@@ -1,10 +1,87 @@
-//! Thread-safe order book cache.
+//! Order book types and thread-safe cache.
 
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
 use super::ids::TokenId;
-use super::types::OrderBook;
+use super::money::{Price, Volume};
+
+/// A single price level in the order book
+#[derive(Debug, Clone)]
+pub struct PriceLevel {
+    price: Price,
+    size: Volume,
+}
+
+impl PriceLevel {
+    /// Create a new price level
+    pub fn new(price: Price, size: Volume) -> Self {
+        Self { price, size }
+    }
+
+    /// Get the price
+    pub fn price(&self) -> Price {
+        self.price
+    }
+
+    /// Get the size/volume
+    pub fn size(&self) -> Volume {
+        self.size
+    }
+}
+
+/// Order book for a single token
+#[derive(Debug, Clone)]
+pub struct OrderBook {
+    token_id: TokenId,
+    bids: Vec<PriceLevel>,
+    asks: Vec<PriceLevel>,
+}
+
+impl OrderBook {
+    /// Create a new empty order book
+    pub fn new(token_id: TokenId) -> Self {
+        Self {
+            token_id,
+            bids: Vec::new(),
+            asks: Vec::new(),
+        }
+    }
+
+    /// Create an order book with initial levels
+    pub fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
+        Self {
+            token_id,
+            bids,
+            asks,
+        }
+    }
+
+    /// Get the token ID
+    pub fn token_id(&self) -> &TokenId {
+        &self.token_id
+    }
+
+    /// Get all bid levels
+    pub fn bids(&self) -> &[PriceLevel] {
+        &self.bids
+    }
+
+    /// Get all ask levels
+    pub fn asks(&self) -> &[PriceLevel] {
+        &self.asks
+    }
+
+    /// Best bid (highest buy price)
+    pub fn best_bid(&self) -> Option<&PriceLevel> {
+        self.bids.first()
+    }
+
+    /// Best ask (lowest sell price)
+    pub fn best_ask(&self) -> Option<&PriceLevel> {
+        self.asks.first()
+    }
+}
 
 /// Thread-safe cache of order books
 pub struct OrderBookCache {
@@ -59,7 +136,7 @@ impl Default for OrderBookCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::PriceLevel;
+    use super::PriceLevel;
     use rust_decimal_macros::dec;
 
     #[test]
