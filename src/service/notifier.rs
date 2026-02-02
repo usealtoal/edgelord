@@ -61,17 +61,17 @@ impl ExecutionEvent {
             ArbitrageExecutionResult::Success { yes_order_id, no_order_id } => Self {
                 market_id: market_id.to_string(),
                 success: true,
-                details: format!("YES: {}, NO: {}", yes_order_id, no_order_id),
+                details: format!("YES: {yes_order_id}, NO: {no_order_id}"),
             },
             ArbitrageExecutionResult::PartialFill { filled_leg, error, .. } => Self {
                 market_id: market_id.to_string(),
                 success: false,
-                details: format!("Partial fill ({}): {}", filled_leg, error),
+                details: format!("Partial fill ({filled_leg}): {error}"),
             },
             ArbitrageExecutionResult::Failed { reason } => Self {
                 market_id: market_id.to_string(),
                 success: false,
-                details: format!("Failed: {}", reason),
+                details: format!("Failed: {reason}"),
             },
         }
     }

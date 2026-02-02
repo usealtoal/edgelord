@@ -35,7 +35,7 @@ impl fmt::Display for PositionId {
 }
 
 /// Status of a position.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PositionStatus {
     /// All legs filled successfully.
     Open,
@@ -52,19 +52,19 @@ impl PositionStatus {
     /// Returns true if the position is open.
     #[must_use] 
     pub const fn is_open(&self) -> bool {
-        matches!(self, PositionStatus::Open)
+        matches!(self, Self::Open)
     }
 
     /// Returns true if the position is a partial fill.
     #[must_use] 
     pub const fn is_partial(&self) -> bool {
-        matches!(self, PositionStatus::PartialFill { .. })
+        matches!(self, Self::PartialFill { .. })
     }
 
     /// Returns true if the position is closed.
     #[must_use] 
     pub const fn is_closed(&self) -> bool {
-        matches!(self, PositionStatus::Closed { .. })
+        matches!(self, Self::Closed { .. })
     }
 }
 

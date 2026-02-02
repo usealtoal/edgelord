@@ -162,7 +162,7 @@ impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(ConfigError::ReadFile)?;
 
-        let mut config: Config = toml::from_str(&content).map_err(ConfigError::Parse)?;
+        let mut config: Self = toml::from_str(&content).map_err(ConfigError::Parse)?;
 
         // Load private key from environment variable (never from config file for security)
         config.wallet.private_key = std::env::var("WALLET_PRIVATE_KEY").ok();
