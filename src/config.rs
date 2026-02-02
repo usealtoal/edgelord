@@ -3,7 +3,7 @@ use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::domain::DetectorConfig;
-use crate::error::{Error, Result};
+use crate::error::{ConfigError, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -47,11 +47,9 @@ pub struct LoggingConfig {
 impl Config {
     #[allow(clippy::result_large_err)]
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| Error::Config(format!("Failed to read config file: {}", e)))?;
+        let content = std::fs::read_to_string(path).map_err(ConfigError::ReadFile)?;
 
-        let mut config: Config = toml::from_str(&content)
-            .map_err(|e| Error::Config(format!("Failed to parse config: {}", e)))?;
+        let mut config: Config = toml::from_str(&content).map_err(ConfigError::Parse)?;
 
         // Load private key from environment variable (never from config file for security)
         config.wallet.private_key = std::env::var("WALLET_PRIVATE_KEY").ok();
@@ -64,10 +62,10 @@ impl Config {
     #[allow(clippy::result_large_err)]
     fn validate(&self) -> Result<()> {
         if self.network.ws_url.is_empty() {
-            return Err(Error::Config("ws_url cannot be empty".into()));
+            return Err(ConfigError::MissingField { field: "ws_url" }.into());
         }
         if self.network.api_url.is_empty() {
-            return Err(Error::Config("api_url cannot be empty".into()));
+            return Err(ConfigError::MissingField { field: "api_url" }.into());
         }
         Ok(())
     }

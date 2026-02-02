@@ -21,7 +21,7 @@ use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::domain::{Opportunity, Position, PositionLeg, PositionStatus, PositionTracker, Price, TokenId};
-use crate::error::{Error, Result};
+use crate::error::{ConfigError, ExecutionError, Result};
 use crate::exchange::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
 
 /// Result of executing an arbitrage opportunity (both legs).
@@ -62,13 +62,18 @@ impl PolymarketExecutor {
             .wallet
             .private_key
             .as_ref()
-            .ok_or_else(|| Error::Config("WALLET_PRIVATE_KEY not set".into()))?;
+            .ok_or(ConfigError::MissingField {
+                field: "WALLET_PRIVATE_KEY",
+            })?;
 
         let chain_id = config.network.chain_id;
 
         // Create signer from private key
         let signer = PrivateKeySigner::from_str(private_key)
-            .map_err(|e| Error::Config(format!("Invalid private key: {}", e)))?
+            .map_err(|e| ConfigError::InvalidValue {
+                field: "WALLET_PRIVATE_KEY",
+                reason: e.to_string(),
+            })?
             .with_chain_id(Some(chain_id));
 
         info!(
@@ -79,11 +84,11 @@ impl PolymarketExecutor {
 
         // Create and authenticate client
         let client = Client::new(&config.network.api_url, ClobConfig::default())
-            .map_err(|e| Error::Execution(format!("Failed to create CLOB client: {}", e)))?
+            .map_err(|e| ExecutionError::AuthFailed(format!("Failed to create CLOB client: {}", e)))?
             .authentication_builder(&signer)
             .authenticate()
             .await
-            .map_err(|e| Error::Execution(format!("Failed to authenticate: {}", e)))?;
+            .map_err(|e| ExecutionError::AuthFailed(e.to_string()))?;
 
         info!("CLOB client authenticated successfully");
 
@@ -200,8 +205,10 @@ impl PolymarketExecutor {
         price: Decimal,
     ) -> Result<PostOrderResponse> {
         // Parse token ID to U256
-        let token_id_u256 = U256::from_str(token_id)
-            .map_err(|e| Error::Execution(format!("Invalid token ID '{}': {}", token_id, e)))?;
+        let token_id_u256 = U256::from_str(token_id).map_err(|e| ExecutionError::InvalidTokenId {
+            token_id: token_id.to_string(),
+            reason: e.to_string(),
+        })?;
 
         // Build limit order
         let order = self
@@ -213,21 +220,21 @@ impl PolymarketExecutor {
             .size(size)
             .build()
             .await
-            .map_err(|e| Error::Execution(format!("Failed to build order: {}", e)))?;
+            .map_err(|e| ExecutionError::OrderBuildFailed(e.to_string()))?;
 
         // Sign order
         let signed_order = self
             .client
             .sign(self.signer.as_ref(), order)
             .await
-            .map_err(|e| Error::Execution(format!("Failed to sign order: {}", e)))?;
+            .map_err(|e| ExecutionError::SigningFailed(e.to_string()))?;
 
         // Submit order
         let response = self
             .client
             .post_order(signed_order)
             .await
-            .map_err(|e| Error::Execution(format!("Failed to submit order: {}", e)))?;
+            .map_err(|e| ExecutionError::SubmissionFailed(e.to_string()))?;
 
         info!(
             order_id = %response.order_id,
@@ -274,7 +281,7 @@ impl OrderExecutor for PolymarketExecutor {
 
     async fn cancel(&self, _order_id: &OrderId) -> Result<()> {
         // TODO: Implement order cancellation via CLOB client
-        Err(Error::Execution("Order cancellation not yet implemented".into()))
+        Err(ExecutionError::OrderRejected("Order cancellation not yet implemented".into()).into())
     }
 
     fn exchange_name(&self) -> &'static str {
