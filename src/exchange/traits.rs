@@ -1,10 +1,13 @@
 //! Exchange trait definitions.
 //!
 //! These traits define the interface that any exchange implementation must provide.
+//! Adapters for specific exchanges (Polymarket, Kalshi, etc.) implement these traits
+//! to provide a unified interface for the application layer.
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
+use crate::domain::{OrderBook, TokenId};
 use crate::error::Error;
 
 /// Unique identifier for an order on an exchange.
@@ -112,6 +115,128 @@ pub trait OrderExecutor: Send + Sync {
 
     /// Cancel an existing order.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;
+
+    /// Get the exchange name for logging/debugging.
+    fn exchange_name(&self) -> &'static str;
+}
+
+/// Exchange-agnostic market information.
+///
+/// Represents the minimal information needed to identify and trade a market
+/// across different prediction market exchanges.
+#[derive(Debug, Clone)]
+pub struct MarketInfo {
+    /// Unique identifier for the market on the exchange.
+    pub id: String,
+    /// Human-readable market question or name.
+    pub question: String,
+    /// Token/outcome identifiers for this market.
+    pub outcomes: Vec<OutcomeInfo>,
+    /// Whether the market is currently active for trading.
+    pub active: bool,
+}
+
+/// Information about a single outcome in a market.
+#[derive(Debug, Clone)]
+pub struct OutcomeInfo {
+    /// Token ID for this outcome.
+    pub token_id: String,
+    /// Human-readable outcome name (e.g., "Yes", "No", "Trump", "Biden").
+    pub name: String,
+}
+
+impl MarketInfo {
+    /// Get all token IDs for this market.
+    #[must_use]
+    pub fn token_ids(&self) -> Vec<&str> {
+        self.outcomes.iter().map(|o| o.token_id.as_str()).collect()
+    }
+
+    /// Check if this is a binary (YES/NO) market.
+    #[must_use]
+    pub fn is_binary(&self) -> bool {
+        self.outcomes.len() == 2
+    }
+}
+
+/// Fetches market information from an exchange.
+#[async_trait]
+pub trait MarketFetcher: Send + Sync {
+    /// Fetch active markets from the exchange.
+    ///
+    /// # Arguments
+    ///
+    /// * `limit` - Maximum number of markets to fetch
+    async fn get_markets(&self, limit: usize) -> Result<Vec<MarketInfo>, Error>;
+
+    /// Get the exchange name for logging/debugging.
+    fn exchange_name(&self) -> &'static str;
+}
+
+/// Events received from a market data stream.
+#[derive(Debug, Clone)]
+pub enum MarketEvent {
+    /// Full order book snapshot for a token.
+    OrderBookSnapshot {
+        token_id: TokenId,
+        book: OrderBook,
+    },
+    /// Incremental order book update (deltas).
+    OrderBookDelta {
+        token_id: TokenId,
+        book: OrderBook,
+    },
+    /// Connection established.
+    Connected,
+    /// Connection lost (may reconnect).
+    Disconnected {
+        reason: String,
+    },
+}
+
+impl MarketEvent {
+    /// Get the token ID if this event contains market data.
+    #[must_use]
+    pub fn token_id(&self) -> Option<&TokenId> {
+        match self {
+            Self::OrderBookSnapshot { token_id, .. } => Some(token_id),
+            Self::OrderBookDelta { token_id, .. } => Some(token_id),
+            _ => None,
+        }
+    }
+
+    /// Get the order book if this event contains one.
+    #[must_use]
+    pub fn order_book(&self) -> Option<&OrderBook> {
+        match self {
+            Self::OrderBookSnapshot { book, .. } => Some(book),
+            Self::OrderBookDelta { book, .. } => Some(book),
+            _ => None,
+        }
+    }
+}
+
+/// Real-time market data stream from an exchange.
+///
+/// Implementations handle connection management, subscriptions, and message parsing
+/// for their specific exchange protocols.
+#[async_trait]
+pub trait MarketDataStream: Send {
+    /// Connect to the exchange's real-time data feed.
+    async fn connect(&mut self) -> Result<(), Error>;
+
+    /// Subscribe to market data for the given tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_ids` - Token IDs to subscribe to
+    async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<(), Error>;
+
+    /// Receive the next market event.
+    ///
+    /// This method blocks until an event is available or the connection closes.
+    /// Returns `None` when the stream is closed.
+    async fn next_event(&mut self) -> Option<MarketEvent>;
 
     /// Get the exchange name for logging/debugging.
     fn exchange_name(&self) -> &'static str;

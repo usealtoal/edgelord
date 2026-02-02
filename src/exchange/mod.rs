@@ -5,4 +5,7 @@
 
 mod traits;
 
-pub use traits::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
+pub use traits::{
+    ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher, MarketInfo, OrderExecutor,
+    OrderId, OrderRequest, OrderSide, OutcomeInfo,
+};
