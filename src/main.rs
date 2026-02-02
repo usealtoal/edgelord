@@ -1,15 +1,12 @@
-mod config;
-mod domain;
-mod error;
 mod executor;
-mod polymarket;
 
 use std::sync::Arc;
 
-use config::Config;
-use domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache, TokenId};
+use edgelord::config::Config;
+use edgelord::domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache, TokenId};
+use edgelord::error;
+use edgelord::polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
 use executor::OrderExecutor;
-use polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
 use tokio::signal;
 use tracing::{error, info, warn};
 
