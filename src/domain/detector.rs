@@ -48,7 +48,7 @@ pub fn detect_single_condition(
     let yes_ask = yes_book.best_ask()?;
     let no_ask = no_book.best_ask()?;
 
-    let total_cost = yes_ask.price + no_ask.price;
+    let total_cost = yes_ask.price() + no_ask.price();
     let one = Decimal::ONE;
 
     if total_cost >= one {
@@ -61,7 +61,7 @@ pub fn detect_single_condition(
         return None;
     }
 
-    let volume = yes_ask.size.min(no_ask.size);
+    let volume = yes_ask.size().min(no_ask.size());
     let expected_profit = edge * volume;
 
     if expected_profit < config.min_profit {
@@ -73,8 +73,8 @@ pub fn detect_single_condition(
         question: pair.question().to_string(),
         yes_token: pair.yes_token().clone(),
         no_token: pair.no_token().clone(),
-        yes_ask: yes_ask.price,
-        no_ask: no_ask.price,
+        yes_ask: yes_ask.price(),
+        no_ask: no_ask.price(),
         total_cost,
         edge,
         volume,
@@ -110,25 +110,19 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_book = OrderBook {
-            token_id: pair.yes_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.40),
-                size: dec!(100),
-            }],
-        };
-        let no_book = OrderBook {
-            token_id: pair.no_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(100),
-            }],
-        };
+        let yes_book = OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.40), dec!(100))],
+        );
+        let no_book = OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        );
 
-        cache.books.write().insert(pair.yes_token().clone(), yes_book);
-        cache.books.write().insert(pair.no_token().clone(), no_book);
+        cache.update(yes_book);
+        cache.update(no_book);
 
         let opp = detect_single_condition(&pair, &cache, &config);
         assert!(opp.is_some());
@@ -145,25 +139,19 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_book = OrderBook {
-            token_id: pair.yes_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(100),
-            }],
-        };
-        let no_book = OrderBook {
-            token_id: pair.no_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(100),
-            }],
-        };
+        let yes_book = OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        );
+        let no_book = OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        );
 
-        cache.books.write().insert(pair.yes_token().clone(), yes_book);
-        cache.books.write().insert(pair.no_token().clone(), no_book);
+        cache.update(yes_book);
+        cache.update(no_book);
 
         let opp = detect_single_condition(&pair, &cache, &config);
         assert!(opp.is_none());
@@ -175,25 +163,19 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_book = OrderBook {
-            token_id: pair.yes_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.48),
-                size: dec!(100),
-            }],
-        };
-        let no_book = OrderBook {
-            token_id: pair.no_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(100),
-            }],
-        };
+        let yes_book = OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.48), dec!(100))],
+        );
+        let no_book = OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        );
 
-        cache.books.write().insert(pair.yes_token().clone(), yes_book);
-        cache.books.write().insert(pair.no_token().clone(), no_book);
+        cache.update(yes_book);
+        cache.update(no_book);
 
         let opp = detect_single_condition(&pair, &cache, &config);
         assert!(opp.is_none());
@@ -205,25 +187,19 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_book = OrderBook {
-            token_id: pair.yes_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.40),
-                size: dec!(1),
-            }],
-        };
-        let no_book = OrderBook {
-            token_id: pair.no_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(1),
-            }],
-        };
+        let yes_book = OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.40), dec!(1))],
+        );
+        let no_book = OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(1))],
+        );
 
-        cache.books.write().insert(pair.yes_token().clone(), yes_book);
-        cache.books.write().insert(pair.no_token().clone(), no_book);
+        cache.update(yes_book);
+        cache.update(no_book);
 
         let opp = detect_single_condition(&pair, &cache, &config);
         assert!(opp.is_none());
@@ -235,25 +211,19 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_book = OrderBook {
-            token_id: pair.yes_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.40),
-                size: dec!(50),
-            }],
-        };
-        let no_book = OrderBook {
-            token_id: pair.no_token().clone(),
-            bids: vec![],
-            asks: vec![PriceLevel {
-                price: dec!(0.50),
-                size: dec!(100),
-            }],
-        };
+        let yes_book = OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.40), dec!(50))],
+        );
+        let no_book = OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        );
 
-        cache.books.write().insert(pair.yes_token().clone(), yes_book);
-        cache.books.write().insert(pair.no_token().clone(), no_book);
+        cache.update(yes_book);
+        cache.update(no_book);
 
         let opp = detect_single_condition(&pair, &cache, &config);
         assert!(opp.is_some());

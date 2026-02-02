@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::{OrderBook, PriceLevel, TokenId};
+
 /// Subscription request sent to Polymarket WebSocket
 #[derive(Debug, Serialize)]
 pub struct SubscribeMessage {
@@ -46,6 +48,28 @@ pub struct BookMessage {
     pub asks: Vec<WsPriceLevel>,
     pub timestamp: Option<String>,
     pub hash: Option<String>,
+}
+
+impl BookMessage {
+    /// Convert this WebSocket message to a domain OrderBook
+    pub fn to_orderbook(&self) -> OrderBook {
+        let token_id = TokenId::from(self.asset_id.clone());
+        let bids = Self::parse_levels(&self.bids);
+        let asks = Self::parse_levels(&self.asks);
+        OrderBook::with_levels(token_id, bids, asks)
+    }
+
+    fn parse_levels(levels: &[WsPriceLevel]) -> Vec<PriceLevel> {
+        levels
+            .iter()
+            .filter_map(|pl| {
+                Some(PriceLevel::new(
+                    pl.price.parse().ok()?,
+                    pl.size.parse().ok()?,
+                ))
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Deserialize)]

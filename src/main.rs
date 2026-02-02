@@ -3,7 +3,7 @@ mod executor;
 use std::sync::Arc;
 
 use edgelord::config::Config;
-use edgelord::domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache, TokenId};
+use edgelord::domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache};
 use edgelord::error;
 use edgelord::polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
 use executor::OrderExecutor;
@@ -131,9 +131,9 @@ fn handle_message(
 ) {
     match msg {
         WsMessage::Book(book) => {
-            cache.update_from_ws(&book);
-
-            let token_id = TokenId::from(book.asset_id.clone());
+            let orderbook = book.to_orderbook();
+            let token_id = orderbook.token_id().clone();
+            cache.update(orderbook);
             if let Some(pair) = registry.get_market_for_token(&token_id) {
                 if let Some(opp) = detect_single_condition(pair, cache, config) {
                     info!(
