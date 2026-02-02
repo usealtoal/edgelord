@@ -1,3 +1,8 @@
+//! Application configuration loading and validation.
+//!
+//! Configuration is loaded from a TOML file with environment variable overrides
+//! for sensitive values like `WALLET_PRIVATE_KEY`.
+
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::path::Path;
