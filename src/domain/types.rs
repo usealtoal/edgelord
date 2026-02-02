@@ -4,12 +4,12 @@
 //! - TokenId, MarketId -> ids.rs
 //! - Price, Volume -> money.rs
 //! - MarketPair, MarketInfo, TokenInfo -> market.rs
+//! - Opportunity -> opportunity.rs
 //!
 //! This file will be deleted in Task 14. For now, it contains:
 //! - OrderBook and PriceLevel (will move to orderbook types)
-//! - Opportunity (will move to its own module)
 
-use super::ids::{MarketId, TokenId};
+use super::ids::TokenId;
 use super::money::{Price, Volume};
 
 /// A single price level in the order book
@@ -87,20 +87,4 @@ impl OrderBook {
     pub fn best_ask(&self) -> Option<&PriceLevel> {
         self.asks.first()
     }
-}
-
-/// Detected arbitrage opportunity
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct Opportunity {
-    pub market_id: MarketId,
-    pub question: String,
-    pub yes_token: TokenId,
-    pub no_token: TokenId,
-    pub yes_ask: Price,
-    pub no_ask: Price,
-    pub total_cost: Price,
-    pub edge: Price,
-    pub volume: Volume,
-    pub expected_profit: Price,
 }

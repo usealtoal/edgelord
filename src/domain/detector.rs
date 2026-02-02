@@ -68,18 +68,16 @@ pub fn detect_single_condition(
         return None;
     }
 
-    Some(Opportunity {
-        market_id: pair.market_id().clone(),
-        question: pair.question().to_string(),
-        yes_token: pair.yes_token().clone(),
-        no_token: pair.no_token().clone(),
-        yes_ask: yes_ask.price(),
-        no_ask: no_ask.price(),
-        total_cost,
-        edge,
-        volume,
-        expected_profit,
-    })
+    // Build the opportunity using the builder pattern
+    // The builder calculates total_cost, edge, and expected_profit internally
+    Opportunity::builder()
+        .market_id(pair.market_id().clone())
+        .question(pair.question())
+        .yes_token(pair.yes_token().clone(), yes_ask.price())
+        .no_token(pair.no_token().clone(), no_ask.price())
+        .volume(volume)
+        .build()
+        .ok()
 }
 
 #[cfg(test)]
@@ -128,9 +126,9 @@ mod tests {
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
-        assert_eq!(opp.edge, dec!(0.10));
-        assert_eq!(opp.total_cost, dec!(0.90));
-        assert_eq!(opp.expected_profit, dec!(10.00));
+        assert_eq!(opp.edge(), dec!(0.10));
+        assert_eq!(opp.total_cost(), dec!(0.90));
+        assert_eq!(opp.expected_profit(), dec!(10.00));
     }
 
     #[test]
@@ -229,7 +227,7 @@ mod tests {
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
-        assert_eq!(opp.volume, dec!(50));
-        assert_eq!(opp.expected_profit, dec!(5.00));
+        assert_eq!(opp.volume(), dec!(50));
+        assert_eq!(opp.expected_profit(), dec!(5.00));
     }
 }

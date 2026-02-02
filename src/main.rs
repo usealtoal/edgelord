@@ -137,14 +137,14 @@ fn handle_message(
             if let Some(pair) = registry.get_market_for_token(&token_id) {
                 if let Some(opp) = detect_single_condition(pair, cache, config) {
                     info!(
-                        market = %opp.market_id,
-                        question = %opp.question,
-                        yes_ask = %opp.yes_ask,
-                        no_ask = %opp.no_ask,
-                        total_cost = %opp.total_cost,
-                        edge = %opp.edge,
-                        volume = %opp.volume,
-                        expected_profit = %opp.expected_profit,
+                        market = %opp.market_id(),
+                        question = %opp.question(),
+                        yes_ask = %opp.yes_ask(),
+                        no_ask = %opp.no_ask(),
+                        total_cost = %opp.total_cost(),
+                        edge = %opp.edge(),
+                        volume = %opp.volume(),
+                        expected_profit = %opp.expected_profit(),
                         "ARBITRAGE DETECTED"
                     );
 

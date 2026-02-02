@@ -4,6 +4,7 @@ mod detector;
 mod ids;
 mod market;
 mod money;
+mod opportunity;
 mod orderbook;
 mod types;
 
@@ -11,11 +12,12 @@ mod types;
 pub use ids::{MarketId, TokenId};
 pub use market::{MarketInfo, MarketPair, TokenInfo};
 pub use money::{Price, Volume};
+pub use opportunity::{Opportunity, OpportunityBuildError, OpportunityBuilder};
 
 // Detector and cache
 pub use detector::{detect_single_condition, DetectorConfig};
 pub use orderbook::OrderBookCache;
 
 // Types from types.rs (kept for backward compatibility, will be removed in Task 14)
-// Note: Opportunity, OrderBook, PriceLevel still live in types.rs
-pub use types::{Opportunity, OrderBook, PriceLevel};
+// Note: OrderBook, PriceLevel still live in types.rs
+pub use types::{OrderBook, PriceLevel};

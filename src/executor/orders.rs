@@ -96,18 +96,18 @@ impl OrderExecutor {
     /// Execute an arbitrage opportunity by placing orders on both legs.
     pub async fn execute(&self, opportunity: &Opportunity) -> Result<ExecutionResult> {
         info!(
-            market = %opportunity.market_id,
-            edge = %opportunity.edge,
-            volume = %opportunity.volume,
+            market = %opportunity.market_id(),
+            edge = %opportunity.edge(),
+            volume = %opportunity.volume(),
             "Executing arbitrage opportunity"
         );
 
         // Execute both legs in parallel
-        let yes_token = opportunity.yes_token.to_string();
-        let no_token = opportunity.no_token.to_string();
-        let volume = opportunity.volume;
-        let yes_price = opportunity.yes_ask;
-        let no_price = opportunity.no_ask;
+        let yes_token = opportunity.yes_token().to_string();
+        let no_token = opportunity.no_token().to_string();
+        let volume = opportunity.volume();
+        let yes_price = opportunity.yes_ask();
+        let no_price = opportunity.no_ask();
 
         let (yes_result, no_result) = tokio::join!(
             self.submit_order(&yes_token, Side::Buy, volume, yes_price),
@@ -126,21 +126,21 @@ impl OrderExecutor {
                 let mut tracker = self.positions.lock();
                 let position = Position {
                     id: tracker.next_id(),
-                    market_id: opportunity.market_id.clone(),
+                    market_id: opportunity.market_id().clone(),
                     legs: vec![
                         PositionLeg {
-                            token_id: opportunity.yes_token.clone(),
-                            size: opportunity.volume,
-                            entry_price: opportunity.yes_ask,
+                            token_id: opportunity.yes_token().clone(),
+                            size: opportunity.volume(),
+                            entry_price: opportunity.yes_ask(),
                         },
                         PositionLeg {
-                            token_id: opportunity.no_token.clone(),
-                            size: opportunity.volume,
-                            entry_price: opportunity.no_ask,
+                            token_id: opportunity.no_token().clone(),
+                            size: opportunity.volume(),
+                            entry_price: opportunity.no_ask(),
                         },
                     ],
-                    entry_cost: opportunity.total_cost * opportunity.volume,
-                    guaranteed_payout: opportunity.volume,
+                    entry_cost: opportunity.total_cost() * opportunity.volume(),
+                    guaranteed_payout: opportunity.volume(),
                     opened_at: chrono::Utc::now(),
                     status: PositionStatus::Open,
                 };
@@ -160,8 +160,8 @@ impl OrderExecutor {
                     "NO leg failed, YES leg succeeded"
                 );
                 Ok(ExecutionResult::PartialFill {
-                    filled_leg: opportunity.yes_token.clone(),
-                    failed_leg: opportunity.no_token.clone(),
+                    filled_leg: opportunity.yes_token().clone(),
+                    failed_leg: opportunity.no_token().clone(),
                     error: no_err.to_string(),
                 })
             }
@@ -172,8 +172,8 @@ impl OrderExecutor {
                     "YES leg failed, NO leg succeeded"
                 );
                 Ok(ExecutionResult::PartialFill {
-                    filled_leg: opportunity.no_token.clone(),
-                    failed_leg: opportunity.yes_token.clone(),
+                    filled_leg: opportunity.no_token().clone(),
+                    failed_leg: opportunity.yes_token().clone(),
                     error: yes_err.to_string(),
                 })
             }
