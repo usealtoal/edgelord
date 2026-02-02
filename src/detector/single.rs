@@ -63,6 +63,7 @@ pub fn detect_single_condition(
 }
 
 /// Scan all markets for arbitrage opportunities
+#[allow(dead_code)]
 pub fn scan_all(
     registry: &MarketRegistry,
     cache: &OrderBookCache,

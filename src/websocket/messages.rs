@@ -19,6 +19,7 @@ impl SubscribeMessage {
 }
 
 /// Messages received from Polymarket WebSocket
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event_type")]
 pub enum WsMessage {
@@ -35,6 +36,7 @@ pub enum WsMessage {
     Unknown,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct BookMessage {
     pub asset_id: String,
@@ -45,6 +47,7 @@ pub struct BookMessage {
     pub hash: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct PriceChangeMessage {
     pub asset_id: String,
@@ -53,12 +56,14 @@ pub struct PriceChangeMessage {
     pub changes: Option<Vec<PriceLevel>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct PriceLevel {
     pub price: String,
     pub size: String,
 }
 
+#[allow(dead_code)]
 impl PriceLevel {
     pub fn price_decimal(&self) -> Option<Decimal> {
         self.price.parse().ok()

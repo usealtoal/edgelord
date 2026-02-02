@@ -51,6 +51,7 @@ pub struct PriceLevel {
 }
 
 /// Order book for a single token
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct OrderBook {
     pub token_id: TokenId,
@@ -58,6 +59,7 @@ pub struct OrderBook {
     pub asks: Vec<PriceLevel>, // Sorted ascending by price (best first)
 }
 
+#[allow(dead_code)]
 impl OrderBook {
     pub fn new(token_id: TokenId) -> Self {
         Self {
@@ -88,6 +90,7 @@ pub struct MarketPair {
 }
 
 /// Detected arbitrage opportunity
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Opportunity {
     pub market_id: MarketId,

@@ -52,6 +52,7 @@ impl OrderBookCache {
     }
 
     /// Get a snapshot of an order book
+    #[allow(dead_code)]
     pub fn get(&self, token_id: &TokenId) -> Option<OrderBook> {
         self.books.read().get(token_id).cloned()
     }
@@ -67,10 +68,12 @@ impl OrderBookCache {
     }
 
     /// Number of books in cache
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.books.read().len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

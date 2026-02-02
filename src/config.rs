@@ -25,6 +25,7 @@ pub struct LoggingConfig {
     pub format: String,
 }
 
+#[allow(clippy::result_large_err)]
 impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)
