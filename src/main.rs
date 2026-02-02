@@ -1,12 +1,9 @@
-mod executor;
-
 use std::sync::Arc;
 
 use edgelord::config::Config;
 use edgelord::domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache};
 use edgelord::error;
-use edgelord::polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
-use executor::OrderExecutor;
+use edgelord::polymarket::{MarketRegistry, PolymarketClient, PolymarketExecutor, WebSocketHandler, WsMessage};
 use tokio::signal;
 use tracing::{error, info, warn};
 
@@ -43,8 +40,8 @@ async fn main() {
 
 async fn run(config: Config) -> error::Result<()> {
     // Initialize executor if wallet is configured
-    let executor: Option<Arc<OrderExecutor>> = if config.wallet.private_key.is_some() {
-        match OrderExecutor::new(&config).await {
+    let executor: Option<Arc<PolymarketExecutor>> = if config.wallet.private_key.is_some() {
+        match PolymarketExecutor::new(&config).await {
             Ok(exec) => {
                 info!("Executor initialized - trading ENABLED");
                 Some(Arc::new(exec))
@@ -127,7 +124,7 @@ fn handle_message(
     cache: &OrderBookCache,
     registry: &MarketRegistry,
     config: &DetectorConfig,
-    executor: Option<Arc<OrderExecutor>>,
+    executor: Option<Arc<PolymarketExecutor>>,
 ) {
     match msg {
         WsMessage::Book(book) => {
@@ -161,9 +158,9 @@ fn handle_message(
 }
 
 /// Spawn async execution without blocking message processing.
-fn spawn_execution(executor: Arc<OrderExecutor>, opportunity: Opportunity) {
+fn spawn_execution(executor: Arc<PolymarketExecutor>, opportunity: Opportunity) {
     tokio::spawn(async move {
-        match executor.execute(&opportunity).await {
+        match executor.execute_arbitrage(&opportunity).await {
             Ok(result) => {
                 info!(result = ?result, "Execution completed");
             }

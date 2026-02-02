@@ -1,4 +1,4 @@
-//! Order building and submission using Polymarket CLOB SDK.
+//! Order execution for Polymarket CLOB.
 
 #![allow(dead_code)]
 
@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy_signer_local::PrivateKeySigner;
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use polymarket_client_sdk::auth::state::Authenticated;
 use polymarket_client_sdk::auth::Normal;
@@ -18,13 +19,14 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
-use edgelord::config::Config;
-use edgelord::domain::{Opportunity, Position, PositionLeg, PositionStatus, PositionTracker, Price, TokenId};
-use edgelord::error::{Error, Result};
+use crate::config::Config;
+use crate::domain::{Opportunity, Position, PositionLeg, PositionStatus, PositionTracker, Price, TokenId};
+use crate::error::{Error, Result};
+use crate::exchange::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
 
-/// Result of executing an arbitrage opportunity.
+/// Result of executing an arbitrage opportunity (both legs).
 #[derive(Debug, Clone)]
-pub enum ExecutionResult {
+pub enum ArbitrageExecutionResult {
     /// Both legs executed successfully.
     Success {
         yes_order_id: String,
@@ -44,7 +46,7 @@ pub enum ExecutionResult {
 type AuthenticatedClient = Client<Authenticated<Normal>>;
 
 /// Executes trades on Polymarket CLOB.
-pub struct OrderExecutor {
+pub struct PolymarketExecutor {
     /// The authenticated CLOB client.
     client: Arc<AuthenticatedClient>,
     /// The signer for signing orders.
@@ -53,7 +55,7 @@ pub struct OrderExecutor {
     positions: Mutex<PositionTracker>,
 }
 
-impl OrderExecutor {
+impl PolymarketExecutor {
     /// Create new executor by authenticating with Polymarket CLOB.
     pub async fn new(config: &Config) -> Result<Self> {
         let private_key = config
@@ -93,7 +95,7 @@ impl OrderExecutor {
     }
 
     /// Execute an arbitrage opportunity by placing orders on both legs.
-    pub async fn execute(&self, opportunity: &Opportunity) -> Result<ExecutionResult> {
+    pub async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
         info!(
             market = %opportunity.market_id(),
             edge = %opportunity.edge(),
@@ -147,7 +149,7 @@ impl OrderExecutor {
                 info!(position_id = %position.id(), entry_cost = %position.entry_cost(), "Position opened");
                 tracker.add(position);
 
-                Ok(ExecutionResult::Success {
+                Ok(ArbitrageExecutionResult::Success {
                     yes_order_id: yes_resp.order_id,
                     no_order_id: no_resp.order_id,
                 })
@@ -158,7 +160,7 @@ impl OrderExecutor {
                     no_error = %no_err,
                     "NO leg failed, YES leg succeeded"
                 );
-                Ok(ExecutionResult::PartialFill {
+                Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.yes_token().clone(),
                     failed_leg: opportunity.no_token().clone(),
                     error: no_err.to_string(),
@@ -170,7 +172,7 @@ impl OrderExecutor {
                     yes_error = %yes_err,
                     "YES leg failed, NO leg succeeded"
                 );
-                Ok(ExecutionResult::PartialFill {
+                Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.no_token().clone(),
                     failed_leg: opportunity.yes_token().clone(),
                     error: yes_err.to_string(),
@@ -182,7 +184,7 @@ impl OrderExecutor {
                     no_error = %no_err,
                     "Both legs failed"
                 );
-                Ok(ExecutionResult::Failed {
+                Ok(ArbitrageExecutionResult::Failed {
                     reason: format!("YES: {}, NO: {}", yes_err, no_err),
                 })
             }
@@ -247,5 +249,35 @@ impl OrderExecutor {
     /// Get the count of currently open positions.
     pub fn open_position_count(&self) -> usize {
         self.positions.lock().open_count()
+    }
+}
+
+#[async_trait]
+impl OrderExecutor for PolymarketExecutor {
+    async fn execute(&self, order: &OrderRequest) -> Result<ExecutionResult> {
+        let side = match order.side {
+            OrderSide::Buy => Side::Buy,
+            OrderSide::Sell => Side::Sell,
+        };
+
+        match self.submit_order(&order.token_id, side, order.size, order.price).await {
+            Ok(response) => Ok(ExecutionResult::Success {
+                order_id: OrderId::new(response.order_id),
+                filled_amount: order.size,
+                average_price: order.price,
+            }),
+            Err(e) => Ok(ExecutionResult::Failed {
+                reason: e.to_string(),
+            }),
+        }
+    }
+
+    async fn cancel(&self, _order_id: &OrderId) -> Result<()> {
+        // TODO: Implement order cancellation via CLOB client
+        Err(Error::Execution("Order cancellation not yet implemented".into()))
+    }
+
+    fn exchange_name(&self) -> &'static str {
+        "Polymarket"
     }
 }
