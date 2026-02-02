@@ -2,7 +2,9 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use crate::domain::DetectorConfig;
+use crate::domain::strategy::{
+    CombinatorialConfig, MarketRebalancingConfig, SingleConditionConfig,
+};
 use crate::error::{ConfigError, Result};
 
 #[derive(Debug, Deserialize)]
@@ -10,9 +12,33 @@ pub struct Config {
     pub network: NetworkConfig,
     pub logging: LoggingConfig,
     #[serde(default)]
-    pub detector: DetectorConfig,
+    pub strategies: StrategiesConfig,
     #[serde(default)]
     pub wallet: WalletConfig,
+}
+
+/// Configuration for all detection strategies.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct StrategiesConfig {
+    /// Enabled strategy names.
+    #[serde(default = "default_enabled_strategies")]
+    pub enabled: Vec<String>,
+
+    /// Single-condition strategy config.
+    #[serde(default)]
+    pub single_condition: SingleConditionConfig,
+
+    /// Market rebalancing strategy config.
+    #[serde(default)]
+    pub market_rebalancing: MarketRebalancingConfig,
+
+    /// Combinatorial (Frank-Wolfe + ILP) strategy config.
+    #[serde(default)]
+    pub combinatorial: CombinatorialConfig,
+}
+
+fn default_enabled_strategies() -> Vec<String> {
+    vec!["single_condition".to_string()]
 }
 
 /// Wallet configuration for signing orders.
@@ -83,7 +109,7 @@ impl Default for Config {
                 level: "info".into(),
                 format: "pretty".into(),
             },
-            detector: DetectorConfig::default(),
+            strategies: StrategiesConfig::default(),
             wallet: WalletConfig::default(),
         }
     }

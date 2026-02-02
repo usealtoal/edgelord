@@ -47,10 +47,19 @@ fix/<name>        # Bug fix branches
 4. **No premature abstraction** — Three concrete cases before generalizing
 5. **Minimal indirection** — Fewer layers, easier to trace
 
+### Architecture Patterns
+
+- **Domain-driven design** — Exchange-agnostic logic in `domain/`, no exchange imports allowed
+- **Trait-based abstractions** — `ExchangeClient`, `OrderExecutor` for multi-exchange support
+- **Builder patterns** — Use builders for complex types (e.g., `Opportunity::builder()`)
+- **Proper encapsulation** — Private fields with accessor methods, not public structs
+- **Newtypes** — `TokenId`, `MarketId` instead of raw strings
+- **Decimal for money** — Never use floats, always `rust_decimal::Decimal`
+
 ### Rust Specifics
 
 - Prefer `Result` over `panic!` for recoverable errors
-- Use `thiserror` for error types, not strings
+- Use `thiserror` for error types with structured variants (not strings)
 - Avoid `.unwrap()` except in tests
 - Keep functions short — if it scrolls, split it
 - Name things for what they are, not what they do
@@ -59,6 +68,8 @@ fix/<name>        # Bug fix branches
 
 - One public type per file when possible
 - `mod.rs` re-exports only, no logic
+- `domain/` must not import from exchange implementations
+- Exchange implementations (e.g., `polymarket/`) implement traits from `exchange/`
 - Tests live in `tests/` for integration, inline `#[cfg(test)]` for unit
 
 ---

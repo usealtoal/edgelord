@@ -8,6 +8,9 @@ mod opportunity;
 mod orderbook;
 mod position;
 
+pub mod solver;
+pub mod strategy;
+
 // Core domain types
 pub use ids::{MarketId, TokenId};
 pub use market::{MarketInfo, MarketPair, TokenInfo};

@@ -8,9 +8,25 @@ chain_id = 80002
 level = "info"
 format = "pretty"
 
-[detector]
+# Strategy configuration
+# Enable specific strategies by listing them here
+[strategies]
+enabled = ["single_condition", "market_rebalancing"]
+
+[strategies.single_condition]
 min_edge = 0.05
 min_profit = 0.50
+
+[strategies.market_rebalancing]
+min_edge = 0.03
+min_profit = 1.00
+max_outcomes = 10
+
+[strategies.combinatorial]
+enabled = false
+max_iterations = 20
+tolerance = 0.0001
+gap_threshold = 0.02
 
 # Wallet configuration
 # Private key is loaded from WALLET_PRIVATE_KEY environment variable.

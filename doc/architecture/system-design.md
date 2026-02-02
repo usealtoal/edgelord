@@ -5,175 +5,182 @@
 ## Design Philosophy
 
 1. **Hot path must be <40ms** — Compete with sophisticated actors
-2. **Pre-compute everything possible** — Heavy math happens offline
-3. **Simple arbitrage first** — 95% of profits came from simple cases
-4. **Fail safe** — Never lose money on a "guaranteed" trade
+2. **Strategy pattern** — Pluggable detection algorithms
+3. **Domain-driven design** — Exchange-agnostic core, exchange-specific adapters
+4. **Solver abstraction** — Swappable LP/ILP backends
+5. **Fail safe** — Never lose money on a "guaranteed" trade
 
 ---
 
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     RUST CORE (tokio async)                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │  WebSocket   │───▶│   Detector   │───▶│   Executor   │      │
-│  │   Handler    │    │   Engine     │    │   Engine     │      │
-│  └──────────────┘    └──────────────┘    └──────────────┘      │
-│         │                   │                    │              │
-│         ▼                   ▼                    ▼              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │  Order Book  │    │  Dependency  │    │   Parallel   │      │
-│  │    Cache     │    │    Graph     │    │  RPC Submit  │      │
-│  │  (lockfree)  │    │  (prebuilt)  │    │              │      │
-│  └──────────────┘    └──────────────┘    └──────────────┘      │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (async, non-blocking)
-┌─────────────────────────────────────────────────────────────────┐
-│              OPTIMIZATION SERVICE (background)                  │
-├─────────────────────────────────────────────────────────────────┤
-│  Gurobi C API ← Rust FFI bindings (grb crate)                  │
-│  Frank-Wolfe solver for combinatorial arbitrage                 │
-│  Pre-computes projections, Rust core queries cache              │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                     RUST CORE (tokio async)                       │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
+│  │  WebSocket   │───▶│   Strategy   │───▶│   Executor   │        │
+│  │   Handler    │    │   Registry   │    │   (traits)   │        │
+│  └──────────────┘    └──────────────┘    └──────────────┘        │
+│         │                   │                    │                │
+│         ▼                   ▼                    ▼                │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
+│  │  OrderBook   │    │  Strategies  │    │  Polymarket  │        │
+│  │    Cache     │    │  ┌─────────┐ │    │   Executor   │        │
+│  │  (RwLock)    │    │  │ Single  │ │    │              │        │
+│  └──────────────┘    │  │Condition│ │    └──────────────┘        │
+│                      │  ├─────────┤ │                             │
+│                      │  │Rebalanc.│ │                             │
+│                      │  ├─────────┤ │                             │
+│                      │  │Combinat.│ │                             │
+│                      │  └─────────┘ │                             │
+│                      └──────────────┘                             │
+│                             │                                     │
+│                             ▼                                     │
+│                      ┌──────────────┐                             │
+│                      │ HiGHS Solver │                             │
+│                      │  (LP/ILP)    │                             │
+│                      └──────────────┘                             │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+## Module Structure
+
+```
+src/
+├── lib.rs                 # Library root with public API
+├── main.rs                # Thin entry point
+├── app.rs                 # Application orchestration
+│
+├── domain/                # Exchange-agnostic (NO exchange imports)
+│   ├── ids.rs             # TokenId, MarketId (newtypes)
+│   ├── money.rs           # Price, Volume types
+│   ├── market.rs          # MarketPair, MarketInfo
+│   ├── orderbook.rs       # OrderBook, OrderBookCache
+│   ├── opportunity.rs     # Opportunity with builder
+│   ├── position.rs        # Position tracking
+│   ├── detector.rs        # Legacy re-export
+│   │
+│   ├── strategy/          # Pluggable detection strategies
+│   │   ├── mod.rs         # Strategy trait + StrategyRegistry
+│   │   ├── context.rs     # DetectionContext, MarketContext
+│   │   ├── single_condition.rs    # YES + NO < $1
+│   │   ├── market_rebalancing.rs  # Sum of outcomes < $1
+│   │   └── combinatorial/         # Frank-Wolfe + ILP
+│   │       ├── mod.rs             # CombinatorialStrategy
+│   │       ├── bregman.rs         # Bregman divergence (KL)
+│   │       └── frank_wolfe.rs     # Frank-Wolfe algorithm
+│   │
+│   └── solver/            # LP/ILP solver abstraction
+│       ├── mod.rs         # Solver trait + types
+│       └── highs.rs       # HiGHS implementation
+│
+├── exchange/              # Abstraction layer
+│   └── traits.rs          # ExchangeClient, OrderExecutor
+│
+└── polymarket/            # Polymarket implementation
+    ├── client.rs          # REST client
+    ├── executor.rs        # OrderExecutor implementation
+    ├── websocket.rs       # WS handler
+    ├── messages.rs        # WS types + to_orderbook()
+    ├── registry.rs        # YES/NO pair mapping
+    └── types.rs           # API types
 ```
 
 ---
 
-## Component Breakdown
+## Strategy System
 
-### 1. WebSocket Handler
-**Responsibility:** Maintain real-time connection to Polymarket CLOB
+### Strategy Trait
 
 ```rust
-// Pseudo-structure
-struct WebSocketHandler {
-    connection: WebSocketStream,
-    subscribed_markets: HashSet<TokenId>,
-    order_book_tx: Sender<OrderBookUpdate>,
+pub trait Strategy: Send + Sync {
+    /// Unique identifier for this strategy.
+    fn name(&self) -> &'static str;
+
+    /// Check if this strategy applies to a given market.
+    fn applies_to(&self, ctx: &MarketContext) -> bool;
+
+    /// Detect opportunities given current market state.
+    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity>;
+
+    /// Optional: warm-start from previous detection.
+    fn warm_start(&mut self, previous: &DetectionResult) {}
 }
 ```
 
-**Key requirements:**
-- Auto-reconnect on disconnect
-- Subscribe to all active markets
-- Parse updates with zero-copy where possible
-
-### 2. Order Book Cache
-**Responsibility:** Maintain current state of all order books
+### Strategy Registry
 
 ```rust
-struct OrderBookCache {
-    books: DashMap<TokenId, OrderBook>,  // Lock-free concurrent map
-}
+let mut registry = StrategyRegistry::new();
+registry.register(Box::new(SingleConditionStrategy::new(config)));
+registry.register(Box::new(MarketRebalancingStrategy::new(config)));
 
-struct OrderBook {
-    bids: BTreeMap<Price, Volume>,  // Sorted by price
-    asks: BTreeMap<Price, Volume>,
-    last_update: Instant,
+// Run all applicable strategies
+let opportunities = registry.detect_all(&ctx);
+```
+
+### Available Strategies
+
+| Strategy | Profit Share | Complexity | Markets |
+|----------|-------------|------------|---------|
+| SingleCondition | 26.7% ($10.5M) | O(1) | Binary |
+| MarketRebalancing | 73.1% ($29M) | O(n) | Multi-outcome |
+| Combinatorial | 0.24% ($95K) | O(ILP) | Correlated |
+
+---
+
+## Solver Abstraction
+
+### Solver Trait
+
+```rust
+pub trait Solver: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn solve_lp(&self, problem: &LpProblem) -> Result<LpSolution>;
+    fn solve_ilp(&self, problem: &IlpProblem) -> Result<LpSolution>;
 }
 ```
 
-**Key requirements:**
-- Lock-free reads (hot path can't wait)
-- Atomic updates from WebSocket
-- VWAP calculation methods
+### HiGHS Implementation
 
-### 3. Detector Engine
-**Responsibility:** Find arbitrage opportunities
+Open-source LP/MIP solver via `good_lp` crate:
 
 ```rust
-enum ArbitrageOpportunity {
-    SingleCondition {
-        market_id: MarketId,
-        yes_price: Decimal,
-        no_price: Decimal,
-        profit_per_share: Decimal,
-        available_volume: Volume,
-    },
-    MarketRebalancing {
-        market_id: MarketId,
-        positions: Vec<(TokenId, Decimal)>,
-        total_cost: Decimal,
-        profit: Decimal,
-    },
-    Combinatorial {
-        markets: Vec<MarketId>,
-        positions: Vec<Position>,
-        guaranteed_profit: Decimal,
-    },
-}
+let solver = HiGHSSolver::new();
+let solution = solver.solve_ilp(&problem)?;
 ```
 
-**Detection priority:**
-1. Simple YES+NO (fastest, most common)
-2. Market rebalancing (fast, common)
-3. Combinatorial (slow, rare but valuable)
+**Performance targets:**
+- <10ms per ILP solve
+- 5-20 Frank-Wolfe iterations per tick
+- <100ms total latency for combinatorial detection
 
-### 4. Executor Engine
-**Responsibility:** Execute trades atomically
+---
+
+## Frank-Wolfe Algorithm
+
+The combinatorial strategy uses Frank-Wolfe projection onto the marginal polytope:
+
+```
+1. Start with current market prices θ
+2. Compute gradient of Bregman divergence
+3. Solve ILP oracle: find vertex minimizing gradient dot product
+4. Update toward that vertex
+5. Repeat until convergence or iteration limit
+```
+
+The gap between θ and the projection μ* indicates arbitrage potential.
+
+### Bregman Divergence
+
+For LMSR cost function, the Bregman divergence is KL divergence:
 
 ```rust
-struct ExecutorEngine {
-    clob_client: ClobClient,
-    wallet: LocalWallet,
-    pending_orders: Vec<Order>,
-}
-
-impl ExecutorEngine {
-    async fn execute(&self, opp: ArbitrageOpportunity) -> Result<Execution> {
-        // 1. Validate opportunity still exists
-        // 2. Calculate position sizes (VWAP-aware)
-        // 3. Submit all orders in parallel
-        // 4. Monitor fills
-        // 5. Handle partial fills
-    }
-}
+D(μ||θ) = Σ μᵢ * ln(μᵢ/θᵢ)
 ```
-
-**Key requirements:**
-- All legs submitted within same block (~2s window)
-- Slippage protection
-- Partial fill handling
-
-### 5. Dependency Graph
-**Responsibility:** Track logical relationships between markets
-
-```rust
-struct DependencyGraph {
-    // Market A implies Market B
-    implications: HashMap<MarketId, Vec<MarketId>>,
-    // Constraint sets for IP solver
-    constraints: Vec<Constraint>,
-}
-```
-
-**Built offline via:**
-- LLM analysis of market descriptions (DeepSeek-R1)
-- Manual curation for high-value markets
-- Periodic refresh
-
-### 6. Optimization Service
-**Responsibility:** Solve combinatorial arbitrage via Frank-Wolfe
-
-```rust
-struct OptimizationService {
-    gurobi_env: grb::Env,
-    projection_cache: HashMap<MarketState, Projection>,
-}
-
-impl OptimizationService {
-    fn compute_projection(&self, state: &MarketState) -> Projection {
-        // Frank-Wolfe algorithm with Gurobi IP oracle
-    }
-}
-```
-
-**Runs in background, results cached for hot path queries.**
 
 ---
 
@@ -189,23 +196,50 @@ WebSocket receives update (~5ms)
 Order Book Cache updated (~1ms)
          │
          ▼
-Detector scans for opportunities (~5ms)
+StrategyRegistry.detect_all() (~5ms)
          │
     ┌────┴────┐
     │         │
-Simple?    Complex?
+Binary?    Multi?
     │         │
     ▼         ▼
-Execute    Query cache
- (~25ms)      │
-              ▼
-         Cache hit? ──Yes──▶ Execute
-              │
-              No
-              │
-              ▼
-         Queue for background
-         optimization
+Single    Rebalancing
+Condition  Strategy
+    │         │
+    └────┬────┘
+         │
+    Opportunities found?
+         │
+    ┌────┴────┐
+   Yes        No
+    │         │
+    ▼         ▼
+Execute    Continue
+ (~25ms)   listening
+```
+
+---
+
+## Configuration
+
+```toml
+[strategies]
+enabled = ["single_condition", "market_rebalancing"]
+
+[strategies.single_condition]
+min_edge = 0.05      # 5% minimum edge
+min_profit = 0.50    # $0.50 minimum profit
+
+[strategies.market_rebalancing]
+min_edge = 0.03      # 3% minimum edge
+min_profit = 1.00    # $1.00 minimum profit
+max_outcomes = 10    # Skip markets with >10 outcomes
+
+[strategies.combinatorial]
+enabled = false      # Requires dependency configuration
+max_iterations = 20
+tolerance = 0.0001
+gap_threshold = 0.02
 ```
 
 ---
@@ -227,65 +261,75 @@ struct RiskLimits {
 - Stop trading if execution failure rate spikes
 - Stop trading if WebSocket disconnects
 
-### Logging
-Every trade logged with:
-- Opportunity detected (prices, volumes)
-- Decision made (position sizes)
-- Execution result (fills, slippage)
-- P&L attribution
-
 ---
 
 ## Tech Stack
 
 ```toml
 [dependencies]
+# Async runtime
 tokio = { version = "1", features = ["full"] }
-tokio-tungstenite = "0.21"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-crossbeam = "0.8"
-dashmap = "5"
-rust_decimal = "1"
-grb = "2"
-ethers = "2"
-reqwest = { version = "0.11", features = ["json"] }
-tracing = "0.1"
-tracing-subscriber = "0.3"
 
-[dependencies.rs-clob-client]
-git = "https://github.com/Polymarket/rs-clob-client"
+# LP/ILP solver
+good_lp = { version = "1.8", features = ["highs"] }
+
+# Decimal math (never floats)
+rust_decimal = { version = "1", features = ["serde"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
 ```
 
 ---
 
 ## Development Phases
 
-### Phase 1: Infrastructure (Week 1-2)
-- [ ] Rust project setup
-- [ ] WebSocket connection to Polymarket
-- [ ] Order book cache structure
-- [ ] Basic logging/monitoring
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Rust project setup with proper module structure
+- [x] WebSocket connection to Polymarket
+- [x] Order book cache with thread-safe access
+- [x] Configuration and logging
 
-### Phase 2: Simple Arbitrage (Week 3-4)
-- [ ] YES+NO detector
-- [ ] Market rebalancing detector
-- [ ] Execution engine (paper trading)
-- [ ] Testnet deployment (Amoy)
+### Phase 2: Detection ✅ COMPLETE
+- [x] Single-condition detector (YES + NO < $1)
+- [x] Domain types with proper encapsulation
+- [x] Opportunity builder pattern
+- [x] Comprehensive test coverage
 
-### Phase 3: Production Hardening (Week 5-6)
-- [ ] Risk management
-- [ ] Slippage protection
-- [ ] Monitoring dashboard
-- [ ] Mainnet deployment (small capital)
+### Phase 3: Execution ✅ COMPLETE
+- [x] Exchange trait abstractions (OrderExecutor)
+- [x] Polymarket executor implementation
+- [x] Position tracking
+- [x] Testnet integration (Amoy)
 
-### Phase 4: Combinatorial (Week 7-8)
-- [ ] Dependency graph builder
-- [ ] Gurobi integration
-- [ ] Frank-Wolfe implementation
-- [ ] Backtest framework
+### Multi-Strategy Architecture ✅ COMPLETE
+- [x] Strategy trait and StrategyRegistry
+- [x] SingleConditionStrategy (refactored)
+- [x] MarketRebalancingStrategy (new)
+- [x] CombinatorialStrategy with Frank-Wolfe + ILP
+- [x] Solver abstraction with HiGHS
+- [x] Bregman divergence calculations
+- [x] Configuration-driven strategy selection
 
-### Phase 5: Scale (Week 9+)
-- [ ] Latency optimization
-- [ ] Capital scaling
-- [ ] Additional markets
+### Phase 4: Risk & Telegram (Next)
+- [ ] Risk manager with limits and circuit breakers
+- [ ] Telegram bot for alerts and control
+- [ ] Daily summary reports
+
+### Phase 5: Mainnet
+- [ ] Switch config to mainnet
+- [ ] Start with small stakes ($50-100)
+- [ ] Monitor and tune thresholds
+
+---
+
+## Future Work
+
+1. **Dependency Detection** — LLM-assisted market correlation discovery
+2. **Constraint Builder** — Encode logical dependencies as ILP constraints
+3. **Multi-Market State** — Aggregate order books across correlated markets
+4. **Warm-Starting** — Reuse solver state across detection cycles
+5. **Gurobi Backend** — Optional high-performance solver for heavy workloads
