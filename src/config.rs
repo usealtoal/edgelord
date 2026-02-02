@@ -68,15 +68,10 @@ impl Config {
 
         match self.logging.format.as_str() {
             "json" => {
-                fmt()
-                    .json()
-                    .with_env_filter(filter)
-                    .init();
+                fmt().json().with_env_filter(filter).init();
             }
             _ => {
-                fmt()
-                    .with_env_filter(filter)
-                    .init();
+                fmt().with_env_filter(filter).init();
             }
         }
     }

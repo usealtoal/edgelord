@@ -49,10 +49,7 @@ async fn run(config: Config) -> error::Result<()> {
         return Ok(());
     }
 
-    let token_ids: Vec<String> = markets
-        .iter()
-        .flat_map(|m| m.token_ids())
-        .collect();
+    let token_ids: Vec<String> = markets.iter().flat_map(|m| m.token_ids()).collect();
 
     info!(
         markets = markets.len(),
@@ -70,8 +67,8 @@ async fn run(config: Config) -> error::Result<()> {
 
     let handler = WebSocketHandler::new(config.network.ws_url);
 
-    handler.run(token_ids, |msg| {
-        match msg {
+    handler
+        .run(token_ids, |msg| match msg {
             WsMessage::Book(book) => {
                 let best_bid = book.bids.first().map(|b| b.price.as_str()).unwrap_or("-");
                 let best_ask = book.asks.first().map(|a| a.price.as_str()).unwrap_or("-");
@@ -91,8 +88,8 @@ async fn run(config: Config) -> error::Result<()> {
                 );
             }
             _ => {}
-        }
-    }).await?;
+        })
+        .await?;
 
     Ok(())
 }

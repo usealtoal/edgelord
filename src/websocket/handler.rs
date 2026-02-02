@@ -1,15 +1,10 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::Message,
-    MaybeTlsStream,
-    WebSocketStream,
-};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
-use crate::error::Result;
 use super::messages::{SubscribeMessage, WsMessage};
+use crate::error::Result;
 
 pub struct WebSocketHandler {
     url: String,
@@ -46,11 +41,7 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    pub async fn run<F>(
-        &self,
-        asset_ids: Vec<String>,
-        mut on_message: F,
-    ) -> Result<()>
+    pub async fn run<F>(&self, asset_ids: Vec<String>, mut on_message: F) -> Result<()>
     where
         F: FnMut(WsMessage),
     {
