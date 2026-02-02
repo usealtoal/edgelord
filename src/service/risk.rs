@@ -276,4 +276,46 @@ mod tests {
         risk.reset_circuit_breaker();
         assert!(!state.is_circuit_breaker_active());
     }
+
+    #[test]
+    fn test_check_position_limit() {
+        use crate::domain::{Position, PositionLeg, PositionStatus};
+
+        let limits = RiskLimits {
+            max_position_per_market: dec!(100), // Only $100 per market
+            min_profit_threshold: dec!(0),
+            ..Default::default()
+        };
+        let state = Arc::new(AppState::new(limits));
+
+        // Add existing position in this market
+        {
+            let mut positions = state.positions_mut();
+            let position = Position::new(
+                positions.next_id(),
+                MarketId::from("test-market"),
+                vec![
+                    PositionLeg::new(TokenId::from("yes"), dec!(50), dec!(0.45)),
+                    PositionLeg::new(TokenId::from("no"), dec!(50), dec!(0.45)),
+                ],
+                dec!(45), // $45 entry cost
+                dec!(50),
+                chrono::Utc::now(),
+                PositionStatus::Open,
+            );
+            positions.add(position);
+        }
+
+        let risk = RiskManager::new(state);
+
+        // Try to add $90 more (45 + 90 = 135 > 100 limit)
+        let opp = make_opportunity(dec!(100), dec!(0.45), dec!(0.45)); // $90 cost
+        let result = risk.check(&opp);
+
+        assert!(!result.is_approved());
+        assert!(matches!(
+            result.rejection_error(),
+            Some(RiskError::PositionLimitExceeded { .. })
+        ));
+    }
 }
