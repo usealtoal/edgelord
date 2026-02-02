@@ -54,7 +54,6 @@ src/
 │   ├── orderbook.rs       # OrderBook, OrderBookCache
 │   ├── opportunity.rs     # Opportunity with builder
 │   ├── position.rs        # Position tracking
-│   ├── detector.rs        # Legacy re-export
 │   │
 │   ├── strategy/          # Pluggable detection strategies
 │   │   ├── mod.rs         # Strategy trait + StrategyRegistry
@@ -78,7 +77,7 @@ src/
 │
 ├── exchange/              # Abstraction layer
 │   ├── mod.rs             # Module exports
-│   └── traits.rs          # ExchangeClient, OrderExecutor
+│   └── traits.rs          # OrderExecutor trait
 │
 └── adapter/               # Exchange implementations
     ├── mod.rs             # Module exports
