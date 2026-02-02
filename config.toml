@@ -1,0 +1,7 @@
+[network]
+ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+api_url = "https://clob.polymarket.com"
+
+[logging]
+level = "info"
+format = "pretty"
