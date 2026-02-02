@@ -1,6 +1,8 @@
 mod api;
 mod config;
+mod detector;
 mod error;
+mod orderbook;
 mod types;
 mod websocket;
 

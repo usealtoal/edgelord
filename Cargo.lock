@@ -263,6 +263,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "futures-util",
+ "parking_lot",
  "reqwest",
  "rust_decimal",
  "serde",
