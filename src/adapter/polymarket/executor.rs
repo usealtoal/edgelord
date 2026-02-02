@@ -239,9 +239,25 @@ impl OrderExecutor for Executor {
         }
     }
 
-    async fn cancel(&self, _order_id: &OrderId) -> Result<()> {
-        // TODO: Implement order cancellation via CLOB client
-        Err(ExecutionError::OrderRejected("Order cancellation not yet implemented".into()).into())
+    async fn cancel(&self, order_id: &OrderId) -> Result<()> {
+        let response = self
+            .client
+            .cancel_order(order_id.as_str())
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Cancel failed: {e}")))?;
+
+        // Check if the order was actually cancelled
+        if let Some(reason) = response.not_canceled.get(order_id.as_str()) {
+            return Err(ExecutionError::OrderRejected(format!(
+                "Order {} not cancelled: {}",
+                order_id.as_str(),
+                reason
+            ))
+            .into());
+        }
+
+        info!(order_id = %order_id, "Order cancelled");
+        Ok(())
     }
 
     fn exchange_name(&self) -> &'static str {
