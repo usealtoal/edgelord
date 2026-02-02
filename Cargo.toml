@@ -8,6 +8,7 @@ license = "MIT"
 [features]
 default = ["polymarket"]
 polymarket = ["dep:polymarket-client-sdk", "dep:alloy-signer-local"]
+telegram = ["dep:teloxide"]
 
 [dependencies]
 # Async runtime
@@ -25,6 +26,9 @@ polymarket-client-sdk = { version = "0.4", features = ["clob"], optional = true 
 
 # Alloy signer for wallet operations (optional, must match polymarket-client-sdk's version)
 alloy-signer-local = { version = "1", optional = true }
+
+# Telegram bot (optional)
+teloxide = { version = "0.13", features = ["macros"], optional = true }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
