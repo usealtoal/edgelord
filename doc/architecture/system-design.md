@@ -51,8 +51,14 @@
 ```
 src/
 ├── lib.rs                 # Library root with public API
-├── main.rs                # Thin entry point
-├── app.rs                 # Application orchestration
+├── main.rs                # Thin binary entry point
+├── error.rs               # Structured error types
+│
+├── app/                   # Application layer
+│   ├── mod.rs             # Module exports
+│   ├── config.rs          # Configuration loading
+│   ├── orchestrator.rs    # Main application loop
+│   └── state.rs           # Application state management
 │
 ├── domain/                # Exchange-agnostic (NO exchange imports)
 │   ├── id.rs             # TokenId, MarketId (newtypes)
@@ -77,16 +83,94 @@ src/
 │       ├── mod.rs         # Solver trait + types
 │       └── highs.rs       # HiGHS implementation
 │
+├── service/               # Cross-cutting services
+│   ├── mod.rs             # Module exports
+│   ├── risk.rs            # RiskManager with limits & circuit breakers
+│   ├── notifier.rs        # NotifierRegistry trait + registry
+│   └── telegram.rs        # Telegram notifier (feature-gated)
+│
 ├── exchange/              # Abstraction layer
+│   ├── mod.rs             # Module exports
 │   └── traits.rs          # ExchangeClient, OrderExecutor
 │
-└── polymarket/            # Polymarket implementation
-    ├── client.rs          # REST client
-    ├── executor.rs        # OrderExecutor implementation
-    ├── websocket.rs       # WS handler
-    ├── messages.rs        # WS types + to_orderbook()
-    ├── registry.rs        # YES/NO pair mapping
-    └── types.rs           # API types
+└── adapter/               # Exchange implementations
+    ├── mod.rs             # Module exports
+    └── polymarket/        # Polymarket implementation
+        ├── mod.rs         # Module exports
+        ├── client.rs      # REST client
+        ├── executor.rs    # OrderExecutor implementation
+        ├── websocket.rs   # WS handler
+        ├── messages.rs    # WS types + to_orderbook()
+        ├── registry.rs    # YES/NO pair mapping
+        └── types.rs       # API types
+```
+
+---
+
+## Service Layer
+
+The service layer provides cross-cutting concerns that operate across the application.
+
+### RiskManager
+
+Validates opportunities against configurable risk limits before execution:
+
+```rust
+pub struct RiskManager {
+    limits: RiskLimits,
+    circuit_breaker: CircuitBreaker,
+}
+
+impl RiskManager {
+    /// Check if an opportunity passes all risk checks.
+    pub fn check(&self, opportunity: &Opportunity, state: &AppState) -> RiskDecision;
+
+    /// Record execution result and update circuit breaker state.
+    pub fn record_execution(&mut self, result: &ExecutionResult);
+}
+```
+
+**Risk Limits:**
+- `max_position_per_market`: Maximum exposure per individual market
+- `max_total_exposure`: Maximum total portfolio exposure
+- `min_profit_threshold`: Minimum profit required to execute
+- `max_slippage`: Maximum acceptable slippage
+
+**Circuit Breakers:**
+- Consecutive failure threshold triggers trading halt
+- Configurable cooldown period before resuming
+
+### NotifierRegistry
+
+Manages multiple notification backends for alerts and monitoring:
+
+```rust
+#[async_trait]
+pub trait Notifier: Send + Sync {
+    fn name(&self) -> &'static str;
+    async fn notify(&self, event: &NotificationEvent) -> Result<()>;
+}
+
+pub struct NotifierRegistry {
+    notifiers: Vec<Box<dyn Notifier>>,
+}
+```
+
+**Notification Events:**
+- `OpportunityDetected`: New arbitrage opportunity found
+- `ExecutionCompleted`: Trade executed successfully
+- `ExecutionFailed`: Trade execution failed
+- `RiskRejection`: Opportunity rejected by risk manager
+- `CircuitBreakerTripped`: Trading halted due to failures
+
+### TelegramNotifier (feature-gated)
+
+Real-time alerts via Telegram bot (requires `telegram` feature):
+
+```rust
+// Enable with: cargo build --features telegram
+let notifier = TelegramNotifier::from_env()?;
+registry.register(Box::new(notifier));
 ```
 
 ---
@@ -240,6 +324,24 @@ enabled = false      # Requires dependency configuration
 max_iterations = 20
 tolerance = 0.0001
 gap_threshold = 0.02
+
+[risk]
+max_position_per_market = 1000   # $1000 max per market
+max_total_exposure = 10000       # $10000 total portfolio limit
+min_profit_threshold = 0.05      # $0.05 minimum profit
+max_slippage = 0.02              # 2% maximum slippage
+
+[telegram]
+enabled = false                  # Set to true to enable
+notify_opportunities = false     # Alert on new opportunities
+notify_executions = true         # Alert on trade executions
+notify_risk_rejections = true    # Alert when risk manager rejects
+```
+
+**Environment Variables for Telegram:**
+```bash
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
 ```
 
 ---
@@ -314,10 +416,11 @@ tracing = "0.1"
 - [x] Bregman divergence calculations
 - [x] Configuration-driven strategy selection
 
-### Phase 4: Risk & Telegram (Next)
-- [ ] Risk manager with limits and circuit breakers
-- [ ] Telegram bot for alerts and control
-- [ ] Daily summary reports
+### Phase 4: Risk & Telegram ✅ COMPLETE
+- [x] Risk manager with limits and circuit breakers
+- [x] Telegram bot for alerts (feature-gated)
+- [x] Service layer architecture (RiskManager, NotifierRegistry)
+- [x] App module refactoring (config, orchestrator, state)
 
 ### Phase 5: Mainnet
 - [ ] Switch config to mainnet

@@ -64,9 +64,12 @@ See [doc/architecture/system-design.md](doc/architecture/system-design.md) for d
 src/
 ├── lib.rs                 # Library root with public API
 ├── main.rs                # Thin binary entry point
-├── app.rs                 # Application orchestration
-├── config.rs              # Configuration loading
 ├── error.rs               # Structured error types
+│
+├── app/                   # Application layer
+│   ├── config.rs          # Configuration loading
+│   ├── orchestrator.rs    # Main application loop
+│   └── state.rs           # Shared application state
 │
 ├── domain/                # Exchange-agnostic core
 │   ├── id.rs             # TokenId, MarketId (newtypes)
@@ -75,32 +78,29 @@ src/
 │   ├── orderbook.rs       # PriceLevel, OrderBook, OrderBookCache
 │   ├── opportunity.rs     # Opportunity with builder pattern
 │   ├── position.rs        # Position tracking
-│   ├── detector.rs        # Legacy re-export (use strategy/)
 │   │
 │   ├── strategy/          # Pluggable detection strategies
-│   │   ├── mod.rs         # Strategy trait + StrategyRegistry
-│   │   ├── context.rs     # DetectionContext, MarketContext
 │   │   ├── single_condition.rs    # YES + NO < $1
 │   │   ├── market_rebalancing.rs  # Sum of outcomes < $1
 │   │   └── combinatorial/         # Frank-Wolfe + ILP
-│   │       ├── mod.rs             # CombinatorialStrategy
-│   │       ├── bregman.rs         # Bregman divergence (KL)
-│   │       └── frank_wolfe.rs     # Frank-Wolfe algorithm
 │   │
 │   └── solver/            # LP/ILP solver abstraction
-│       ├── mod.rs         # Solver trait + types
 │       └── highs.rs       # HiGHS implementation
+│
+├── service/               # Cross-cutting services
+│   ├── risk.rs            # RiskManager with limits & circuit breakers
+│   ├── notifier.rs        # Notifier trait + registry
+│   └── telegram.rs        # Telegram notifier (feature-gated)
 │
 ├── exchange/              # Exchange abstraction layer
 │   └── traits.rs          # ExchangeClient, OrderExecutor traits
 │
-└── polymarket/            # Polymarket implementation
-    ├── client.rs          # REST API client
-    ├── executor.rs        # Order execution
-    ├── websocket.rs       # WebSocket handler
-    ├── messages.rs        # WS message types
-    ├── registry.rs        # YES/NO market pair mapping
-    └── types.rs           # API response types
+└── adapter/               # Exchange implementations
+    └── polymarket/        # Polymarket implementation
+        ├── client.rs      # REST API client
+        ├── executor.rs    # Order execution
+        ├── websocket.rs   # WebSocket handler
+        └── registry.rs    # YES/NO market pair mapping
 ```
 
 ## Configuration
@@ -123,6 +123,34 @@ enabled = false      # Requires dependency configuration
 max_iterations = 20
 tolerance = 0.0001
 gap_threshold = 0.02
+
+[risk]
+max_position_per_market = 1000   # $1000 max per market
+max_total_exposure = 10000       # $10000 total portfolio limit
+min_profit_threshold = 0.05      # $0.05 minimum profit
+max_slippage = 0.02              # 2% maximum slippage
+
+[telegram]
+enabled = false                  # Set to true to enable
+notify_opportunities = false     # Alert on new opportunities
+notify_executions = true         # Alert on trade executions
+notify_risk_rejections = true    # Alert when risk manager rejects
+```
+
+## Environment Variables
+
+```bash
+# Required for trading
+export WALLET_PRIVATE_KEY="0x..."
+
+# Required for Telegram notifications (when telegram feature enabled)
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
+```
+
+To enable Telegram notifications:
+```bash
+cargo build --features telegram
 ```
 
 ## Tech Stack
@@ -150,12 +178,12 @@ doc/
 
 **Multi-Strategy Architecture Complete**
 
-- ✅ Phase 1: Foundation (WebSocket, market data)
-- ✅ Phase 2: Detection (single-condition arbitrage scanner)
-- ✅ Phase 3: Execution (order submission on Amoy testnet)
-- ✅ Multi-Strategy: Pluggable strategy system with Frank-Wolfe + ILP
-- 🔜 Phase 4: Risk management & Telegram alerts
-- 🔜 Phase 5: Mainnet deployment
+- Phase 1: Foundation (WebSocket, market data)
+- Phase 2: Detection (single-condition arbitrage scanner)
+- Phase 3: Execution (order submission on Amoy testnet)
+- Multi-Strategy: Pluggable strategy system with Frank-Wolfe + ILP
+- Phase 4: Risk management & Telegram alerts
+- Phase 5: Mainnet deployment (next)
 
 ## References
 

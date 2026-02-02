@@ -40,3 +40,15 @@ gap_threshold = 0.02
 #
 # For mainnet (chain_id = 137), use a dedicated trading wallet with limited funds.
 [wallet]
+
+[risk]
+max_position_per_market = 1000
+max_total_exposure = 10000
+min_profit_threshold = 0.05
+max_slippage = 0.02
+
+[telegram]
+enabled = false
+notify_opportunities = false
+notify_executions = true
+notify_risk_rejections = true

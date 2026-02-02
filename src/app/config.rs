@@ -1,7 +1,9 @@
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::app::state::RiskLimits;
 use crate::domain::strategy::{
     CombinatorialConfig, MarketRebalancingConfig, SingleConditionConfig,
 };
@@ -15,6 +17,10 @@ pub struct Config {
     pub strategies: StrategiesConfig,
     #[serde(default)]
     pub wallet: WalletConfig,
+    #[serde(default)]
+    pub risk: RiskConfig,
+    #[serde(default)]
+    pub telegram: TelegramAppConfig,
 }
 
 /// Configuration for all detection strategies.
@@ -48,6 +54,82 @@ pub struct WalletConfig {
     /// Private key loaded from WALLET_PRIVATE_KEY env var at runtime
     #[serde(skip)]
     pub private_key: Option<String>,
+}
+
+/// Risk management configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RiskConfig {
+    /// Maximum position size per market in dollars.
+    #[serde(default = "default_max_position_per_market")]
+    pub max_position_per_market: Decimal,
+    /// Maximum total exposure across all positions.
+    #[serde(default = "default_max_total_exposure")]
+    pub max_total_exposure: Decimal,
+    /// Minimum profit threshold to execute.
+    #[serde(default = "default_min_profit_threshold")]
+    pub min_profit_threshold: Decimal,
+    /// Maximum slippage tolerance (e.g., 0.02 = 2%).
+    #[serde(default = "default_max_slippage")]
+    pub max_slippage: Decimal,
+}
+
+fn default_max_position_per_market() -> Decimal {
+    Decimal::from(1000)
+}
+
+fn default_max_total_exposure() -> Decimal {
+    Decimal::from(10000)
+}
+
+fn default_min_profit_threshold() -> Decimal {
+    Decimal::new(5, 2) // $0.05
+}
+
+fn default_max_slippage() -> Decimal {
+    Decimal::new(2, 2) // 2%
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Telegram notification configuration.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TelegramAppConfig {
+    /// Enable telegram notifications.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Send opportunity alerts (can be noisy).
+    #[serde(default)]
+    pub notify_opportunities: bool,
+    /// Send execution alerts.
+    #[serde(default = "default_true")]
+    pub notify_executions: bool,
+    /// Send risk rejection alerts.
+    #[serde(default = "default_true")]
+    pub notify_risk_rejections: bool,
+}
+
+impl Default for RiskConfig {
+    fn default() -> Self {
+        Self {
+            max_position_per_market: default_max_position_per_market(),
+            max_total_exposure: default_max_total_exposure(),
+            min_profit_threshold: default_min_profit_threshold(),
+            max_slippage: default_max_slippage(),
+        }
+    }
+}
+
+impl From<RiskConfig> for RiskLimits {
+    fn from(config: RiskConfig) -> Self {
+        Self {
+            max_position_per_market: config.max_position_per_market,
+            max_total_exposure: config.max_total_exposure,
+            min_profit_threshold: config.min_profit_threshold,
+            max_slippage: config.max_slippage,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,6 +193,8 @@ impl Default for Config {
             },
             strategies: StrategiesConfig::default(),
             wallet: WalletConfig::default(),
+            risk: RiskConfig::default(),
+            telegram: TelegramAppConfig::default(),
         }
     }
 }

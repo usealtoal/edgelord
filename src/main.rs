@@ -1,6 +1,6 @@
+use edgelord::app::Config;
 #[cfg(feature = "polymarket")]
 use edgelord::app::App;
-use edgelord::config::Config;
 use tokio::signal;
 use tracing::{error, info};
 

@@ -38,6 +38,39 @@ pub enum ExecutionError {
     SubmissionFailed(String),
 }
 
+/// Risk management errors.
+#[derive(Error, Debug, Clone)]
+pub enum RiskError {
+    #[error("circuit breaker active: {reason}")]
+    CircuitBreakerActive { reason: String },
+
+    #[error("position limit exceeded: {current} >= {limit} for market {market_id}")]
+    PositionLimitExceeded {
+        market_id: String,
+        current: rust_decimal::Decimal,
+        limit: rust_decimal::Decimal,
+    },
+
+    #[error("exposure limit exceeded: {current} + {additional} > {limit}")]
+    ExposureLimitExceeded {
+        current: rust_decimal::Decimal,
+        additional: rust_decimal::Decimal,
+        limit: rust_decimal::Decimal,
+    },
+
+    #[error("profit below threshold: {expected} < {threshold}")]
+    ProfitBelowThreshold {
+        expected: rust_decimal::Decimal,
+        threshold: rust_decimal::Decimal,
+    },
+
+    #[error("slippage too high: {actual} > {max}")]
+    SlippageTooHigh {
+        actual: rust_decimal::Decimal,
+        max: rust_decimal::Decimal,
+    },
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -45,6 +78,9 @@ pub enum Error {
 
     #[error(transparent)]
     Execution(#[from] ExecutionError),
+
+    #[error(transparent)]
+    Risk(#[from] RiskError),
 
     #[error("WebSocket error: {0}")]
     WebSocket(#[from] tokio_tungstenite::tungstenite::Error),

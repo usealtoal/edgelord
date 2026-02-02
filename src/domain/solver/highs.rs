@@ -3,6 +3,9 @@
 //! HiGHS is a high-performance open-source linear/mixed-integer programming solver.
 //! This implementation wraps it using the good_lp crate for ergonomic Rust usage.
 
+// Allow large error types - inherited from parent module's unified Error type
+#![allow(clippy::result_large_err)]
+
 use good_lp::solvers::highs::highs;
 use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel};
 use rust_decimal::prelude::ToPrimitive;
