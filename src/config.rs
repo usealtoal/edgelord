@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::path::Path;
+use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::error::{Error, Result};
 
@@ -56,6 +57,27 @@ impl Default for Config {
                 level: "info".into(),
                 format: "pretty".into(),
             },
+        }
+    }
+}
+
+impl Config {
+    pub fn init_logging(&self) {
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new(&self.logging.level));
+
+        match self.logging.format.as_str() {
+            "json" => {
+                fmt()
+                    .json()
+                    .with_env_filter(filter)
+                    .init();
+            }
+            _ => {
+                fmt()
+                    .with_env_filter(filter)
+                    .init();
+            }
         }
     }
 }
