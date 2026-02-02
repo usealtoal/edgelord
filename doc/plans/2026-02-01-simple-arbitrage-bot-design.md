@@ -879,6 +879,23 @@ tokio-test = "0.4"
 
 ---
 
+## Future Considerations
+
+### Kalshi Integration
+
+Kalshi (US-regulated, CFTC-approved) uses a fundamentally different market structure:
+
+- **Single-contract model**: One contract per binary outcome, not separate YES/NO tokens
+- **No simple arbitrage**: A YES bid at X¢ = NO ask at (100-X)¢, preventing YES+NO < $1 opportunities
+- **Different opportunities**: Multi-outcome events (3+ outcomes) and cross-platform arbitrage
+
+If adding Kalshi support:
+1. Detection logic must change (multi-outcome sum < $1, not binary pair)
+2. Different API client (kalshi-rust crate, API key auth vs wallet signing)
+3. Consider `exchanges/kalshi/` alongside `polymarket/` with shared `domain/` types
+
+---
+
 ## References
 
 - [Polymarket CLOB Docs](https://docs.polymarket.com/developers/CLOB/introduction)
