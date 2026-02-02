@@ -49,7 +49,7 @@ pub mod error;
 pub mod exchange;
 
 #[cfg(feature = "polymarket")]
-pub mod polymarket;
+pub mod adapter;
 
 #[cfg(feature = "polymarket")]
 pub mod app;

@@ -14,7 +14,7 @@ use crate::domain::strategy::{
 };
 use crate::domain::{MarketPair, Opportunity, OrderBookCache};
 use crate::error::Result;
-use crate::polymarket::{
+use crate::adapter::polymarket::{
     MarketRegistry, PolymarketClient, PolymarketExecutor, WebSocketHandler, WsMessage,
 };
 use tracing::{debug, error, info, warn};
