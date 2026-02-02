@@ -4,6 +4,6 @@ mod config;
 mod orchestrator;
 mod state;
 
-pub use config::{Config, LoggingConfig, NetworkConfig, StrategiesConfig, WalletConfig};
+pub use config::{Config, LoggingConfig, NetworkConfig, RiskConfig, StrategiesConfig, WalletConfig};
 pub use orchestrator::App;
 pub use state::{AppState, RiskLimits};
