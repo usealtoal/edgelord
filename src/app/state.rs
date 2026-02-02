@@ -133,4 +133,36 @@ mod tests {
         assert_eq!(limits.max_position_per_market, Decimal::from(1000));
         assert_eq!(limits.max_total_exposure, Decimal::from(10000));
     }
+
+    #[test]
+    fn test_total_exposure() {
+        use crate::domain::{MarketId, Position, PositionLeg, PositionStatus, TokenId};
+        use rust_decimal_macros::dec;
+
+        let state = AppState::default();
+
+        // Initially zero
+        assert_eq!(state.total_exposure(), Decimal::ZERO);
+
+        // Add a position
+        {
+            let mut positions = state.positions_mut();
+            let position = Position::new(
+                positions.next_id(),
+                MarketId::new("test"),
+                vec![
+                    PositionLeg::new(TokenId::new("yes"), dec!(100), dec!(0.45)),
+                    PositionLeg::new(TokenId::new("no"), dec!(100), dec!(0.45)),
+                ],
+                dec!(90), // entry cost
+                dec!(100),
+                chrono::Utc::now(),
+                PositionStatus::Open,
+            );
+            positions.add(position);
+        }
+
+        // Now has exposure
+        assert_eq!(state.total_exposure(), dec!(90));
+    }
 }
