@@ -3,7 +3,8 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use super::types::{OrderBook, PriceLevel, TokenId};
+use super::ids::TokenId;
+use super::types::{OrderBook, PriceLevel};
 use crate::polymarket::{BookMessage, WsPriceLevel};
 
 /// Thread-safe cache of order books

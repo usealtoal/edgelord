@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use crate::domain::{MarketId, Price, TokenId, Volume};
+use edgelord::domain::{MarketId, Price, TokenId, Volume};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 

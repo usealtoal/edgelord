@@ -40,19 +40,19 @@ impl MarketRegistry {
                 .find(|t| t.outcome.to_lowercase() == "no");
 
             if let (Some(yes), Some(no)) = (yes_token, no_token) {
-                let pair = MarketPair {
-                    market_id: MarketId::from(market.condition_id.clone()),
-                    question: market.question.clone().unwrap_or_default(),
-                    yes_token: TokenId::from(yes.token_id.clone()),
-                    no_token: TokenId::from(no.token_id.clone()),
-                };
+                let pair = MarketPair::new(
+                    MarketId::from(market.condition_id.clone()),
+                    market.question.clone().unwrap_or_default(),
+                    TokenId::from(yes.token_id.clone()),
+                    TokenId::from(no.token_id.clone()),
+                );
 
                 registry
                     .token_to_market
-                    .insert(pair.yes_token.clone(), pair.clone());
+                    .insert(pair.yes_token().clone(), pair.clone());
                 registry
                     .token_to_market
-                    .insert(pair.no_token.clone(), pair.clone());
+                    .insert(pair.no_token().clone(), pair.clone());
                 registry.pairs.push(pair);
             }
         }

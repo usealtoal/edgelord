@@ -1,49 +1,16 @@
 //! Core domain types for arbitrage detection.
+//!
+//! NOTE: This file is being deprecated. Types are being migrated to focused modules:
+//! - TokenId, MarketId -> ids.rs
+//! - Price, Volume -> money.rs
+//! - MarketPair, MarketInfo, TokenInfo -> market.rs
+//!
+//! This file will be deleted in Task 14. For now, it contains:
+//! - OrderBook and PriceLevel (will move to orderbook types)
+//! - Opportunity (will move to its own module)
 
-use rust_decimal::Decimal;
-use std::fmt;
-
-/// Token identifier - newtype for type safety
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TokenId(pub String);
-
-impl fmt::Display for TokenId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<String> for TokenId {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<&str> for TokenId {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-/// Market condition identifier
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MarketId(pub String);
-
-impl fmt::Display for MarketId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<String> for MarketId {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-/// Price and volume use Decimal for precision
-pub type Price = Decimal;
-pub type Volume = Decimal;
+use super::ids::{MarketId, TokenId};
+use super::money::{Price, Volume};
 
 /// A single price level in the order book
 #[derive(Debug, Clone)]
@@ -81,15 +48,6 @@ impl OrderBook {
     pub fn best_ask(&self) -> Option<&PriceLevel> {
         self.asks.first()
     }
-}
-
-/// A YES/NO market pair
-#[derive(Debug, Clone)]
-pub struct MarketPair {
-    pub market_id: MarketId,
-    pub question: String,
-    pub yes_token: TokenId,
-    pub no_token: TokenId,
 }
 
 /// Detected arbitrage opportunity

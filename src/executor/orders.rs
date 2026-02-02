@@ -19,9 +19,9 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use super::positions::{Position, PositionLeg, PositionStatus, PositionTracker};
-use crate::config::Config;
-use crate::domain::{Opportunity, Price, TokenId};
-use crate::error::{Error, Result};
+use edgelord::config::Config;
+use edgelord::domain::{Opportunity, Price, TokenId};
+use edgelord::error::{Error, Result};
 
 /// Result of executing an arbitrage opportunity.
 #[derive(Debug, Clone)]
@@ -103,8 +103,8 @@ impl OrderExecutor {
         );
 
         // Execute both legs in parallel
-        let yes_token = opportunity.yes_token.0.clone();
-        let no_token = opportunity.no_token.0.clone();
+        let yes_token = opportunity.yes_token.to_string();
+        let no_token = opportunity.no_token.to_string();
         let volume = opportunity.volume;
         let yes_price = opportunity.yes_ask;
         let no_price = opportunity.no_ask;

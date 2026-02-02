@@ -82,8 +82,8 @@ async fn run(config: Config) -> error::Result<()> {
 
     for pair in registry.pairs() {
         info!(
-            market_id = %pair.market_id,
-            question = %pair.question,
+            market_id = %pair.market_id(),
+            question = %pair.question(),
             "Tracking market"
         );
     }
@@ -91,7 +91,7 @@ async fn run(config: Config) -> error::Result<()> {
     let token_ids: Vec<String> = registry
         .pairs()
         .iter()
-        .flat_map(|p| vec![p.yes_token.0.clone(), p.no_token.0.clone()])
+        .flat_map(|p| vec![p.yes_token().to_string(), p.no_token().to_string()])
         .collect();
 
     info!(tokens = token_ids.len(), "Subscribing to tokens");
