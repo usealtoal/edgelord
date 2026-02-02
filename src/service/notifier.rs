@@ -84,6 +84,7 @@ pub struct RiskEvent {
 }
 
 impl RiskEvent {
+    #[must_use]
     pub fn new(market_id: &str, error: &RiskError) -> Self {
         Self {
             market_id: market_id.to_string(),
