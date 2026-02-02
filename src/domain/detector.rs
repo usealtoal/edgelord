@@ -1,18 +1,72 @@
-//! Arbitrage detection logic.
+//! Arbitrage detection logic for prediction markets.
+//!
+//! This module implements single-condition arbitrage detection, which identifies
+//! opportunities where the sum of YES and NO ask prices is less than $1.00.
+//! In a well-functioning binary prediction market, YES + NO should equal $1.00,
+//! so any discount represents a risk-free profit opportunity.
+//!
+//! # Detection Strategy
+//!
+//! The detector scans market pairs and identifies opportunities based on:
+//! - **Edge**: The profit margin per dollar (1.0 - total_cost)
+//! - **Volume**: Minimum of available YES and NO liquidity
+//! - **Expected Profit**: Edge multiplied by tradeable volume
+//!
+//! Both minimum edge and minimum expected profit thresholds can be configured
+//! to filter out opportunities that are too small to be worthwhile.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use edgelord::domain::{DetectorConfig, MarketPair, OrderBookCache};
+//! use edgelord::domain::detector::detect_single_condition;
+//!
+//! let pair = MarketPair::new(market_id, "Will it rain?", yes_token, no_token);
+//! let cache = OrderBookCache::new();
+//! // ... populate cache with order books ...
+//! let config = DetectorConfig::default();
+//!
+//! if let Some(opportunity) = detect_single_condition(&pair, &cache, &config) {
+//!     println!("Found opportunity with edge: {}", opportunity.edge());
+//! }
+//! ```
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{MarketPair, Opportunity, OrderBookCache};
 
-/// Configuration for the arbitrage detector
+/// Configuration for the arbitrage detector.
+///
+/// Controls the minimum thresholds for considering an opportunity actionable.
+/// Default values are conservative to avoid chasing tiny profits.
+///
+/// # Example
+///
+/// ```
+/// use edgelord::domain::DetectorConfig;
+/// use rust_decimal_macros::dec;
+///
+/// // Use defaults
+/// let config = DetectorConfig::default();
+///
+/// // Or customize thresholds
+/// let config = DetectorConfig {
+///     min_edge: dec!(0.03),      // 3% minimum edge
+///     min_profit: dec!(1.00),    // $1.00 minimum expected profit
+/// };
+/// ```
 #[derive(Debug, Clone, Deserialize)]
 pub struct DetectorConfig {
-    /// Minimum edge (profit per $1) to consider an opportunity
+    /// Minimum edge (profit per $1) to consider an opportunity.
+    ///
+    /// Default: 0.05 (5% edge required)
     #[serde(default = "default_min_edge")]
     pub min_edge: Decimal,
 
-    /// Minimum expected profit in dollars to act on
+    /// Minimum expected profit in dollars to act on.
+    ///
+    /// Default: 0.50 ($0.50 minimum profit)
     #[serde(default = "default_min_profit")]
     pub min_profit: Decimal,
 }
@@ -34,7 +88,31 @@ impl Default for DetectorConfig {
     }
 }
 
-/// Detect single-condition arbitrage (YES + NO < $1.00)
+/// Detect single-condition arbitrage opportunities.
+///
+/// Checks if the sum of the best YES ask and best NO ask prices is less than $1.00.
+/// If so, buying both outcomes guarantees a profit since they resolve to exactly $1.00.
+///
+/// # Arguments
+///
+/// * `pair` - The market pair containing YES and NO token IDs
+/// * `cache` - Order book cache with current market data
+/// * `config` - Detection thresholds (min edge, min profit)
+///
+/// # Returns
+///
+/// Returns `Some(Opportunity)` if an actionable arbitrage exists, `None` otherwise.
+///
+/// # Example
+///
+/// ```ignore
+/// let opportunity = detect_single_condition(&pair, &cache, &config);
+/// if let Some(opp) = opportunity {
+///     println!("Market: {}", opp.question());
+///     println!("Edge: {}%", opp.edge() * 100);
+///     println!("Expected profit: ${}", opp.expected_profit());
+/// }
+/// ```
 pub fn detect_single_condition(
     pair: &MarketPair,
     cache: &OrderBookCache,
