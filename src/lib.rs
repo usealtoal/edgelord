@@ -46,6 +46,7 @@ pub mod app;
 pub mod domain;
 pub mod error;
 pub mod exchange;
+pub mod service;
 
 #[cfg(feature = "polymarket")]
 pub mod adapter;
