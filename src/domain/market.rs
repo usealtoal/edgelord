@@ -10,7 +10,7 @@ pub struct TokenInfo {
 }
 
 impl TokenInfo {
-    /// Create a new TokenInfo.
+    /// Create a new `TokenInfo`.
     pub fn new(id: TokenId, outcome: impl Into<String>) -> Self {
         Self {
             id,
@@ -40,7 +40,7 @@ pub struct MarketInfo {
 }
 
 impl MarketInfo {
-    /// Create a new MarketInfo.
+    /// Create a new `MarketInfo`.
     pub fn new(id: MarketId, question: impl Into<String>, tokens: Vec<TokenInfo>) -> Self {
         Self {
             id,
@@ -78,7 +78,7 @@ pub struct MarketPair {
 }
 
 impl MarketPair {
-    /// Create a new MarketPair.
+    /// Create a new `MarketPair`.
     pub fn new(
         market_id: MarketId,
         question: impl Into<String>,

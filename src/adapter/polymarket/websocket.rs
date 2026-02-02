@@ -36,7 +36,7 @@ use crate::error::Result;
 /// The handler is stateless after construction - connection state is
 /// managed within the `run()` method.
 pub struct WebSocketHandler {
-    /// The WebSocket URL to connect to (e.g., wss://ws-subscriptions-clob.polymarket.com/ws/market)
+    /// The WebSocket URL to connect to (e.g., <wss://ws-subscriptions-clob.polymarket.com/ws/market>)
     url: String,
 }
 

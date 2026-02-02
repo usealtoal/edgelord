@@ -12,7 +12,7 @@ use super::{Event, Notifier};
 /// Configuration for Telegram notifier.
 #[derive(Debug, Clone)]
 pub struct TelegramConfig {
-    /// Bot token from @BotFather.
+    /// Bot token from @`BotFather`.
     pub bot_token: String,
     /// Chat ID to send notifications to.
     pub chat_id: i64,
@@ -160,7 +160,7 @@ async fn telegram_worker(config: TelegramConfig, mut receiver: mpsc::UnboundedRe
     warn!("Telegram worker shutting down");
 }
 
-/// Escape special characters for Telegram MarkdownV2.
+/// Escape special characters for Telegram `MarkdownV2`.
 fn escape_markdown(text: &str) -> String {
     let special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
     let mut result = String::with_capacity(text.len() * 2);

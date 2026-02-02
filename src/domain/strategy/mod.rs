@@ -3,8 +3,8 @@
 //! This module provides a pluggable strategy system supporting multiple
 //! detection algorithms:
 //!
-//! - **SingleCondition**: YES + NO < $1 (26.7% of historical profits)
-//! - **MarketRebalancing**: Sum of outcomes < $1 (73.1% of historical profits)
+//! - **`SingleCondition`**: YES + NO < $1 (26.7% of historical profits)
+//! - **`MarketRebalancing`**: Sum of outcomes < $1 (73.1% of historical profits)
 //! - **Combinatorial**: Frank-Wolfe + ILP for correlated markets (0.24%)
 //!
 //! # Architecture

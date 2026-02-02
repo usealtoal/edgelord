@@ -12,7 +12,7 @@ use crate::error::Error;
 pub struct OrderId(pub String);
 
 impl OrderId {
-    /// Create a new OrderId.
+    /// Create a new `OrderId`.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }

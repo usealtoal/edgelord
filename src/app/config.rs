@@ -53,10 +53,10 @@ fn default_enabled_strategies() -> Vec<String> {
 }
 
 /// Wallet configuration for signing orders.
-/// Private key is loaded from WALLET_PRIVATE_KEY env var at runtime (never from config file).
+/// Private key is loaded from `WALLET_PRIVATE_KEY` env var at runtime (never from config file).
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct WalletConfig {
-    /// Private key loaded from WALLET_PRIVATE_KEY env var at runtime
+    /// Private key loaded from `WALLET_PRIVATE_KEY` env var at runtime
     #[serde(skip)]
     pub private_key: Option<String>,
 }

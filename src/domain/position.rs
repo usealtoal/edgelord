@@ -15,7 +15,7 @@ use super::{MarketId, Price, TokenId, Volume};
 pub struct PositionId(u64);
 
 impl PositionId {
-    /// Create a new PositionId from a u64 value.
+    /// Create a new `PositionId` from a u64 value.
     #[must_use] 
     pub fn new(id: u64) -> Self {
         Self(id)
@@ -105,7 +105,7 @@ impl PositionLeg {
         self.entry_price
     }
 
-    /// Calculate the cost of this leg (size * entry_price).
+    /// Calculate the cost of this leg (size * `entry_price`).
     #[must_use] 
     pub fn cost(&self) -> Price {
         self.size * self.entry_price
@@ -189,7 +189,7 @@ impl Position {
         &self.status
     }
 
-    /// Calculate the expected profit (guaranteed_payout - entry_cost).
+    /// Calculate the expected profit (`guaranteed_payout` - `entry_cost`).
     #[must_use] 
     pub fn expected_profit(&self) -> Price {
         self.guaranteed_payout - self.entry_cost
@@ -201,7 +201,7 @@ impl Position {
         self.status.is_open()
     }
 
-    /// Close the position with the given PnL.
+    /// Close the position with the given `PnL`.
     pub fn close(&mut self, pnl: Price) {
         self.status = PositionStatus::Closed { pnl };
     }

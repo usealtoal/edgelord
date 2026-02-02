@@ -1,7 +1,7 @@
 //! Solver abstraction for linear and integer programming.
 //!
 //! This module provides a trait-based abstraction over LP/ILP solvers,
-//! allowing different backends (HiGHS, Gurobi, etc.) to be swapped.
+//! allowing different backends (`HiGHS`, Gurobi, etc.) to be swapped.
 
 // Allow large error types in Result - Error includes WebSocket variant for unified error handling
 #![allow(clippy::result_large_err)]

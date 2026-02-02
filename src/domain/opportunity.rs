@@ -41,7 +41,7 @@ impl std::error::Error for OpportunityBuildError {}
 /// A detected arbitrage opportunity.
 ///
 /// Use `Opportunity::builder()` to construct instances.
-/// The builder calculates derived fields (total_cost, edge, expected_profit)
+/// The builder calculates derived fields (`total_cost`, edge, `expected_profit`)
 /// automatically.
 #[derive(Debug, Clone)]
 pub struct Opportunity {
@@ -100,13 +100,13 @@ impl Opportunity {
         self.no_ask
     }
 
-    /// Get the total cost (yes_ask + no_ask).
+    /// Get the total cost (`yes_ask` + `no_ask`).
     #[must_use] 
     pub fn total_cost(&self) -> Price {
         self.total_cost
     }
 
-    /// Get the edge (1.0 - total_cost).
+    /// Get the edge (1.0 - `total_cost`).
     #[must_use] 
     pub fn edge(&self) -> Price {
         self.edge
