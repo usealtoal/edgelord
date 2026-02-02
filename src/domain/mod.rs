@@ -1,13 +1,22 @@
 //! Exchange-agnostic domain logic.
 
 mod detector;
+mod ids;
+mod market;
+mod money;
+mod opportunity;
 mod orderbook;
-mod types;
+mod position;
 
+// Core domain types
+pub use ids::{MarketId, TokenId};
+pub use market::{MarketInfo, MarketPair, TokenInfo};
+pub use money::{Price, Volume};
+pub use opportunity::{Opportunity, OpportunityBuildError, OpportunityBuilder};
+pub use position::{Position, PositionId, PositionLeg, PositionStatus, PositionTracker};
+
+// OrderBook types and cache
+pub use orderbook::{OrderBook, OrderBookCache, PriceLevel};
+
+// Detector
 pub use detector::{detect_single_condition, DetectorConfig};
-pub use orderbook::OrderBookCache;
-pub use types::{MarketId, MarketPair, Opportunity, Price, TokenId, Volume};
-
-// Re-export for future use
-#[allow(unused_imports)]
-pub use types::{OrderBook, PriceLevel};
