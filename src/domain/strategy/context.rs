@@ -74,6 +74,8 @@ pub struct DetectionContext<'a> {
     pub cache: &'a OrderBookCache,
     /// Additional market context.
     market_ctx: MarketContext,
+    /// Token IDs for multi-outcome markets.
+    token_ids: Vec<TokenId>,
 }
 
 impl<'a> DetectionContext<'a> {
@@ -83,6 +85,22 @@ impl<'a> DetectionContext<'a> {
             pair,
             cache,
             market_ctx: MarketContext::binary(),
+            token_ids: vec![],
+        }
+    }
+
+    /// Create a detection context for a multi-outcome market.
+    pub fn multi_outcome(
+        pair: &'a MarketPair,
+        cache: &'a OrderBookCache,
+        token_ids: Vec<crate::domain::TokenId>,
+    ) -> Self {
+        let outcome_count = token_ids.len();
+        Self {
+            pair,
+            cache,
+            market_ctx: MarketContext::multi_outcome(outcome_count),
+            token_ids,
         }
     }
 
@@ -95,6 +113,11 @@ impl<'a> DetectionContext<'a> {
     /// Get the market context.
     pub fn market_context(&self) -> MarketContext {
         self.market_ctx.clone()
+    }
+
+    /// Get the token IDs for multi-outcome markets.
+    pub fn token_ids(&self) -> &[crate::domain::TokenId] {
+        &self.token_ids
     }
 }
 
