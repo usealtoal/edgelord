@@ -6,6 +6,7 @@ mod market;
 mod money;
 mod opportunity;
 mod orderbook;
+mod position;
 mod types;
 
 // New properly-encapsulated types from focused modules
@@ -13,6 +14,7 @@ pub use ids::{MarketId, TokenId};
 pub use market::{MarketInfo, MarketPair, TokenInfo};
 pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityBuildError, OpportunityBuilder};
+pub use position::{Position, PositionId, PositionLeg, PositionStatus, PositionTracker};
 
 // Detector and cache
 pub use detector::{detect_single_condition, DetectorConfig};

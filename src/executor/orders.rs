@@ -18,9 +18,8 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
-use super::positions::{Position, PositionLeg, PositionStatus, PositionTracker};
 use edgelord::config::Config;
-use edgelord::domain::{Opportunity, Price, TokenId};
+use edgelord::domain::{Opportunity, Position, PositionLeg, PositionStatus, PositionTracker, Price, TokenId};
 use edgelord::error::{Error, Result};
 
 /// Result of executing an arbitrage opportunity.
@@ -124,28 +123,28 @@ impl OrderExecutor {
 
                 // Record the position
                 let mut tracker = self.positions.lock();
-                let position = Position {
-                    id: tracker.next_id(),
-                    market_id: opportunity.market_id().clone(),
-                    legs: vec![
-                        PositionLeg {
-                            token_id: opportunity.yes_token().clone(),
-                            size: opportunity.volume(),
-                            entry_price: opportunity.yes_ask(),
-                        },
-                        PositionLeg {
-                            token_id: opportunity.no_token().clone(),
-                            size: opportunity.volume(),
-                            entry_price: opportunity.no_ask(),
-                        },
+                let position = Position::new(
+                    tracker.next_id(),
+                    opportunity.market_id().clone(),
+                    vec![
+                        PositionLeg::new(
+                            opportunity.yes_token().clone(),
+                            opportunity.volume(),
+                            opportunity.yes_ask(),
+                        ),
+                        PositionLeg::new(
+                            opportunity.no_token().clone(),
+                            opportunity.volume(),
+                            opportunity.no_ask(),
+                        ),
                     ],
-                    entry_cost: opportunity.total_cost() * opportunity.volume(),
-                    guaranteed_payout: opportunity.volume(),
-                    opened_at: chrono::Utc::now(),
-                    status: PositionStatus::Open,
-                };
+                    opportunity.total_cost() * opportunity.volume(),
+                    opportunity.volume(),
+                    chrono::Utc::now(),
+                    PositionStatus::Open,
+                );
 
-                info!(position_id = position.id.0, entry_cost = %position.entry_cost, "Position opened");
+                info!(position_id = %position.id(), entry_cost = %position.entry_cost(), "Position opened");
                 tracker.add(position);
 
                 Ok(ExecutionResult::Success {
@@ -247,6 +246,6 @@ impl OrderExecutor {
 
     /// Get the count of currently open positions.
     pub fn open_position_count(&self) -> usize {
-        self.positions.lock().open_positions().len()
+        self.positions.lock().open_count()
     }
 }
