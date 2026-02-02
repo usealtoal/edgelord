@@ -6,7 +6,7 @@ use crate::websocket::BookMessage;
 
 /// Thread-safe cache of order books
 pub struct OrderBookCache {
-    books: RwLock<HashMap<TokenId, OrderBook>>,
+    pub(crate) books: RwLock<HashMap<TokenId, OrderBook>>,
 }
 
 impl OrderBookCache {
