@@ -1,15 +1,17 @@
+//! Polymarket REST API client.
+
 use reqwest::Client;
 use tracing::{debug, info};
 
 use super::types::{Market, MarketsResponse};
 use crate::error::Result;
 
-pub struct ApiClient {
+pub struct PolymarketClient {
     client: Client,
     base_url: String,
 }
 
-impl ApiClient {
+impl PolymarketClient {
     pub fn new(base_url: String) -> Self {
         Self {
             client: Client::new(),

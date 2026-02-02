@@ -1,13 +1,14 @@
+//! Polymarket-specific market registry for YES/NO pairs.
+
 use std::collections::HashMap;
 
-use crate::api::Market;
-use crate::types::{MarketId, MarketPair, TokenId};
+use super::types::Market;
+use crate::domain::{MarketId, MarketPair, TokenId};
 
-/// Registry mapping tokens to their market pairs
+/// Registry mapping tokens to their market pairs.
+/// This is Polymarket-specific because it understands the YES/NO token structure.
 pub struct MarketRegistry {
-    /// Token ID -> Market pair it belongs to
     token_to_market: HashMap<TokenId, MarketPair>,
-    /// All market pairs
     pairs: Vec<MarketPair>,
 }
 
@@ -19,18 +20,16 @@ impl MarketRegistry {
         }
     }
 
-    /// Build registry from API market data
-    /// Only includes 2-outcome (YES/NO) markets
+    /// Build registry from Polymarket API market data.
+    /// Only includes 2-outcome (YES/NO) markets.
     pub fn from_markets(markets: &[Market]) -> Self {
         let mut registry = Self::new();
 
         for market in markets {
-            // Only handle 2-outcome markets for single-condition arbitrage
             if market.tokens.len() != 2 {
                 continue;
             }
 
-            // Find YES and NO tokens
             let yes_token = market
                 .tokens
                 .iter()
@@ -61,17 +60,14 @@ impl MarketRegistry {
         registry
     }
 
-    /// Get the market pair for a token
     pub fn get_market_for_token(&self, token_id: &TokenId) -> Option<&MarketPair> {
         self.token_to_market.get(token_id)
     }
 
-    /// Get all market pairs
     pub fn pairs(&self) -> &[MarketPair] {
         &self.pairs
     }
 
-    /// Number of registered pairs
     pub fn len(&self) -> usize {
         self.pairs.len()
     }

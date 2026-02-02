@@ -1,9 +1,38 @@
+//! Arbitrage detection logic.
+
 use rust_decimal::Decimal;
+use serde::Deserialize;
 
-use crate::orderbook::{MarketRegistry, OrderBookCache};
-use crate::types::{MarketPair, Opportunity};
+use super::{MarketPair, Opportunity, OrderBookCache};
 
-use super::DetectorConfig;
+/// Configuration for the arbitrage detector
+#[derive(Debug, Clone, Deserialize)]
+pub struct DetectorConfig {
+    /// Minimum edge (profit per $1) to consider an opportunity
+    #[serde(default = "default_min_edge")]
+    pub min_edge: Decimal,
+
+    /// Minimum expected profit in dollars to act on
+    #[serde(default = "default_min_profit")]
+    pub min_profit: Decimal,
+}
+
+fn default_min_edge() -> Decimal {
+    Decimal::new(5, 2) // 0.05
+}
+
+fn default_min_profit() -> Decimal {
+    Decimal::new(50, 2) // 0.50
+}
+
+impl Default for DetectorConfig {
+    fn default() -> Self {
+        Self {
+            min_edge: default_min_edge(),
+            min_profit: default_min_profit(),
+        }
+    }
+}
 
 /// Detect single-condition arbitrage (YES + NO < $1.00)
 pub fn detect_single_condition(
@@ -11,39 +40,30 @@ pub fn detect_single_condition(
     cache: &OrderBookCache,
     config: &DetectorConfig,
 ) -> Option<Opportunity> {
-    // Get both order books atomically
     let (yes_book, no_book) = cache.get_pair(&pair.yes_token, &pair.no_token);
 
     let yes_book = yes_book?;
     let no_book = no_book?;
 
-    // Get best asks (what we'd pay to buy)
     let yes_ask = yes_book.best_ask()?;
     let no_ask = no_book.best_ask()?;
 
-    // Calculate edge
     let total_cost = yes_ask.price + no_ask.price;
     let one = Decimal::ONE;
 
-    // If total cost >= $1, no arbitrage
     if total_cost >= one {
         return None;
     }
 
     let edge = one - total_cost;
 
-    // Check minimum edge
     if edge < config.min_edge {
         return None;
     }
 
-    // Volume is limited by smaller side
     let volume = yes_ask.size.min(no_ask.size);
-
-    // Expected profit
     let expected_profit = edge * volume;
 
-    // Check minimum profit
     if expected_profit < config.min_profit {
         return None;
     }
@@ -62,24 +82,10 @@ pub fn detect_single_condition(
     })
 }
 
-/// Scan all markets for arbitrage opportunities
-#[allow(dead_code)]
-pub fn scan_all(
-    registry: &MarketRegistry,
-    cache: &OrderBookCache,
-    config: &DetectorConfig,
-) -> Vec<Opportunity> {
-    registry
-        .pairs()
-        .iter()
-        .filter_map(|pair| detect_single_condition(pair, cache, config))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{MarketId, OrderBook, PriceLevel, TokenId};
+    use crate::domain::{MarketId, OrderBook, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
     fn make_pair() -> MarketPair {
@@ -104,7 +110,6 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        // YES ask: 0.40, NO ask: 0.50 -> total 0.90, edge 0.10
         let yes_book = OrderBook {
             token_id: pair.yes_token.clone(),
             bids: vec![],
@@ -131,7 +136,7 @@ mod tests {
         let opp = opp.unwrap();
         assert_eq!(opp.edge, dec!(0.10));
         assert_eq!(opp.total_cost, dec!(0.90));
-        assert_eq!(opp.expected_profit, dec!(10.00)); // 0.10 * 100
+        assert_eq!(opp.expected_profit, dec!(10.00));
     }
 
     #[test]
@@ -140,7 +145,6 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        // YES ask: 0.50, NO ask: 0.50 -> total 1.00, no edge
         let yes_book = OrderBook {
             token_id: pair.yes_token.clone(),
             bids: vec![],
@@ -169,9 +173,8 @@ mod tests {
     fn test_no_arbitrage_when_edge_too_small() {
         let pair = make_pair();
         let cache = OrderBookCache::new();
-        let config = make_config(); // min_edge = 0.05
+        let config = make_config();
 
-        // YES ask: 0.48, NO ask: 0.50 -> total 0.98, edge 0.02 (below min)
         let yes_book = OrderBook {
             token_id: pair.yes_token.clone(),
             bids: vec![],
@@ -200,10 +203,8 @@ mod tests {
     fn test_no_arbitrage_when_profit_too_small() {
         let pair = make_pair();
         let cache = OrderBookCache::new();
-        let config = make_config(); // min_profit = 0.50
+        let config = make_config();
 
-        // YES ask: 0.40, NO ask: 0.50 -> edge 0.10, but volume only 1
-        // expected profit = 0.10 * 1 = 0.10 (below min)
         let yes_book = OrderBook {
             token_id: pair.yes_token.clone(),
             bids: vec![],
@@ -234,7 +235,6 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        // YES has 50 volume, NO has 100 volume -> should use 50
         let yes_book = OrderBook {
             token_id: pair.yes_token.clone(),
             bids: vec![],
@@ -260,6 +260,6 @@ mod tests {
 
         let opp = opp.unwrap();
         assert_eq!(opp.volume, dec!(50));
-        assert_eq!(opp.expected_profit, dec!(5.00)); // 0.10 * 50
+        assert_eq!(opp.expected_profit, dec!(5.00));
     }
 }

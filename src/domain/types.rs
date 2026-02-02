@@ -1,3 +1,5 @@
+//! Core domain types for arbitrage detection.
+
 use rust_decimal::Decimal;
 use std::fmt;
 
@@ -51,16 +53,16 @@ pub struct PriceLevel {
 }
 
 /// Order book for a single token
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct OrderBook {
     pub token_id: TokenId,
-    pub bids: Vec<PriceLevel>, // Sorted descending by price (best first)
-    pub asks: Vec<PriceLevel>, // Sorted ascending by price (best first)
+    pub bids: Vec<PriceLevel>,
+    pub asks: Vec<PriceLevel>,
 }
 
-#[allow(dead_code)]
 impl OrderBook {
+    #[allow(dead_code)]
     pub fn new(token_id: TokenId) -> Self {
         Self {
             token_id,
@@ -70,6 +72,7 @@ impl OrderBook {
     }
 
     /// Best bid (highest buy price)
+    #[allow(dead_code)]
     pub fn best_bid(&self) -> Option<&PriceLevel> {
         self.bids.first()
     }
@@ -90,8 +93,8 @@ pub struct MarketPair {
 }
 
 /// Detected arbitrage opportunity
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Opportunity {
     pub market_id: MarketId,
     pub question: String,

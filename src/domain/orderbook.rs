@@ -1,8 +1,10 @@
+//! Thread-safe order book cache.
+
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use crate::types::{OrderBook, PriceLevel, TokenId};
-use crate::websocket::BookMessage;
+use super::types::{OrderBook, PriceLevel, TokenId};
+use crate::polymarket::{BookMessage, WsPriceLevel};
 
 /// Thread-safe cache of order books
 pub struct OrderBookCache {
@@ -17,30 +19,11 @@ impl OrderBookCache {
     }
 
     /// Update order book from WebSocket message
-    pub fn update(&self, msg: &BookMessage) {
+    pub fn update_from_ws(&self, msg: &BookMessage) {
         let token_id = TokenId::from(msg.asset_id.clone());
 
-        let bids: Vec<PriceLevel> = msg
-            .bids
-            .iter()
-            .filter_map(|pl| {
-                Some(PriceLevel {
-                    price: pl.price.parse().ok()?,
-                    size: pl.size.parse().ok()?,
-                })
-            })
-            .collect();
-
-        let asks: Vec<PriceLevel> = msg
-            .asks
-            .iter()
-            .filter_map(|pl| {
-                Some(PriceLevel {
-                    price: pl.price.parse().ok()?,
-                    size: pl.size.parse().ok()?,
-                })
-            })
-            .collect();
+        let bids = Self::parse_levels(&msg.bids);
+        let asks = Self::parse_levels(&msg.asks);
 
         let book = OrderBook {
             token_id: token_id.clone(),
@@ -49,6 +32,18 @@ impl OrderBookCache {
         };
 
         self.books.write().insert(token_id, book);
+    }
+
+    fn parse_levels(levels: &[WsPriceLevel]) -> Vec<PriceLevel> {
+        levels
+            .iter()
+            .filter_map(|pl| {
+                Some(PriceLevel {
+                    price: pl.price.parse().ok()?,
+                    size: pl.size.parse().ok()?,
+                })
+            })
+            .collect()
     }
 
     /// Get a snapshot of an order book

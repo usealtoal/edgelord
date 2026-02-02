@@ -1,20 +1,15 @@
-mod api;
 mod config;
-mod detector;
+mod domain;
 mod error;
-mod orderbook;
-mod types;
-mod websocket;
+mod polymarket;
 
 use std::sync::Arc;
 
-use api::ApiClient;
 use config::Config;
-use detector::{detect_single_condition, DetectorConfig};
-use orderbook::{MarketRegistry, OrderBookCache};
+use domain::{detect_single_condition, DetectorConfig, OrderBookCache, TokenId};
+use polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
 use tokio::signal;
 use tracing::{error, info, warn};
-use websocket::{WebSocketHandler, WsMessage};
 
 #[tokio::main]
 async fn main() {
@@ -48,16 +43,14 @@ async fn main() {
 }
 
 async fn run(config: Config) -> error::Result<()> {
-    // Fetch active markets
-    let api = ApiClient::new(config.network.api_url.clone());
-    let markets = api.get_active_markets(20).await?;
+    let client = PolymarketClient::new(config.network.api_url.clone());
+    let markets = client.get_active_markets(20).await?;
 
     if markets.is_empty() {
         warn!("No active markets found");
         return Ok(());
     }
 
-    // Build market registry (only YES/NO pairs)
     let registry = MarketRegistry::from_markets(&markets);
 
     info!(
@@ -71,7 +64,6 @@ async fn run(config: Config) -> error::Result<()> {
         return Ok(());
     }
 
-    // Log the pairs we're tracking
     for pair in registry.pairs() {
         info!(
             market_id = %pair.market_id,
@@ -80,7 +72,6 @@ async fn run(config: Config) -> error::Result<()> {
         );
     }
 
-    // Collect all token IDs to subscribe to
     let token_ids: Vec<String> = registry
         .pairs()
         .iter()
@@ -89,12 +80,10 @@ async fn run(config: Config) -> error::Result<()> {
 
     info!(tokens = token_ids.len(), "Subscribing to tokens");
 
-    // Create shared state
     let cache = Arc::new(OrderBookCache::new());
     let registry = Arc::new(registry);
     let detector_config = Arc::new(config.detector.clone());
 
-    // Connect to WebSocket and process messages
     let handler = WebSocketHandler::new(config.network.ws_url);
 
     let cache_clone = cache.clone();
@@ -118,13 +107,10 @@ fn handle_message(
 ) {
     match msg {
         WsMessage::Book(book) => {
-            // Update cache
-            cache.update(&book);
+            cache.update_from_ws(&book);
 
-            // Get the market for this token
-            let token_id = types::TokenId::from(book.asset_id.clone());
+            let token_id = TokenId::from(book.asset_id.clone());
             if let Some(pair) = registry.get_market_for_token(&token_id) {
-                // Check for arbitrage on this market
                 if let Some(opp) = detect_single_condition(pair, cache, config) {
                     info!(
                         market = %opp.market_id,
@@ -140,9 +126,7 @@ fn handle_message(
                 }
             }
         }
-        WsMessage::PriceChange(_) => {
-            // Price changes don't have full book data, ignore for now
-        }
+        WsMessage::PriceChange(_) => {}
         _ => {}
     }
 }

@@ -1,4 +1,5 @@
-use rust_decimal::Decimal;
+//! Polymarket WebSocket message types.
+
 use serde::{Deserialize, Serialize};
 
 /// Subscription request sent to Polymarket WebSocket
@@ -19,9 +20,9 @@ impl SubscribeMessage {
 }
 
 /// Messages received from Polymarket WebSocket
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event_type")]
+#[allow(dead_code)]
 pub enum WsMessage {
     #[serde(rename = "book")]
     Book(BookMessage),
@@ -36,40 +37,29 @@ pub enum WsMessage {
     Unknown,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct BookMessage {
     pub asset_id: String,
     pub market: Option<String>,
-    pub bids: Vec<PriceLevel>,
-    pub asks: Vec<PriceLevel>,
+    pub bids: Vec<WsPriceLevel>,
+    pub asks: Vec<WsPriceLevel>,
     pub timestamp: Option<String>,
     pub hash: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PriceChangeMessage {
     pub asset_id: String,
     pub market: Option<String>,
     pub price: Option<String>,
-    pub changes: Option<Vec<PriceLevel>>,
+    pub changes: Option<Vec<WsPriceLevel>>,
 }
 
-#[allow(dead_code)]
+/// Price level as received from WebSocket (strings, not decimals)
 #[derive(Debug, Clone, Deserialize)]
-pub struct PriceLevel {
+pub struct WsPriceLevel {
     pub price: String,
     pub size: String,
-}
-
-#[allow(dead_code)]
-impl PriceLevel {
-    pub fn price_decimal(&self) -> Option<Decimal> {
-        self.price.parse().ok()
-    }
-
-    pub fn size_decimal(&self) -> Option<Decimal> {
-        self.size.parse().ok()
-    }
 }
