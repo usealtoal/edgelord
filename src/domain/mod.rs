@@ -1,6 +1,5 @@
 //! Exchange-agnostic domain logic.
 
-mod detector;
 mod id;
 mod market;
 mod money;
@@ -21,5 +20,5 @@ pub use position::{Position, PositionId, PositionLeg, PositionStatus, PositionTr
 // OrderBook types and cache
 pub use orderbook::{OrderBook, OrderBookCache, PriceLevel};
 
-// Detector
-pub use detector::{detect_single_condition, DetectorConfig};
+// Detector (legacy re-export for backwards compatibility)
+pub use strategy::single_condition::{detect_single_condition, SingleConditionConfig as DetectorConfig};
