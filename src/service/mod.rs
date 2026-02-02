@@ -1,3 +1,5 @@
 //! Cross-cutting services - risk management, notifications, etc.
 
-// Services will be added in subsequent tasks
+mod risk;
+
+pub use risk::{RiskCheckResult, RiskManager};
