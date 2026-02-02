@@ -77,20 +77,6 @@ impl ExecutionResult {
     }
 }
 
-/// Represents market information from an exchange.
-///
-/// This is a simplified market info type for the exchange abstraction layer.
-/// Exchange implementations can convert their specific market types to this.
-#[derive(Debug, Clone)]
-pub struct MarketInfo {
-    /// Unique identifier for the market.
-    pub id: String,
-    /// Human-readable market name/question.
-    pub name: String,
-    /// Whether the market is active for trading.
-    pub active: bool,
-}
-
 /// Represents an order to be executed.
 #[derive(Debug, Clone)]
 pub struct OrderRequest {
@@ -111,16 +97,6 @@ pub enum OrderSide {
     Buy,
     /// Sell order.
     Sell,
-}
-
-/// Client for fetching market data from an exchange.
-#[async_trait]
-pub trait ExchangeClient: Send + Sync {
-    /// Fetch all available markets from the exchange.
-    async fn get_markets(&self) -> Result<Vec<MarketInfo>, Error>;
-
-    /// Get the exchange name for logging/debugging.
-    fn exchange_name(&self) -> &'static str;
 }
 
 /// Executor for submitting orders to an exchange.
