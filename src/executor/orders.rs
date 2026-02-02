@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy_signer_local::PrivateKeySigner;
+use parking_lot::Mutex;
 use polymarket_client_sdk::auth::state::Authenticated;
 use polymarket_client_sdk::auth::Normal;
 #[allow(unused_imports)]
@@ -17,8 +18,9 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
+use super::positions::{Position, PositionLeg, PositionStatus, PositionTracker};
 use crate::config::Config;
-use crate::domain::{Opportunity, TokenId};
+use crate::domain::{Opportunity, Price, TokenId};
 use crate::error::{Error, Result};
 
 /// Result of executing an arbitrage opportunity.
@@ -48,6 +50,8 @@ pub struct OrderExecutor {
     client: Arc<AuthenticatedClient>,
     /// The signer for signing orders.
     signer: Arc<PrivateKeySigner>,
+    /// Position tracker for recording executed arbitrage positions.
+    positions: Mutex<PositionTracker>,
 }
 
 impl OrderExecutor {
@@ -85,6 +89,7 @@ impl OrderExecutor {
         Ok(Self {
             client: Arc::new(client),
             signer: Arc::new(signer),
+            positions: Mutex::new(PositionTracker::new()),
         })
     }
 
@@ -116,6 +121,33 @@ impl OrderExecutor {
                     no_order = %no_resp.order_id,
                     "Both legs executed successfully"
                 );
+
+                // Record the position
+                let mut tracker = self.positions.lock();
+                let position = Position {
+                    id: tracker.next_id(),
+                    market_id: opportunity.market_id.clone(),
+                    legs: vec![
+                        PositionLeg {
+                            token_id: opportunity.yes_token.clone(),
+                            size: opportunity.volume,
+                            entry_price: opportunity.yes_ask,
+                        },
+                        PositionLeg {
+                            token_id: opportunity.no_token.clone(),
+                            size: opportunity.volume,
+                            entry_price: opportunity.no_ask,
+                        },
+                    ],
+                    entry_cost: opportunity.total_cost * opportunity.volume,
+                    guaranteed_payout: opportunity.volume,
+                    opened_at: chrono::Utc::now(),
+                    status: PositionStatus::Open,
+                };
+
+                info!(position_id = position.id.0, entry_cost = %position.entry_cost, "Position opened");
+                tracker.add(position);
+
                 Ok(ExecutionResult::Success {
                     yes_order_id: yes_resp.order_id,
                     no_order_id: no_resp.order_id,
@@ -206,5 +238,15 @@ impl OrderExecutor {
         );
 
         Ok(response)
+    }
+
+    /// Get total exposure across all open positions.
+    pub fn total_exposure(&self) -> Price {
+        self.positions.lock().total_exposure()
+    }
+
+    /// Get the count of currently open positions.
+    pub fn open_position_count(&self) -> usize {
+        self.positions.lock().open_positions().len()
     }
 }
