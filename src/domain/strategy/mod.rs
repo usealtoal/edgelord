@@ -28,7 +28,7 @@
 //! ```
 
 mod context;
-mod single_condition;
+pub mod single_condition;
 mod market_rebalancing;
 pub mod combinatorial;
 
