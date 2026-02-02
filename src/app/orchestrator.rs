@@ -2,41 +2,58 @@
 //!
 //! This module contains the main application logic for running
 //! the edgelord arbitrage detection and execution system.
-//!
-//! Requires the `polymarket` feature.
 
 use std::sync::Arc;
 
-use super::config::Config;
+use tracing::{debug, error, info, warn};
+
+use crate::adapter::polymarket::{
+    ArbitrageExecutionResult, MarketRegistry, PolymarketClient, PolymarketExecutor,
+    WebSocketHandler, WsMessage,
+};
+use crate::app::config::Config;
+use crate::app::state::AppState;
 use crate::domain::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
 use crate::domain::{MarketPair, Opportunity, OrderBookCache};
 use crate::error::Result;
-use crate::adapter::polymarket::{
-    MarketRegistry, PolymarketClient, PolymarketExecutor, WebSocketHandler, WsMessage,
+use crate::service::{
+    Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
+    RiskEvent, RiskManager,
 };
-use tracing::{debug, error, info, warn};
+
+#[cfg(feature = "telegram")]
+use crate::service::{TelegramConfig, TelegramNotifier};
 
 /// Main application struct.
 pub struct App;
 
 impl App {
     /// Run the main application loop.
-    ///
-    /// This initializes the executor (if wallet is configured), fetches markets,
-    /// and starts the WebSocket handler for real-time order book updates.
     pub async fn run(config: Config) -> Result<()> {
+        // Initialize shared state
+        let state = Arc::new(AppState::new(config.risk.clone().into()));
+
+        // Initialize risk manager
+        let risk_manager = Arc::new(RiskManager::new(state.clone()));
+
+        // Initialize notifiers
+        let notifiers = Arc::new(build_notifier_registry(&config));
+        info!(notifiers = notifiers.len(), "Notifiers initialized");
+
+        // Initialize executor (optional)
         let executor = init_executor(&config).await;
 
-        // Build strategy registry from config
-        let strategies = build_strategy_registry(&config);
+        // Build strategy registry
+        let strategies = Arc::new(build_strategy_registry(&config));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),
             "Strategies loaded"
         );
 
+        // Fetch markets
         let client = PolymarketClient::new(config.network.api_url.clone());
         let markets = client.get_active_markets(20).await?;
 
@@ -76,14 +93,17 @@ impl App {
 
         let cache = Arc::new(OrderBookCache::new());
         let registry = Arc::new(registry);
-        let strategies = Arc::new(strategies);
 
         let handler = WebSocketHandler::new(config.network.ws_url);
 
+        // Clone Arcs for closure
         let cache_clone = cache.clone();
         let registry_clone = registry.clone();
         let strategies_clone = strategies.clone();
         let executor_clone = executor.clone();
+        let risk_manager_clone = risk_manager.clone();
+        let notifiers_clone = notifiers.clone();
+        let state_clone = state.clone();
 
         handler
             .run(token_ids, move |msg| {
@@ -93,12 +113,46 @@ impl App {
                     &registry_clone,
                     &strategies_clone,
                     executor_clone.clone(),
+                    &risk_manager_clone,
+                    &notifiers_clone,
+                    &state_clone,
                 );
             })
             .await?;
 
         Ok(())
     }
+}
+
+/// Build notifier registry from configuration.
+fn build_notifier_registry(config: &Config) -> NotifierRegistry {
+    let mut registry = NotifierRegistry::new();
+
+    // Always add log notifier
+    registry.register(Box::new(LogNotifier));
+
+    // Add telegram notifier if configured
+    #[cfg(feature = "telegram")]
+    if config.telegram.enabled {
+        if let Some(tg_config) = TelegramConfig::from_env() {
+            let tg_config = TelegramConfig {
+                notify_opportunities: config.telegram.notify_opportunities,
+                notify_executions: config.telegram.notify_executions,
+                notify_risk_rejections: config.telegram.notify_risk_rejections,
+                ..tg_config
+            };
+            registry.register(Box::new(TelegramNotifier::new(tg_config)));
+            info!("Telegram notifier enabled");
+        } else {
+            warn!("Telegram enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
+        }
+    }
+
+    // Suppress unused variable warning when telegram feature is disabled
+    #[cfg(not(feature = "telegram"))]
+    let _ = config;
+
+    registry
 }
 
 /// Build strategy registry from configuration.
@@ -159,6 +213,9 @@ fn handle_message(
     registry: &MarketRegistry,
     strategies: &StrategyRegistry,
     executor: Option<Arc<PolymarketExecutor>>,
+    risk_manager: &RiskManager,
+    notifiers: &Arc<NotifierRegistry>,
+    state: &Arc<AppState>,
 ) {
     match msg {
         WsMessage::Book(book) => {
@@ -167,18 +224,11 @@ fn handle_message(
             cache.update(orderbook);
 
             if let Some(pair) = registry.get_market_for_token(&token_id) {
-                // Create detection context
                 let ctx = DetectionContext::new(pair, cache);
-
-                // Run all applicable strategies
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    log_opportunity(&opp);
-
-                    if let Some(exec) = executor.clone() {
-                        spawn_execution(exec, opp);
-                    }
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
                 }
             }
         }
@@ -187,33 +237,93 @@ fn handle_message(
     }
 }
 
-/// Log detected opportunity.
-fn log_opportunity(opp: &Opportunity) {
-    info!(
-        market = %opp.market_id(),
-        question = %opp.question(),
-        yes_ask = %opp.yes_ask(),
-        no_ask = %opp.no_ask(),
-        total_cost = %opp.total_cost(),
-        edge = %opp.edge(),
-        volume = %opp.volume(),
-        expected_profit = %opp.expected_profit(),
-        "ARBITRAGE DETECTED"
-    );
+/// Handle a detected opportunity.
+fn handle_opportunity(
+    opp: Opportunity,
+    executor: Option<Arc<PolymarketExecutor>>,
+    risk_manager: &RiskManager,
+    notifiers: &Arc<NotifierRegistry>,
+    state: &Arc<AppState>,
+) {
+    // Notify opportunity detected
+    notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
+
+    // Check risk
+    match risk_manager.check(&opp) {
+        RiskCheckResult::Approved => {
+            if let Some(exec) = executor {
+                spawn_execution(exec, opp, notifiers.clone(), state.clone());
+            }
+        }
+        RiskCheckResult::Rejected(error) => {
+            notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
+                opp.market_id().as_str(),
+                &error,
+            )));
+        }
+    }
 }
 
 /// Spawn async execution without blocking message processing.
-fn spawn_execution(executor: Arc<PolymarketExecutor>, opportunity: Opportunity) {
+fn spawn_execution(
+    executor: Arc<PolymarketExecutor>,
+    opportunity: Opportunity,
+    notifiers: Arc<NotifierRegistry>,
+    state: Arc<AppState>,
+) {
+    let market_id = opportunity.market_id().to_string();
+
     tokio::spawn(async move {
         match executor.execute_arbitrage(&opportunity).await {
             Ok(result) => {
-                info!(result = ?result, "Execution completed");
+                // Record position in shared state
+                if matches!(result, ArbitrageExecutionResult::Success { .. }) {
+                    record_position(&state, &opportunity);
+                }
+
+                // Notify execution result
+                notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
+                    &market_id, &result,
+                )));
             }
             Err(e) => {
                 error!(error = %e, "Execution failed");
+                notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent {
+                    market_id,
+                    success: false,
+                    details: e.to_string(),
+                }));
             }
         }
     });
+}
+
+/// Record a position in shared state.
+fn record_position(state: &AppState, opportunity: &Opportunity) {
+    use crate::domain::{Position, PositionLeg, PositionStatus};
+
+    let mut positions = state.positions_mut();
+    let position = Position::new(
+        positions.next_id(),
+        opportunity.market_id().clone(),
+        vec![
+            PositionLeg::new(
+                opportunity.yes_token().clone(),
+                opportunity.volume(),
+                opportunity.yes_ask(),
+            ),
+            PositionLeg::new(
+                opportunity.no_token().clone(),
+                opportunity.volume(),
+                opportunity.no_ask(),
+            ),
+        ],
+        opportunity.total_cost() * opportunity.volume(),
+        opportunity.volume(),
+        chrono::Utc::now(),
+        PositionStatus::Open,
+    );
+    positions.add(position);
 }
 
 /// Log market pair being tracked.
