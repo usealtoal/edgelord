@@ -60,113 +60,116 @@
 
 ## Core Types
 
-Types designed to make invalid states unrepresentable:
+Types designed with proper encapsulation and builder patterns:
 
 ```rust
-// Identifiers — distinct types prevent mixing
-pub struct MarketId(String);
+// Identifiers — newtypes with private fields and accessors
 pub struct TokenId(String);
+impl TokenId {
+    pub fn new(id: impl Into<String>) -> Self;
+    pub fn as_str(&self) -> &str;
+}
+
+pub struct MarketId(String);
+impl MarketId {
+    pub fn new(id: impl Into<String>) -> Self;
+    pub fn as_str(&self) -> &str;
+}
 
 // Money — always use Decimal, never f64
 pub type Price = rust_decimal::Decimal;
 pub type Volume = rust_decimal::Decimal;
 
-// Market structure
-pub struct Market {
-    pub id: MarketId,
-    pub question: String,
-    pub outcomes: Vec<Outcome>,
-    pub end_date: Option<DateTime<Utc>>,
+// Market pair (binary YES/NO)
+pub struct MarketPair {
+    market_id: MarketId,
+    question: String,
+    yes_token: TokenId,
+    no_token: TokenId,
+}
+impl MarketPair {
+    pub fn new(...) -> Self;
+    pub fn market_id(&self) -> &MarketId;
+    pub fn question(&self) -> &str;
+    pub fn yes_token(&self) -> &TokenId;
+    pub fn no_token(&self) -> &TokenId;
 }
 
-pub struct Outcome {
-    pub token_id: TokenId,
-    pub name: String,  // "Yes", "No", or candidate name
+// Order book with private fields
+pub struct PriceLevel { price: Price, size: Volume }
+impl PriceLevel {
+    pub fn new(price: Price, size: Volume) -> Self;
+    pub fn price(&self) -> Price;
+    pub fn size(&self) -> Volume;
 }
 
-// Order book
-pub struct OrderBook {
-    pub token_id: TokenId,
-    pub bids: Vec<PriceLevel>,  // Sorted descending by price
-    pub asks: Vec<PriceLevel>,  // Sorted ascending by price
-    pub updated_at: Instant,
-}
-
-pub struct PriceLevel {
-    pub price: Price,
-    pub volume: Volume,
-}
-
+pub struct OrderBook { token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel> }
 impl OrderBook {
+    pub fn new(token_id: TokenId) -> Self;
+    pub fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self;
     pub fn best_bid(&self) -> Option<&PriceLevel>;
     pub fn best_ask(&self) -> Option<&PriceLevel>;
-    pub fn vwap_for_volume(&self, side: Side, volume: Volume) -> Option<Price>;
 }
 
-// Opportunities — enum ensures we handle each type explicitly
-pub enum Opportunity {
-    SingleCondition {
-        market_id: MarketId,
-        yes_token: TokenId,
-        no_token: TokenId,
-        yes_ask: Price,
-        no_ask: Price,
-        volume: Volume,
-        edge: Price,
-        expected_profit: Price,
-    },
-    Rebalancing {
-        market_id: MarketId,
-        legs: Vec<RebalanceLeg>,
-        total_cost: Price,
-        volume: Volume,
-        edge: Price,
-        expected_profit: Price,
-    },
-}
+// Opportunities — builder pattern with automatic field calculation
+let opportunity = Opportunity::builder()
+    .market_id(id)
+    .question("Will X happen?")
+    .yes_token(yes_token, yes_price)
+    .no_token(no_token, no_price)
+    .volume(volume)
+    .build()?;  // Calculates total_cost, edge, expected_profit
 
-pub struct RebalanceLeg {
-    pub token_id: TokenId,
-    pub ask_price: Price,
+impl Opportunity {
+    pub fn market_id(&self) -> &MarketId;
+    pub fn yes_ask(&self) -> Price;
+    pub fn no_ask(&self) -> Price;
+    pub fn total_cost(&self) -> Price;
+    pub fn edge(&self) -> Price;
+    pub fn volume(&self) -> Volume;
+    pub fn expected_profit(&self) -> Price;
 }
 
 // Positions — track what we hold
-pub struct Position {
-    pub id: PositionId,
-    pub market_id: MarketId,
-    pub legs: Vec<PositionLeg>,
-    pub entry_cost: Price,
-    pub guaranteed_payout: Price,
-    pub opened_at: DateTime<Utc>,
-    pub status: PositionStatus,
+pub struct Position { id: PositionId, market_id: MarketId, legs: Vec<PositionLeg>, ... }
+impl Position {
+    pub fn new(id, market_id, legs, guaranteed_payout) -> Self;  // Calculates entry_cost
+    pub fn id(&self) -> PositionId;
+    pub fn entry_cost(&self) -> Price;
+    pub fn expected_profit(&self) -> Price;
+    pub fn is_open(&self) -> bool;
+    pub fn close(&mut self, pnl: Price);
 }
 
 pub enum PositionStatus {
     Open,
     PartialFill { filled: Vec<TokenId>, missing: Vec<TokenId> },
-    Closed { pnl: Price },
+    Closed { pnl: Price, closed_at: DateTime<Utc> },
 }
 
-// Execution results
+// Execution results (in exchange/traits.rs)
 pub enum ExecutionResult {
-    Success { position: Position },
-    PartialFill { position: Position, exposure: Price },
-    Failed { reason: ExecutionError },
+    Success { yes_order: OrderId, no_order: OrderId, position: Position },
+    PartialFill { filled_order: OrderId, filled_leg: TokenId, failed_leg: TokenId, error: String },
+    Failed { reason: String },
+}
+
+// Structured errors (in error.rs)
+pub enum ConfigError {
+    MissingField { field: &'static str },
+    InvalidValue { field: &'static str, message: String },
+    ReadFile(std::io::Error),
+    Parse(toml::de::Error),
 }
 
 pub enum ExecutionError {
-    PriceMoved,
-    InsufficientLiquidity,
-    RejectedByRisk(RiskRejection),
-    ApiError(String),
-    Timeout,
-}
-
-pub enum RiskRejection {
-    ExposureLimitExceeded,
-    DailyLossLimitExceeded,
-    CircuitBreakerActive,
-    MarketSettlingSoon,
+    AuthFailed { reason: String },
+    InvalidTokenId { token_id: String, reason: String },
+    OrderRejected { reason: String },
+    OrderBuildFailed { reason: String },
+    SigningFailed { reason: String },
+    SubmissionFailed { reason: String },
+    PartialFill { filled_leg: TokenId, failed_leg: TokenId, error: String },
 }
 ```
 
@@ -693,28 +696,34 @@ edgelord/
 ├── CONTRIBUTING.md
 │
 ├── src/
-│   ├── main.rs              # Entry, tokio runtime, task spawning
-│   ├── config.rs            # Load and validate configuration
-│   ├── error.rs             # Error types
+│   ├── lib.rs               # Library root with public API
+│   ├── main.rs              # Thin binary entry point
+│   ├── app.rs               # Application orchestration
+│   ├── config.rs            # Configuration loading
+│   ├── error.rs             # Structured error types (ConfigError, ExecutionError)
 │   │
-│   ├── polymarket/          # Polymarket-specific code
-│   │   ├── mod.rs           # Re-exports
-│   │   ├── client.rs        # REST API client (PolymarketClient)
-│   │   ├── websocket.rs     # WebSocket connection and handling
-│   │   ├── messages.rs      # WebSocket message types
-│   │   ├── types.rs         # API response types (Market, Token)
-│   │   └── registry.rs      # MarketRegistry (YES/NO pair mapping)
-│   │
-│   ├── domain/              # Exchange-agnostic business logic
-│   │   ├── mod.rs           # Re-exports
-│   │   ├── types.rs         # Core types (TokenId, MarketId, OrderBook, etc.)
-│   │   ├── orderbook.rs     # Thread-safe OrderBookCache
+│   ├── domain/              # Exchange-agnostic core (no exchange imports!)
+│   │   ├── mod.rs           # Public exports
+│   │   ├── ids.rs           # TokenId, MarketId (newtypes with encapsulation)
+│   │   ├── money.rs         # Price, Volume (type aliases + constants)
+│   │   ├── market.rs        # MarketPair, MarketInfo, TokenInfo
+│   │   ├── orderbook.rs     # PriceLevel, OrderBook, OrderBookCache
+│   │   ├── opportunity.rs   # Opportunity with builder pattern
+│   │   ├── position.rs      # Position, PositionLeg, PositionTracker
 │   │   └── detector.rs      # Detection logic + DetectorConfig
 │   │
-│   ├── executor/            # (Phase 3+)
+│   ├── exchange/            # Exchange abstraction layer
 │   │   ├── mod.rs
-│   │   ├── orders.rs        # Build and submit orders
-│   │   └── positions.rs     # Track open positions
+│   │   └── traits.rs        # ExchangeClient, OrderExecutor traits
+│   │
+│   ├── polymarket/          # Polymarket implementation
+│   │   ├── mod.rs           # Re-exports
+│   │   ├── client.rs        # REST API client (implements ExchangeClient)
+│   │   ├── executor.rs      # Order execution (implements OrderExecutor)
+│   │   ├── websocket.rs     # WebSocket connection and handling
+│   │   ├── messages.rs      # WS message types + to_orderbook() conversion
+│   │   ├── types.rs         # API response types (Market, Token)
+│   │   └── registry.rs      # MarketRegistry (YES/NO pair mapping)
 │   │
 │   ├── risk/                # (Phase 4+)
 │   │   ├── mod.rs
@@ -727,7 +736,6 @@ edgelord/
 │
 ├── tests/
 │   ├── detection_tests.rs
-│   ├── risk_tests.rs
 │   └── integration/
 │       └── testnet.rs
 │
@@ -737,6 +745,15 @@ edgelord/
     └── plans/
 ```
 
+### Architecture Principles
+
+- **Domain-driven design:** `domain/` contains exchange-agnostic types and logic
+- **Trait-based abstractions:** `exchange/traits.rs` defines `ExchangeClient` and `OrderExecutor`
+- **Clean separation:** `polymarket/` implements traits, `domain/` has no exchange imports
+- **Proper encapsulation:** Private fields with accessor methods, builder patterns
+- **Type safety:** Newtypes for identifiers, Decimal for money (never floats)
+- **Feature flags:** `polymarket` feature optional, domain builds standalone
+
 ### Dependencies
 
 ```toml
@@ -745,16 +762,20 @@ name = "edgelord"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["polymarket"]
+polymarket = ["dep:polymarket-client-sdk", "dep:alloy-signer-local"]
+
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
 # WebSocket
-tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures = "0.3"
 
 # HTTP client
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -762,9 +783,10 @@ serde_json = "1"
 
 # Decimal math (never use floats for money)
 rust_decimal = { version = "1", features = ["serde"] }
+rust_decimal_macros = "1"
 
-# Telegram
-teloxide = { version = "0.12", features = ["macros"] }
+# Telegram (Phase 4+)
+# teloxide = { version = "0.12", features = ["macros"] }
 
 # Configuration
 dotenvy = "0.15"
@@ -775,8 +797,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 # Error handling
-thiserror = "1"
-anyhow = "1"
+thiserror = "2"
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
@@ -784,9 +805,23 @@ chrono = { version = "0.4", features = ["serde"] }
 # Concurrency
 parking_lot = "0.12"
 
+# Async traits
+async-trait = "0.1"
+
+# URL parsing
+url = "2"
+
+# Polymarket CLOB client (optional, feature-gated)
+polymarket-client-sdk = { version = "0.4", features = ["clob"], optional = true }
+alloy-signer-local = { version = "1", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 ```
+
+**Feature flags:**
+- `default = ["polymarket"]` — Full functionality with Polymarket support
+- `--no-default-features` — Builds domain-only library (for multi-exchange development)
 
 ---
 

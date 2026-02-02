@@ -5,9 +5,10 @@
 ## Design Philosophy
 
 1. **Hot path must be <40ms** — Compete with sophisticated actors
-2. **Pre-compute everything possible** — Heavy math happens offline
-3. **Simple arbitrage first** — 95% of profits came from simple cases
+2. **Domain-driven design** — Exchange-agnostic core, exchange-specific adapters
+3. **Simple arbitrage first** — 99.7% of profits came from simple cases
 4. **Fail safe** — Never lose money on a "guaranteed" trade
+5. **Proper encapsulation** — Private fields, builder patterns, type safety
 
 ---
 
@@ -20,26 +21,46 @@
 │                                                                 │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
 │  │  WebSocket   │───▶│   Detector   │───▶│   Executor   │      │
-│  │   Handler    │    │   Engine     │    │   Engine     │      │
+│  │   Handler    │    │   (domain)   │    │   (traits)   │      │
 │  └──────────────┘    └──────────────┘    └──────────────┘      │
 │         │                   │                    │              │
 │         ▼                   ▼                    ▼              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │  Order Book  │    │  Dependency  │    │   Parallel   │      │
-│  │    Cache     │    │    Graph     │    │  RPC Submit  │      │
-│  │  (lockfree)  │    │  (prebuilt)  │    │              │      │
+│  │  OrderBook   │    │  Opportunity │    │  Polymarket  │      │
+│  │    Cache     │    │   Builder    │    │   Executor   │      │
+│  │  (RwLock)    │    │              │    │              │      │
 │  └──────────────┘    └──────────────┘    └──────────────┘      │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (async, non-blocking)
-┌─────────────────────────────────────────────────────────────────┐
-│              OPTIMIZATION SERVICE (background)                  │
-├─────────────────────────────────────────────────────────────────┤
-│  Gurobi C API ← Rust FFI bindings (grb crate)                  │
-│  Frank-Wolfe solver for combinatorial arbitrage                 │
-│  Pre-computes projections, Rust core queries cache              │
-└─────────────────────────────────────────────────────────────────┘
+```
+
+## Module Structure
+
+```
+src/
+├── lib.rs                 # Library root with public API
+├── main.rs                # Thin entry point
+├── app.rs                 # Application orchestration
+│
+├── domain/                # Exchange-agnostic (NO exchange imports)
+│   ├── ids.rs             # TokenId, MarketId (newtypes)
+│   ├── money.rs           # Price, Volume types
+│   ├── market.rs          # MarketPair, MarketInfo
+│   ├── orderbook.rs       # OrderBook, OrderBookCache
+│   ├── opportunity.rs     # Opportunity with builder
+│   ├── position.rs        # Position tracking
+│   └── detector.rs        # Detection logic
+│
+├── exchange/              # Abstraction layer
+│   └── traits.rs          # ExchangeClient, OrderExecutor
+│
+└── polymarket/            # Polymarket implementation
+    ├── client.rs          # REST client
+    ├── executor.rs        # OrderExecutor implementation
+    ├── websocket.rs       # WS handler
+    ├── messages.rs        # WS types + to_orderbook()
+    ├── registry.rs        # YES/NO pair mapping
+    └── types.rs           # API types
 ```
 
 ---
@@ -239,53 +260,70 @@ Every trade logged with:
 ## Tech Stack
 
 ```toml
+[features]
+default = ["polymarket"]
+polymarket = ["dep:polymarket-client-sdk", "dep:alloy-signer-local"]
+
 [dependencies]
+# Async runtime
 tokio = { version = "1", features = ["full"] }
-tokio-tungstenite = "0.21"
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-crossbeam = "0.8"
-dashmap = "5"
-rust_decimal = "1"
-grb = "2"
-ethers = "2"
-reqwest = { version = "0.11", features = ["json"] }
-tracing = "0.1"
-tracing-subscriber = "0.3"
 
-[dependencies.rs-clob-client]
-git = "https://github.com/Polymarket/rs-clob-client"
+# Decimal math (never floats)
+rust_decimal = { version = "1", features = ["serde"] }
+
+# Concurrency
+parking_lot = "0.12"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Polymarket (optional)
+polymarket-client-sdk = { version = "0.4", features = ["clob"], optional = true }
+alloy-signer-local = { version = "1", optional = true }
 ```
 
 ---
 
 ## Development Phases
 
-### Phase 1: Infrastructure (Week 1-2)
-- [ ] Rust project setup
-- [ ] WebSocket connection to Polymarket
-- [ ] Order book cache structure
-- [ ] Basic logging/monitoring
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Rust project setup with proper module structure
+- [x] WebSocket connection to Polymarket
+- [x] Order book cache with thread-safe access
+- [x] Configuration and logging
 
-### Phase 2: Simple Arbitrage (Week 3-4)
-- [ ] YES+NO detector
+### Phase 2: Detection ✅ COMPLETE
+- [x] Single-condition detector (YES + NO < $1)
+- [x] Domain types with proper encapsulation
+- [x] Opportunity builder pattern
+- [x] Comprehensive test coverage
+
+### Phase 3: Execution ✅ COMPLETE
+- [x] Exchange trait abstractions (OrderExecutor)
+- [x] Polymarket executor implementation
+- [x] Position tracking
+- [x] Testnet integration (Amoy)
+
+### Phase 4: Risk & Telegram (Next)
+- [ ] Risk manager with limits and circuit breakers
+- [ ] Telegram bot for alerts and control
+- [ ] Daily summary reports
+
+### Phase 5: Mainnet
+- [ ] Switch config to mainnet
+- [ ] Start with small stakes ($50-100)
+- [ ] Monitor and tune thresholds
+
+### Phase 6: Hardening
 - [ ] Market rebalancing detector
-- [ ] Execution engine (paper trading)
-- [ ] Testnet deployment (Amoy)
-
-### Phase 3: Production Hardening (Week 5-6)
-- [ ] Risk management
-- [ ] Slippage protection
-- [ ] Monitoring dashboard
-- [ ] Mainnet deployment (small capital)
-
-### Phase 4: Combinatorial (Week 7-8)
-- [ ] Dependency graph builder
-- [ ] Gurobi integration
-- [ ] Frank-Wolfe implementation
-- [ ] Backtest framework
-
-### Phase 5: Scale (Week 9+)
-- [ ] Latency optimization
-- [ ] Capital scaling
-- [ ] Additional markets
+- [ ] Improved reconnection logic
+- [ ] VPS deployment with systemd
