@@ -100,3 +100,83 @@ impl Default for MarketRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapter::polymarket::types::Token;
+
+    fn make_market(condition_id: &str, question: &str, yes_id: &str, no_id: &str) -> Market {
+        Market {
+            condition_id: condition_id.to_string(),
+            question: Some(question.to_string()),
+            tokens: vec![
+                Token {
+                    token_id: yes_id.to_string(),
+                    outcome: "Yes".to_string(),
+                    price: Some(0.5),
+                },
+                Token {
+                    token_id: no_id.to_string(),
+                    outcome: "No".to_string(),
+                    price: Some(0.5),
+                },
+            ],
+            active: true,
+            closed: false,
+        }
+    }
+
+    #[test]
+    fn test_registry_new() {
+        let registry = MarketRegistry::new();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn test_registry_from_markets() {
+        let markets = vec![
+            make_market("cond-1", "Question 1?", "yes-1", "no-1"),
+            make_market("cond-2", "Question 2?", "yes-2", "no-2"),
+        ];
+
+        let registry = MarketRegistry::from_markets(&markets);
+
+        assert_eq!(registry.len(), 2);
+        assert!(!registry.is_empty());
+    }
+
+    #[test]
+    fn test_registry_skips_non_binary() {
+        let mut market = make_market("cond-1", "Multi?", "a", "b");
+        market.tokens.push(Token {
+            token_id: "c".to_string(),
+            outcome: "Maybe".to_string(),
+            price: None,
+        });
+
+        let registry = MarketRegistry::from_markets(&[market]);
+
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn test_get_market_for_token() {
+        let markets = vec![make_market("cond-1", "Q?", "yes-1", "no-1")];
+        let registry = MarketRegistry::from_markets(&markets);
+
+        let yes_token = TokenId::from("yes-1");
+        let no_token = TokenId::from("no-1");
+        let unknown = TokenId::from("unknown");
+
+        assert!(registry.get_market_for_token(&yes_token).is_some());
+        assert!(registry.get_market_for_token(&no_token).is_some());
+        assert!(registry.get_market_for_token(&unknown).is_none());
+
+        // Both tokens map to same market
+        let yes_market = registry.get_market_for_token(&yes_token).unwrap();
+        let no_market = registry.get_market_for_token(&no_token).unwrap();
+        assert_eq!(yes_market.market_id(), no_market.market_id());
+    }
+}
