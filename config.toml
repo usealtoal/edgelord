@@ -5,3 +5,7 @@ api_url = "https://clob.polymarket.com"
 [logging]
 level = "info"
 format = "pretty"
+
+[detector]
+min_edge = 0.05
+min_profit = 0.50

@@ -2,12 +2,15 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::detector::DetectorConfig;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub network: NetworkConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub detector: DetectorConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,6 +25,7 @@ pub struct LoggingConfig {
     pub format: String,
 }
 
+#[allow(clippy::result_large_err)]
 impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)
@@ -57,6 +61,7 @@ impl Default for Config {
                 level: "info".into(),
                 format: "pretty".into(),
             },
+            detector: DetectorConfig::default(),
         }
     }
 }
