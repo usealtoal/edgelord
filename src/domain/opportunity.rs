@@ -66,7 +66,7 @@ impl Opportunity {
 
     /// Get the market ID.
     #[must_use] 
-    pub fn market_id(&self) -> &MarketId {
+    pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
@@ -78,49 +78,49 @@ impl Opportunity {
 
     /// Get the YES token ID.
     #[must_use] 
-    pub fn yes_token(&self) -> &TokenId {
+    pub const fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
     #[must_use] 
-    pub fn no_token(&self) -> &TokenId {
+    pub const fn no_token(&self) -> &TokenId {
         &self.no_token
     }
 
     /// Get the YES ask price.
     #[must_use] 
-    pub fn yes_ask(&self) -> Price {
+    pub const fn yes_ask(&self) -> Price {
         self.yes_ask
     }
 
     /// Get the NO ask price.
     #[must_use] 
-    pub fn no_ask(&self) -> Price {
+    pub const fn no_ask(&self) -> Price {
         self.no_ask
     }
 
     /// Get the total cost (`yes_ask` + `no_ask`).
     #[must_use] 
-    pub fn total_cost(&self) -> Price {
+    pub const fn total_cost(&self) -> Price {
         self.total_cost
     }
 
     /// Get the edge (1.0 - `total_cost`).
     #[must_use] 
-    pub fn edge(&self) -> Price {
+    pub const fn edge(&self) -> Price {
         self.edge
     }
 
     /// Get the volume.
     #[must_use] 
-    pub fn volume(&self) -> Volume {
+    pub const fn volume(&self) -> Volume {
         self.volume
     }
 
     /// Get the expected profit (edge * volume).
     #[must_use] 
-    pub fn expected_profit(&self) -> Price {
+    pub const fn expected_profit(&self) -> Price {
         self.expected_profit
     }
 }
@@ -187,7 +187,7 @@ impl OpportunityBuilder {
 
     /// Set the volume.
     #[must_use] 
-    pub fn volume(mut self, volume: Volume) -> Self {
+    pub const fn volume(mut self, volume: Volume) -> Self {
         self.volume = Some(volume);
         self
     }

@@ -24,13 +24,13 @@ pub enum RiskCheckResult {
 impl RiskCheckResult {
     /// Check if approved.
     #[must_use] 
-    pub fn is_approved(&self) -> bool {
+    pub const fn is_approved(&self) -> bool {
         matches!(self, RiskCheckResult::Approved)
     }
 
     /// Get rejection error if rejected.
     #[must_use] 
-    pub fn rejection_error(&self) -> Option<&RiskError> {
+    pub const fn rejection_error(&self) -> Option<&RiskError> {
         match self {
             RiskCheckResult::Rejected(e) => Some(e),
             RiskCheckResult::Approved => None,
@@ -45,7 +45,7 @@ pub struct RiskManager {
 
 impl RiskManager {
     /// Create a new risk manager with shared state.
-    pub fn new(state: Arc<AppState>) -> Self {
+    pub const fn new(state: Arc<AppState>) -> Self {
         Self { state }
     }
 

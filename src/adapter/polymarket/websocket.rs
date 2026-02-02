@@ -47,7 +47,7 @@ impl WebSocketHandler {
     ///
     /// * `url` - The WebSocket URL to connect to
     #[must_use] 
-    pub fn new(url: String) -> Self {
+    pub const fn new(url: String) -> Self {
         Self { url }
     }
 

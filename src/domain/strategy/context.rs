@@ -24,7 +24,7 @@ pub struct MarketContext {
 impl MarketContext {
     /// Create context for a simple binary market (YES/NO).
     #[must_use] 
-    pub fn binary() -> Self {
+    pub const fn binary() -> Self {
         Self {
             outcome_count: 2,
             has_dependencies: false,
@@ -34,7 +34,7 @@ impl MarketContext {
 
     /// Create context for a multi-outcome market.
     #[must_use] 
-    pub fn multi_outcome(count: usize) -> Self {
+    pub const fn multi_outcome(count: usize) -> Self {
         Self {
             outcome_count: count,
             has_dependencies: false,
@@ -52,13 +52,13 @@ impl MarketContext {
 
     /// Check if this is a binary market.
     #[must_use] 
-    pub fn is_binary(&self) -> bool {
+    pub const fn is_binary(&self) -> bool {
         self.outcome_count == 2
     }
 
     /// Check if this is a multi-outcome market.
     #[must_use] 
-    pub fn is_multi_outcome(&self) -> bool {
+    pub const fn is_multi_outcome(&self) -> bool {
         self.outcome_count > 2
     }
 }
@@ -85,7 +85,7 @@ pub struct DetectionContext<'a> {
 
 impl<'a> DetectionContext<'a> {
     /// Create a new detection context for a binary market pair.
-    pub fn new(pair: &'a MarketPair, cache: &'a OrderBookCache) -> Self {
+    pub const fn new(pair: &'a MarketPair, cache: &'a OrderBookCache) -> Self {
         Self {
             pair,
             cache,
@@ -95,7 +95,7 @@ impl<'a> DetectionContext<'a> {
     }
 
     /// Create a detection context for a multi-outcome market.
-    pub fn multi_outcome(
+    pub const fn multi_outcome(
         pair: &'a MarketPair,
         cache: &'a OrderBookCache,
         token_ids: Vec<crate::domain::TokenId>,

@@ -17,13 +17,13 @@ pub struct PositionId(u64);
 impl PositionId {
     /// Create a new `PositionId` from a u64 value.
     #[must_use] 
-    pub fn new(id: u64) -> Self {
+    pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
     /// Get the underlying value.
     #[must_use] 
-    pub fn value(&self) -> u64 {
+    pub const fn value(&self) -> u64 {
         self.0
     }
 }
@@ -51,19 +51,19 @@ pub enum PositionStatus {
 impl PositionStatus {
     /// Returns true if the position is open.
     #[must_use] 
-    pub fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         matches!(self, PositionStatus::Open)
     }
 
     /// Returns true if the position is a partial fill.
     #[must_use] 
-    pub fn is_partial(&self) -> bool {
+    pub const fn is_partial(&self) -> bool {
         matches!(self, PositionStatus::PartialFill { .. })
     }
 
     /// Returns true if the position is closed.
     #[must_use] 
-    pub fn is_closed(&self) -> bool {
+    pub const fn is_closed(&self) -> bool {
         matches!(self, PositionStatus::Closed { .. })
     }
 }
@@ -79,7 +79,7 @@ pub struct PositionLeg {
 impl PositionLeg {
     /// Create a new position leg.
     #[must_use] 
-    pub fn new(token_id: TokenId, size: Volume, entry_price: Price) -> Self {
+    pub const fn new(token_id: TokenId, size: Volume, entry_price: Price) -> Self {
         Self {
             token_id,
             size,
@@ -89,19 +89,19 @@ impl PositionLeg {
 
     /// Get the token ID.
     #[must_use] 
-    pub fn token_id(&self) -> &TokenId {
+    pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
     /// Get the size.
     #[must_use] 
-    pub fn size(&self) -> Volume {
+    pub const fn size(&self) -> Volume {
         self.size
     }
 
     /// Get the entry price.
     #[must_use] 
-    pub fn entry_price(&self) -> Price {
+    pub const fn entry_price(&self) -> Price {
         self.entry_price
     }
 
@@ -127,7 +127,7 @@ pub struct Position {
 impl Position {
     /// Create a new position.
     #[must_use] 
-    pub fn new(
+    pub const fn new(
         id: PositionId,
         market_id: MarketId,
         legs: Vec<PositionLeg>,
@@ -149,13 +149,13 @@ impl Position {
 
     /// Get the position ID.
     #[must_use] 
-    pub fn id(&self) -> PositionId {
+    pub const fn id(&self) -> PositionId {
         self.id
     }
 
     /// Get the market ID.
     #[must_use] 
-    pub fn market_id(&self) -> &MarketId {
+    pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
@@ -167,25 +167,25 @@ impl Position {
 
     /// Get the entry cost.
     #[must_use] 
-    pub fn entry_cost(&self) -> Price {
+    pub const fn entry_cost(&self) -> Price {
         self.entry_cost
     }
 
     /// Get the guaranteed payout.
     #[must_use] 
-    pub fn guaranteed_payout(&self) -> Price {
+    pub const fn guaranteed_payout(&self) -> Price {
         self.guaranteed_payout
     }
 
     /// Get when the position was opened.
     #[must_use] 
-    pub fn opened_at(&self) -> DateTime<Utc> {
+    pub const fn opened_at(&self) -> DateTime<Utc> {
         self.opened_at
     }
 
     /// Get the current status.
     #[must_use] 
-    pub fn status(&self) -> &PositionStatus {
+    pub const fn status(&self) -> &PositionStatus {
         &self.status
     }
 
@@ -197,7 +197,7 @@ impl Position {
 
     /// Returns true if the position is open.
     #[must_use] 
-    pub fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         self.status.is_open()
     }
 
@@ -217,7 +217,7 @@ pub struct PositionTracker {
 impl PositionTracker {
     /// Create a new position tracker.
     #[must_use] 
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             positions: Vec::new(),
             next_id: 1,
@@ -225,7 +225,7 @@ impl PositionTracker {
     }
 
     /// Generate the next position ID and increment the counter.
-    pub fn next_id(&mut self) -> PositionId {
+    pub const fn next_id(&mut self) -> PositionId {
         let id = PositionId::new(self.next_id);
         self.next_id += 1;
         id

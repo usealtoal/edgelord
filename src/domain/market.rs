@@ -20,7 +20,7 @@ impl TokenInfo {
 
     /// Get the token ID.
     #[must_use] 
-    pub fn id(&self) -> &TokenId {
+    pub const fn id(&self) -> &TokenId {
         &self.id
     }
 
@@ -51,7 +51,7 @@ impl MarketInfo {
 
     /// Get the market ID.
     #[must_use] 
-    pub fn id(&self) -> &MarketId {
+    pub const fn id(&self) -> &MarketId {
         &self.id
     }
 
@@ -95,7 +95,7 @@ impl MarketPair {
 
     /// Get the market ID.
     #[must_use] 
-    pub fn market_id(&self) -> &MarketId {
+    pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
@@ -107,13 +107,13 @@ impl MarketPair {
 
     /// Get the YES token ID.
     #[must_use] 
-    pub fn yes_token(&self) -> &TokenId {
+    pub const fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
     #[must_use] 
-    pub fn no_token(&self) -> &TokenId {
+    pub const fn no_token(&self) -> &TokenId {
         &self.no_token
     }
 }

@@ -21,7 +21,7 @@ pub struct HiGHSSolver;
 impl HiGHSSolver {
     /// Create a new `HiGHS` solver instance.
     #[must_use] 
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }

@@ -44,13 +44,13 @@ pub struct FrankWolfe {
 impl FrankWolfe {
     /// Create a new Frank-Wolfe instance with the given configuration.
     #[must_use] 
-    pub fn new(config: FrankWolfeConfig) -> Self {
+    pub const fn new(config: FrankWolfeConfig) -> Self {
         Self { config }
     }
 
     /// Get the configuration.
     #[must_use] 
-    pub fn config(&self) -> &FrankWolfeConfig {
+    pub const fn config(&self) -> &FrankWolfeConfig {
         &self.config
     }
 

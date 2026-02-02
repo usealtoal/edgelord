@@ -16,19 +16,19 @@ pub struct PriceLevel {
 impl PriceLevel {
     /// Create a new price level
     #[must_use] 
-    pub fn new(price: Price, size: Volume) -> Self {
+    pub const fn new(price: Price, size: Volume) -> Self {
         Self { price, size }
     }
 
     /// Get the price
     #[must_use] 
-    pub fn price(&self) -> Price {
+    pub const fn price(&self) -> Price {
         self.price
     }
 
     /// Get the size/volume
     #[must_use] 
-    pub fn size(&self) -> Volume {
+    pub const fn size(&self) -> Volume {
         self.size
     }
 }
@@ -44,7 +44,7 @@ pub struct OrderBook {
 impl OrderBook {
     /// Create a new empty order book
     #[must_use] 
-    pub fn new(token_id: TokenId) -> Self {
+    pub const fn new(token_id: TokenId) -> Self {
         Self {
             token_id,
             bids: Vec::new(),
@@ -54,7 +54,7 @@ impl OrderBook {
 
     /// Create an order book with initial levels
     #[must_use] 
-    pub fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
+    pub const fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
         Self {
             token_id,
             bids,
@@ -64,7 +64,7 @@ impl OrderBook {
 
     /// Get the token ID
     #[must_use] 
-    pub fn token_id(&self) -> &TokenId {
+    pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 

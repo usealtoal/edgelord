@@ -94,7 +94,7 @@ fn default_max_slippage() -> Decimal {
     Decimal::new(2, 2) // 2%
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -147,7 +147,7 @@ pub struct NetworkConfig {
 }
 
 /// Default chain ID is Amoy testnet (80002) for safety
-fn default_chain_id() -> u64 {
+const fn default_chain_id() -> u64 {
     80002
 }
 

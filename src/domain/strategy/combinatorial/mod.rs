@@ -57,7 +57,7 @@ pub struct CombinatorialConfig {
     pub enabled: bool,
 }
 
-fn default_max_iterations() -> usize {
+const fn default_max_iterations() -> usize {
     20
 }
 
@@ -69,7 +69,7 @@ fn default_gap_threshold() -> Decimal {
     Decimal::new(2, 2) // 0.02
 }
 
-fn default_enabled() -> bool {
+const fn default_enabled() -> bool {
     false // Disabled by default - requires dependency configuration
 }
 
@@ -100,7 +100,7 @@ pub struct CombinatorialStrategy {
 impl CombinatorialStrategy {
     /// Create a new strategy with the given configuration.
     #[must_use] 
-    pub fn new(config: CombinatorialConfig) -> Self {
+    pub const fn new(config: CombinatorialConfig) -> Self {
         let fw_config = FrankWolfeConfig {
             max_iterations: config.max_iterations,
             tolerance: config.tolerance,
@@ -113,13 +113,13 @@ impl CombinatorialStrategy {
 
     /// Get the strategy configuration.
     #[must_use] 
-    pub fn config(&self) -> &CombinatorialConfig {
+    pub const fn config(&self) -> &CombinatorialConfig {
         &self.config
     }
 
     /// Get the Frank-Wolfe algorithm instance.
     #[must_use] 
-    pub fn frank_wolfe(&self) -> &FrankWolfe {
+    pub const fn frank_wolfe(&self) -> &FrankWolfe {
         &self.fw
     }
 }

@@ -49,13 +49,13 @@ pub struct SingleConditionStrategy {
 impl SingleConditionStrategy {
     /// Create a new strategy with the given configuration.
     #[must_use] 
-    pub fn new(config: SingleConditionConfig) -> Self {
+    pub const fn new(config: SingleConditionConfig) -> Self {
         Self { config }
     }
 
     /// Get the strategy configuration.
     #[must_use] 
-    pub fn config(&self) -> &SingleConditionConfig {
+    pub const fn config(&self) -> &SingleConditionConfig {
         &self.config
     }
 }

@@ -50,7 +50,7 @@ impl LpProblem {
 
     /// Number of variables.
     #[must_use] 
-    pub fn num_vars(&self) -> usize {
+    pub const fn num_vars(&self) -> usize {
         self.objective.len()
     }
 }
@@ -67,7 +67,7 @@ pub struct IlpProblem {
 impl IlpProblem {
     /// Create from an LP problem with specified integer variables.
     #[must_use] 
-    pub fn new(lp: LpProblem, integer_vars: Vec<usize>) -> Self {
+    pub const fn new(lp: LpProblem, integer_vars: Vec<usize>) -> Self {
         Self { lp, integer_vars }
     }
 
@@ -93,7 +93,7 @@ pub struct Constraint {
 impl Constraint {
     /// Create a >= constraint.
     #[must_use] 
-    pub fn geq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    pub const fn geq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::GreaterEqual,
@@ -103,7 +103,7 @@ impl Constraint {
 
     /// Create a <= constraint.
     #[must_use] 
-    pub fn leq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    pub const fn leq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::LessEqual,
@@ -113,7 +113,7 @@ impl Constraint {
 
     /// Create an = constraint.
     #[must_use] 
-    pub fn eq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    pub const fn eq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::Equal,
@@ -151,7 +151,7 @@ impl Default for VariableBounds {
 impl VariableBounds {
     /// Binary variable bounds [0, 1].
     #[must_use] 
-    pub fn binary() -> Self {
+    pub const fn binary() -> Self {
         Self {
             lower: Some(Decimal::ZERO),
             upper: Some(Decimal::ONE),
@@ -160,7 +160,7 @@ impl VariableBounds {
 
     /// Free variable (no bounds).
     #[must_use] 
-    pub fn free() -> Self {
+    pub const fn free() -> Self {
         Self {
             lower: None,
             upper: None,
@@ -175,7 +175,7 @@ impl VariableBounds {
 
     /// Bounded variable [lower, upper].
     #[must_use] 
-    pub fn bounded(lower: Decimal, upper: Decimal) -> Self {
+    pub const fn bounded(lower: Decimal, upper: Decimal) -> Self {
         Self {
             lower: Some(lower),
             upper: Some(upper),
