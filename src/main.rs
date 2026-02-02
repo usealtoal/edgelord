@@ -1,6 +1,7 @@
 mod api;
 mod config;
 mod error;
+mod types;
 mod websocket;
 
 use api::ApiClient;
