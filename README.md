@@ -19,35 +19,35 @@ Based on research showing $40M in arbitrage profits extracted from Polymarket in
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                      RUST CORE (tokio)                            │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
-│  │  WebSocket   │───▶│   Strategy   │───▶│   Executor   │        │
-│  │   Handler    │    │   Registry   │    │   (traits)   │        │
-│  └──────────────┘    └──────────────┘    └──────────────┘        │
-│         │                   │                    │                │
-│         ▼                   ▼                    ▼                │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
-│  │  OrderBook   │    │  Strategies  │    │  Polymarket  │        │
-│  │    Cache     │    │  ┌─────────┐ │    │   Executor   │        │
-│  └──────────────┘    │  │ Single  │ │    └──────────────┘        │
-│                      │  │Condition│ │                             │
-│                      │  ├─────────┤ │                             │
-│                      │  │Rebalanc.│ │                             │
-│                      │  ├─────────┤ │                             │
-│                      │  │Combinat.│ │                             │
-│                      │  └─────────┘ │                             │
-│                      └──────────────┘                             │
-│                             │                                     │
-│                             ▼                                     │
-│                      ┌──────────────┐                             │
-│                      │ HiGHS Solver │                             │
-│                      │  (LP/ILP)    │                             │
-│                      └──────────────┘                             │
-│                                                                   │
-└───────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         RUST CORE (tokio)                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
+│  │  WebSocket   │───▶│   Strategy   │───▶│    Risk      │              │
+│  │   Handler    │    │   Registry   │    │   Manager    │              │
+│  └──────────────┘    └──────────────┘    └──────────────┘              │
+│         │                   │                    │                      │
+│         ▼                   ▼                    ▼                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
+│  │  OrderBook   │    │  Strategies  │    │   Executor   │──▶ Notifier  │
+│  │    Cache     │    │  ┌─────────┐ │    │  (Polymarket)│    Registry  │
+│  └──────────────┘    │  │ Single  │ │    └──────────────┘      │       │
+│                      │  │Condition│ │                          ▼       │
+│                      │  ├─────────┤ │                    ┌──────────┐  │
+│                      │  │Rebalanc.│ │                    │ Telegram │  │
+│                      │  ├─────────┤ │                    │   Log    │  │
+│                      │  │Combinat.│ │                    └──────────┘  │
+│                      │  └─────────┘ │                                   │
+│                      └──────────────┘                                   │
+│                             │                                           │
+│                             ▼                                           │
+│                      ┌──────────────┐                                   │
+│                      │ HiGHS Solver │                                   │
+│                      │  (LP/ILP)    │                                   │
+│                      └──────────────┘                                   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Design principles:**
@@ -176,14 +176,12 @@ doc/
 
 ## Status
 
-**Multi-Strategy Architecture Complete**
-
-- Phase 1: Foundation (WebSocket, market data)
-- Phase 2: Detection (single-condition arbitrage scanner)
-- Phase 3: Execution (order submission on Amoy testnet)
-- Multi-Strategy: Pluggable strategy system with Frank-Wolfe + ILP
-- Phase 4: Risk management & Telegram alerts
-- Phase 5: Mainnet deployment (next)
+- [x] **Phase 1: Foundation** — WebSocket, market data, order book cache
+- [x] **Phase 2: Detection** — Single-condition arbitrage scanner
+- [x] **Phase 3: Execution** — Order submission on Amoy testnet
+- [x] **Multi-Strategy** — Pluggable strategy system with Frank-Wolfe + ILP
+- [x] **Phase 4: Risk & Alerts** — Risk manager, circuit breakers, Telegram notifications
+- [ ] **Phase 5: Mainnet** — Production deployment with real funds
 
 ## References
 
