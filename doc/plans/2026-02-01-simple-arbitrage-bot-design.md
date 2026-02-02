@@ -33,27 +33,15 @@
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    RUST CORE (tokio)                    │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────┐  │
-│  │  WebSocket   │───▶│   Detector   │───▶│ Executor │  │
-│  │   Handler    │    │              │    │          │  │
-│  └──────────────┘    └──────────────┘    └──────────┘  │
-│         │                   │                  │        │
-│         ▼                   │                  ▼        │
-│  ┌──────────────┐           │           ┌──────────┐   │
-│  │  OrderBook   │           │           │ Telegram │   │
-│  │    Cache     │           │           │   Bot    │   │
-│  └──────────────┘           │           └──────────┘   │
-│                             ▼                          │
-│                    ┌──────────────┐                    │
-│                    │     Risk     │                    │
-│                    │   Manager    │                    │
-│                    └──────────────┘                    │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph core["RUST CORE (tokio)"]
+        WS[WebSocket Handler] --> DT[Detector]
+        DT --> EX[Executor]
+        WS --> OBC[OrderBook Cache]
+        DT --> RM[Risk Manager]
+        EX --> TG[Telegram Bot]
+    end
 ```
 
 ---

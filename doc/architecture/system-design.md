@@ -14,36 +14,23 @@
 
 ## High-Level Architecture
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                     RUST CORE (tokio async)                       │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
-│  │  WebSocket   │───▶│   Strategy   │───▶│   Executor   │        │
-│  │   Handler    │    │   Registry   │    │   (traits)   │        │
-│  └──────────────┘    └──────────────┘    └──────────────┘        │
-│         │                   │                    │                │
-│         ▼                   ▼                    ▼                │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐        │
-│  │  OrderBook   │    │  Strategies  │    │  Polymarket  │        │
-│  │    Cache     │    │  ┌─────────┐ │    │   Executor   │        │
-│  │  (RwLock)    │    │  │ Single  │ │    │              │        │
-│  └──────────────┘    │  │Condition│ │    └──────────────┘        │
-│                      │  ├─────────┤ │                             │
-│                      │  │Rebalanc.│ │                             │
-│                      │  ├─────────┤ │                             │
-│                      │  │Combinat.│ │                             │
-│                      │  └─────────┘ │                             │
-│                      └──────────────┘                             │
-│                             │                                     │
-│                             ▼                                     │
-│                      ┌──────────────┐                             │
-│                      │ HiGHS Solver │                             │
-│                      │  (LP/ILP)    │                             │
-│                      └──────────────┘                             │
-│                                                                   │
-└───────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph core["RUST CORE (tokio async)"]
+        WS[WebSocket Handler] --> SR[Strategy Registry]
+        SR --> EX[Executor<br/>traits]
+        WS --> OBC[OrderBook Cache<br/>RwLock]
+
+        subgraph strategies[Strategies]
+            SC[Single Condition]
+            RB[Rebalancing]
+            CB[Combinatorial]
+        end
+
+        SR --> strategies
+        strategies --> HiGHS[HiGHS Solver<br/>LP/ILP]
+        EX --> PM[Polymarket Executor]
+    end
 ```
 
 ## Module Structure
@@ -270,36 +257,18 @@ D(μ||θ) = Σ μᵢ * ln(μᵢ/θᵢ)
 
 ## Data Flow
 
-```
-Block N published on Polygon
-         │
-         ▼
-WebSocket receives update (~5ms)
-         │
-         ▼
-Order Book Cache updated (~1ms)
-         │
-         ▼
-StrategyRegistry.detect_all() (~5ms)
-         │
-    ┌────┴────┐
-    │         │
-Binary?    Multi?
-    │         │
-    ▼         ▼
-Single    Rebalancing
-Condition  Strategy
-    │         │
-    └────┬────┘
-         │
-    Opportunities found?
-         │
-    ┌────┴────┐
-   Yes        No
-    │         │
-    ▼         ▼
-Execute    Continue
- (~25ms)   listening
+```mermaid
+flowchart TD
+    A[Block N published on Polygon] --> B[WebSocket receives update<br/>~5ms]
+    B --> C[Order Book Cache updated<br/>~1ms]
+    C --> D[StrategyRegistry.detect_all<br/>~5ms]
+    D --> E{Market Type?}
+    E -->|Binary| F[Single Condition]
+    E -->|Multi| G[Rebalancing Strategy]
+    F --> H{Opportunities found?}
+    G --> H
+    H -->|Yes| I[Execute<br/>~25ms]
+    H -->|No| J[Continue listening]
 ```
 
 ---

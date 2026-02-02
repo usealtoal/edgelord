@@ -18,36 +18,32 @@ Based on research showing $40M in arbitrage profits extracted from Polymarket in
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         RUST CORE (tokio)                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │  WebSocket   │───▶│   Strategy   │───▶│    Risk      │              │
-│  │   Handler    │    │   Registry   │    │   Manager    │              │
-│  └──────────────┘    └──────────────┘    └──────────────┘              │
-│         │                   │                    │                      │
-│         ▼                   ▼                    ▼                      │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │  OrderBook   │    │  Strategies  │    │   Executor   │──▶ Notifier  │
-│  │    Cache     │    │  ┌─────────┐ │    │  (Polymarket)│    Registry  │
-│  └──────────────┘    │  │ Single  │ │    └──────────────┘      │       │
-│                      │  │Condition│ │                          ▼       │
-│                      │  ├─────────┤ │                    ┌──────────┐  │
-│                      │  │Rebalanc.│ │                    │ Telegram │  │
-│                      │  ├─────────┤ │                    │   Log    │  │
-│                      │  │Combinat.│ │                    └──────────┘  │
-│                      │  └─────────┘ │                                   │
-│                      └──────────────┘                                   │
-│                             │                                           │
-│                             ▼                                           │
-│                      ┌──────────────┐                                   │
-│                      │ HiGHS Solver │                                   │
-│                      │  (LP/ILP)    │                                   │
-│                      └──────────────┘                                   │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph core["RUST CORE (tokio)"]
+        WS[WebSocket Handler] --> SR[Strategy Registry]
+        SR --> RM[Risk Manager]
+        WS --> OBC[OrderBook Cache]
+
+        subgraph strategies[Strategies]
+            SC[Single Condition]
+            RB[Rebalancing]
+            CB[Combinatorial]
+        end
+
+        SR --> strategies
+        strategies --> HiGHS[HiGHS Solver<br/>LP/ILP]
+
+        RM --> EX[Executor<br/>Polymarket]
+        EX --> NR[Notifier Registry]
+
+        subgraph notifiers[Notifiers]
+            TG[Telegram]
+            LOG[Log]
+        end
+
+        NR --> notifiers
+    end
 ```
 
 **Design principles:**
