@@ -20,7 +20,7 @@ use crate::domain::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
-use crate::domain::{MarketPair, Opportunity, OrderBookCache};
+use crate::domain::{Opportunity, OrderBookCache};
 use crate::error::Result;
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
@@ -327,14 +327,4 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
         PositionStatus::Open,
     );
     positions.add(position);
-}
-
-/// Log market pair being tracked.
-#[allow(dead_code)]
-fn log_market(pair: &MarketPair) {
-    debug!(
-        market_id = %pair.market_id(),
-        question = %pair.question(),
-        "Tracking market"
-    );
 }
