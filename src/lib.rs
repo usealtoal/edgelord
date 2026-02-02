@@ -20,14 +20,13 @@
 //!
 //! # Modules
 //!
-//! - [`config`] - Configuration loading from TOML files with strategy settings
+//! - [`app`] - Application layer: configuration, orchestration, and shared state
 //! - [`domain`] - Exchange-agnostic types: order books, opportunities, positions
 //! - [`domain::strategy`] - Strategy trait and implementations
 //! - [`domain::solver`] - LP/ILP solver abstraction
 //! - [`error`] - Error types for the crate
 //! - [`exchange`] - Trait definitions for exchange implementations
-//! - [`polymarket`] - Polymarket-specific implementation (requires `polymarket` feature)
-//! - [`app`] - Application orchestration (requires `polymarket` feature)
+//! - [`adapter`] - Exchange adapter implementations (requires `polymarket` feature)
 //!
 //! # Features
 //!
@@ -36,20 +35,17 @@
 //! # Example
 //!
 //! ```no_run
-//! use edgelord::config::Config;
+//! use edgelord::app::Config;
 //! use edgelord::domain::strategy::{SingleConditionStrategy, StrategyRegistry};
 //!
 //! let mut registry = StrategyRegistry::new();
 //! registry.register(Box::new(SingleConditionStrategy::new(Default::default())));
 //! ```
 
-pub mod config;
+pub mod app;
 pub mod domain;
 pub mod error;
 pub mod exchange;
 
 #[cfg(feature = "polymarket")]
 pub mod adapter;
-
-#[cfg(feature = "polymarket")]
-pub mod app;

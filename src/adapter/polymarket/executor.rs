@@ -19,7 +19,7 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
-use crate::config::Config;
+use crate::app::Config;
 use crate::domain::{Opportunity, Position, PositionLeg, PositionStatus, PositionTracker, Price, TokenId};
 use crate::error::{ConfigError, ExecutionError, Result};
 use crate::exchange::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use crate::config::Config;
+use super::config::Config;
 use crate::domain::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
