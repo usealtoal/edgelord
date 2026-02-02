@@ -19,6 +19,12 @@ pub enum Error {
 
     #[error("URL parse error: {0}")]
     Url(#[from] url::ParseError),
+
+    #[error("Execution error: {0}")]
+    Execution(String),
+
+    #[error("Polymarket SDK error: {0}")]
+    Polymarket(#[from] polymarket_client_sdk::error::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

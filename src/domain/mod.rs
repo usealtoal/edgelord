@@ -6,7 +6,7 @@ mod types;
 
 pub use detector::{detect_single_condition, DetectorConfig};
 pub use orderbook::OrderBookCache;
-pub use types::{MarketId, MarketPair, Opportunity, TokenId};
+pub use types::{MarketId, MarketPair, Opportunity, Price, TokenId, Volume};
 
 // Re-export for future use
 #[allow(unused_imports)]

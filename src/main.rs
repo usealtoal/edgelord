@@ -1,12 +1,14 @@
 mod config;
 mod domain;
 mod error;
+mod executor;
 mod polymarket;
 
 use std::sync::Arc;
 
 use config::Config;
-use domain::{detect_single_condition, DetectorConfig, OrderBookCache, TokenId};
+use domain::{detect_single_condition, DetectorConfig, Opportunity, OrderBookCache, TokenId};
+use executor::OrderExecutor;
 use polymarket::{MarketRegistry, PolymarketClient, WebSocketHandler, WsMessage};
 use tokio::signal;
 use tracing::{error, info, warn};
@@ -43,6 +45,23 @@ async fn main() {
 }
 
 async fn run(config: Config) -> error::Result<()> {
+    // Initialize executor if wallet is configured
+    let executor: Option<Arc<OrderExecutor>> = if config.wallet.private_key.is_some() {
+        match OrderExecutor::new(&config).await {
+            Ok(exec) => {
+                info!("Executor initialized - trading ENABLED");
+                Some(Arc::new(exec))
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to initialize executor - detection only");
+                None
+            }
+        }
+    } else {
+        info!("No wallet configured - detection only mode");
+        None
+    };
+
     let client = PolymarketClient::new(config.network.api_url.clone());
     let markets = client.get_active_markets(20).await?;
 
@@ -89,10 +108,17 @@ async fn run(config: Config) -> error::Result<()> {
     let cache_clone = cache.clone();
     let registry_clone = registry.clone();
     let detector_config_clone = detector_config.clone();
+    let executor_clone = executor.clone();
 
     handler
         .run(token_ids, move |msg| {
-            handle_message(msg, &cache_clone, &registry_clone, &detector_config_clone);
+            handle_message(
+                msg,
+                &cache_clone,
+                &registry_clone,
+                &detector_config_clone,
+                executor_clone.clone(),
+            );
         })
         .await?;
 
@@ -104,6 +130,7 @@ fn handle_message(
     cache: &OrderBookCache,
     registry: &MarketRegistry,
     config: &DetectorConfig,
+    executor: Option<Arc<OrderExecutor>>,
 ) {
     match msg {
         WsMessage::Book(book) => {
@@ -123,10 +150,29 @@ fn handle_message(
                         expected_profit = %opp.expected_profit,
                         "ARBITRAGE DETECTED"
                     );
+
+                    // Execute if trading is enabled
+                    if let Some(exec) = executor.clone() {
+                        spawn_execution(exec, opp);
+                    }
                 }
             }
         }
         WsMessage::PriceChange(_) => {}
         _ => {}
     }
+}
+
+/// Spawn async execution without blocking message processing.
+fn spawn_execution(executor: Arc<OrderExecutor>, opportunity: Opportunity) {
+    tokio::spawn(async move {
+        match executor.execute(&opportunity).await {
+            Ok(result) => {
+                info!(result = ?result, "Execution completed");
+            }
+            Err(e) => {
+                error!(error = %e, "Execution failed");
+            }
+        }
+    });
 }
