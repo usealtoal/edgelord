@@ -1482,6 +1482,7 @@ dependencies = [
 name = "edgelord"
 version = "0.1.0"
 dependencies = [
+ "alloy-signer-local",
  "anyhow",
  "chrono",
  "dotenvy",
