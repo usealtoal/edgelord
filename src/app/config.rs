@@ -19,6 +19,8 @@ pub struct Config {
     pub wallet: WalletConfig,
     #[serde(default)]
     pub risk: RiskConfig,
+    #[serde(default)]
+    pub telegram: TelegramAppConfig,
 }
 
 /// Configuration for all detection strategies.
@@ -85,6 +87,27 @@ fn default_min_profit_threshold() -> Decimal {
 
 fn default_max_slippage() -> Decimal {
     Decimal::new(2, 2) // 2%
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Telegram notification configuration.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TelegramAppConfig {
+    /// Enable telegram notifications.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Send opportunity alerts (can be noisy).
+    #[serde(default)]
+    pub notify_opportunities: bool,
+    /// Send execution alerts.
+    #[serde(default = "default_true")]
+    pub notify_executions: bool,
+    /// Send risk rejection alerts.
+    #[serde(default = "default_true")]
+    pub notify_risk_rejections: bool,
 }
 
 impl Default for RiskConfig {
@@ -171,6 +194,7 @@ impl Default for Config {
             strategies: StrategiesConfig::default(),
             wallet: WalletConfig::default(),
             risk: RiskConfig::default(),
+            telegram: TelegramAppConfig::default(),
         }
     }
 }
