@@ -2,12 +2,15 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
+use crate::detector::DetectorConfig;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub network: NetworkConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub detector: DetectorConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,6 +60,7 @@ impl Default for Config {
                 level: "info".into(),
                 format: "pretty".into(),
             },
+            detector: DetectorConfig::default(),
         }
     }
 }
