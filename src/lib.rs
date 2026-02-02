@@ -21,5 +21,4 @@ pub mod error;
 pub mod exchange;
 pub mod polymarket;
 
-// These will be added in later tasks:
-// pub mod app;
+pub mod app;
