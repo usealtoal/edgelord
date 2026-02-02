@@ -1,5 +1,6 @@
 mod config;
 mod error;
+mod websocket;
 
 use config::Config;
 use tracing::info;
