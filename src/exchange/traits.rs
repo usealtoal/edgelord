@@ -12,12 +12,13 @@ use crate::error::Error;
 pub struct OrderId(pub String);
 
 impl OrderId {
-    /// Create a new OrderId.
+    /// Create a new `OrderId`.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
     /// Get the underlying ID string.
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -53,42 +54,32 @@ pub enum ExecutionResult {
 
 impl ExecutionResult {
     /// Check if the execution was successful (fully filled).
-    pub fn is_success(&self) -> bool {
-        matches!(self, ExecutionResult::Success { .. })
+    #[must_use] 
+    pub const fn is_success(&self) -> bool {
+        matches!(self, Self::Success { .. })
     }
 
     /// Check if the execution resulted in a partial fill.
-    pub fn is_partial(&self) -> bool {
-        matches!(self, ExecutionResult::PartialFill { .. })
+    #[must_use] 
+    pub const fn is_partial(&self) -> bool {
+        matches!(self, Self::PartialFill { .. })
     }
 
     /// Check if the execution failed.
-    pub fn is_failed(&self) -> bool {
-        matches!(self, ExecutionResult::Failed { .. })
+    #[must_use] 
+    pub const fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed { .. })
     }
 
     /// Get the order ID if available.
-    pub fn order_id(&self) -> Option<&OrderId> {
+    #[must_use] 
+    pub const fn order_id(&self) -> Option<&OrderId> {
         match self {
-            ExecutionResult::Success { order_id, .. } => Some(order_id),
-            ExecutionResult::PartialFill { order_id, .. } => Some(order_id),
-            ExecutionResult::Failed { .. } => None,
+            Self::Success { order_id, .. } => Some(order_id),
+            Self::PartialFill { order_id, .. } => Some(order_id),
+            Self::Failed { .. } => None,
         }
     }
-}
-
-/// Represents market information from an exchange.
-///
-/// This is a simplified market info type for the exchange abstraction layer.
-/// Exchange implementations can convert their specific market types to this.
-#[derive(Debug, Clone)]
-pub struct MarketInfo {
-    /// Unique identifier for the market.
-    pub id: String,
-    /// Human-readable market name/question.
-    pub name: String,
-    /// Whether the market is active for trading.
-    pub active: bool,
 }
 
 /// Represents an order to be executed.
@@ -111,16 +102,6 @@ pub enum OrderSide {
     Buy,
     /// Sell order.
     Sell,
-}
-
-/// Client for fetching market data from an exchange.
-#[async_trait]
-pub trait ExchangeClient: Send + Sync {
-    /// Fetch all available markets from the exchange.
-    async fn get_markets(&self) -> Result<Vec<MarketInfo>, Error>;
-
-    /// Get the exchange name for logging/debugging.
-    fn exchange_name(&self) -> &'static str;
 }
 
 /// Executor for submitting orders to an exchange.

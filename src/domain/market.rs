@@ -10,7 +10,7 @@ pub struct TokenInfo {
 }
 
 impl TokenInfo {
-    /// Create a new TokenInfo.
+    /// Create a new `TokenInfo`.
     pub fn new(id: TokenId, outcome: impl Into<String>) -> Self {
         Self {
             id,
@@ -19,11 +19,13 @@ impl TokenInfo {
     }
 
     /// Get the token ID.
-    pub fn id(&self) -> &TokenId {
+    #[must_use] 
+    pub const fn id(&self) -> &TokenId {
         &self.id
     }
 
     /// Get the outcome description.
+    #[must_use] 
     pub fn outcome(&self) -> &str {
         &self.outcome
     }
@@ -38,7 +40,7 @@ pub struct MarketInfo {
 }
 
 impl MarketInfo {
-    /// Create a new MarketInfo.
+    /// Create a new `MarketInfo`.
     pub fn new(id: MarketId, question: impl Into<String>, tokens: Vec<TokenInfo>) -> Self {
         Self {
             id,
@@ -48,16 +50,19 @@ impl MarketInfo {
     }
 
     /// Get the market ID.
-    pub fn id(&self) -> &MarketId {
+    #[must_use] 
+    pub const fn id(&self) -> &MarketId {
         &self.id
     }
 
     /// Get the market question.
+    #[must_use] 
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the tokens in this market.
+    #[must_use] 
     pub fn tokens(&self) -> &[TokenInfo] {
         &self.tokens
     }
@@ -73,7 +78,7 @@ pub struct MarketPair {
 }
 
 impl MarketPair {
-    /// Create a new MarketPair.
+    /// Create a new `MarketPair`.
     pub fn new(
         market_id: MarketId,
         question: impl Into<String>,
@@ -89,22 +94,26 @@ impl MarketPair {
     }
 
     /// Get the market ID.
-    pub fn market_id(&self) -> &MarketId {
+    #[must_use] 
+    pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the market question.
+    #[must_use] 
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the YES token ID.
-    pub fn yes_token(&self) -> &TokenId {
+    #[must_use] 
+    pub const fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
-    pub fn no_token(&self) -> &TokenId {
+    #[must_use] 
+    pub const fn no_token(&self) -> &TokenId {
         &self.no_token
     }
 }

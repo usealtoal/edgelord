@@ -81,7 +81,7 @@ impl PolymarketExecutor {
 
         // Create and authenticate client
         let client = Client::new(&config.network.api_url, ClobConfig::default())
-            .map_err(|e| ExecutionError::AuthFailed(format!("Failed to create CLOB client: {}", e)))?
+            .map_err(|e| ExecutionError::AuthFailed(format!("Failed to create CLOB client: {e}")))?
             .authentication_builder(&signer)
             .authenticate()
             .await
@@ -160,7 +160,7 @@ impl PolymarketExecutor {
                     "Both legs failed"
                 );
                 Ok(ArbitrageExecutionResult::Failed {
-                    reason: format!("YES: {}, NO: {}", yes_err, no_err),
+                    reason: format!("YES: {yes_err}, NO: {no_err}"),
                 })
             }
         }

@@ -23,7 +23,8 @@ pub struct MarketContext {
 
 impl MarketContext {
     /// Create context for a simple binary market (YES/NO).
-    pub fn binary() -> Self {
+    #[must_use] 
+    pub const fn binary() -> Self {
         Self {
             outcome_count: 2,
             has_dependencies: false,
@@ -32,7 +33,8 @@ impl MarketContext {
     }
 
     /// Create context for a multi-outcome market.
-    pub fn multi_outcome(count: usize) -> Self {
+    #[must_use] 
+    pub const fn multi_outcome(count: usize) -> Self {
         Self {
             outcome_count: count,
             has_dependencies: false,
@@ -41,6 +43,7 @@ impl MarketContext {
     }
 
     /// Create context for a market with dependencies.
+    #[must_use] 
     pub fn with_dependencies(mut self, markets: Vec<MarketId>) -> Self {
         self.has_dependencies = !markets.is_empty();
         self.correlated_markets = markets;
@@ -48,12 +51,14 @@ impl MarketContext {
     }
 
     /// Check if this is a binary market.
-    pub fn is_binary(&self) -> bool {
+    #[must_use] 
+    pub const fn is_binary(&self) -> bool {
         self.outcome_count == 2
     }
 
     /// Check if this is a multi-outcome market.
-    pub fn is_multi_outcome(&self) -> bool {
+    #[must_use] 
+    pub const fn is_multi_outcome(&self) -> bool {
         self.outcome_count > 2
     }
 }
@@ -74,27 +79,53 @@ pub struct DetectionContext<'a> {
     pub cache: &'a OrderBookCache,
     /// Additional market context.
     market_ctx: MarketContext,
+    /// Token IDs for multi-outcome markets.
+    token_ids: Vec<TokenId>,
 }
 
 impl<'a> DetectionContext<'a> {
     /// Create a new detection context for a binary market pair.
-    pub fn new(pair: &'a MarketPair, cache: &'a OrderBookCache) -> Self {
+    pub const fn new(pair: &'a MarketPair, cache: &'a OrderBookCache) -> Self {
         Self {
             pair,
             cache,
             market_ctx: MarketContext::binary(),
+            token_ids: vec![],
+        }
+    }
+
+    /// Create a detection context for a multi-outcome market.
+    pub const fn multi_outcome(
+        pair: &'a MarketPair,
+        cache: &'a OrderBookCache,
+        token_ids: Vec<crate::domain::TokenId>,
+    ) -> Self {
+        let outcome_count = token_ids.len();
+        Self {
+            pair,
+            cache,
+            market_ctx: MarketContext::multi_outcome(outcome_count),
+            token_ids,
         }
     }
 
     /// Set custom market context.
+    #[must_use] 
     pub fn with_market_context(mut self, ctx: MarketContext) -> Self {
         self.market_ctx = ctx;
         self
     }
 
     /// Get the market context.
+    #[must_use] 
     pub fn market_context(&self) -> MarketContext {
         self.market_ctx.clone()
+    }
+
+    /// Get the token IDs for multi-outcome markets.
+    #[must_use] 
+    pub fn token_ids(&self) -> &[crate::domain::TokenId] {
+        &self.token_ids
     }
 }
 
@@ -113,11 +144,13 @@ pub struct DetectionResult {
 
 impl DetectionResult {
     /// Create an empty result.
+    #[must_use] 
     pub fn empty() -> Self {
         Self::default()
     }
 
     /// Create a result with opportunity count.
+    #[must_use] 
     pub fn with_count(count: usize) -> Self {
         Self {
             opportunity_count: count,

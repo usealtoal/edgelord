@@ -20,7 +20,7 @@ use crate::domain::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
-use crate::domain::{MarketPair, Opportunity, OrderBookCache};
+use crate::domain::{Opportunity, OrderBookCache};
 use crate::error::Result;
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
@@ -235,7 +235,9 @@ fn handle_message(
                 }
             }
         }
-        WsMessage::PriceChange(_) => {}
+            // Price changes are incremental updates; we only need full book snapshots
+            // for arbitrage detection since we need both bid and ask sides
+            WsMessage::PriceChange(_) => {}
         _ => {}
     }
 }
@@ -327,14 +329,4 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
         PositionStatus::Open,
     );
     positions.add(position);
-}
-
-/// Log market pair being tracked.
-#[allow(dead_code)]
-fn log_market(pair: &MarketPair) {
-    debug!(
-        market_id = %pair.market_id(),
-        question = %pair.question(),
-        "Tracking market"
-    );
 }

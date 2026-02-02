@@ -1,3 +1,8 @@
+//! Application configuration loading and validation.
+//!
+//! Configuration is loaded from a TOML file with environment variable overrides
+//! for sensitive values like `WALLET_PRIVATE_KEY`.
+
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::path::Path;
@@ -48,10 +53,10 @@ fn default_enabled_strategies() -> Vec<String> {
 }
 
 /// Wallet configuration for signing orders.
-/// Private key is loaded from WALLET_PRIVATE_KEY env var at runtime (never from config file).
+/// Private key is loaded from `WALLET_PRIVATE_KEY` env var at runtime (never from config file).
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct WalletConfig {
-    /// Private key loaded from WALLET_PRIVATE_KEY env var at runtime
+    /// Private key loaded from `WALLET_PRIVATE_KEY` env var at runtime
     #[serde(skip)]
     pub private_key: Option<String>,
 }
@@ -89,7 +94,7 @@ fn default_max_slippage() -> Decimal {
     Decimal::new(2, 2) // 2%
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -142,7 +147,7 @@ pub struct NetworkConfig {
 }
 
 /// Default chain ID is Amoy testnet (80002) for safety
-fn default_chain_id() -> u64 {
+const fn default_chain_id() -> u64 {
     80002
 }
 
@@ -157,7 +162,7 @@ impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(ConfigError::ReadFile)?;
 
-        let mut config: Config = toml::from_str(&content).map_err(ConfigError::Parse)?;
+        let mut config: Self = toml::from_str(&content).map_err(ConfigError::Parse)?;
 
         // Load private key from environment variable (never from config file for security)
         config.wallet.private_key = std::env::var("WALLET_PRIVATE_KEY").ok();

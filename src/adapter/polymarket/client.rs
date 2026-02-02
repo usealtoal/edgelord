@@ -25,6 +25,7 @@ impl PolymarketClient {
     ///
     /// * `base_url` - The base URL for the Polymarket CLOB API
     ///   (e.g., `https://clob.polymarket.com`)
+    #[must_use] 
     pub fn new(base_url: String) -> Self {
         Self {
             client: Client::new(),

@@ -51,7 +51,8 @@ pub struct BookMessage {
 }
 
 impl BookMessage {
-    /// Convert this WebSocket message to a domain OrderBook
+    /// Convert this WebSocket message to a domain `OrderBook`
+    #[must_use] 
     pub fn to_orderbook(&self) -> OrderBook {
         let token_id = TokenId::from(self.asset_id.clone());
         let bids = Self::parse_levels(&self.bids);

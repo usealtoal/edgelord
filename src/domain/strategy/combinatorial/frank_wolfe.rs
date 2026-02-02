@@ -43,16 +43,25 @@ pub struct FrankWolfe {
 
 impl FrankWolfe {
     /// Create a new Frank-Wolfe instance with the given configuration.
-    pub fn new(config: FrankWolfeConfig) -> Self {
+    #[must_use] 
+    pub const fn new(config: FrankWolfeConfig) -> Self {
         Self { config }
     }
 
     /// Get the configuration.
-    pub fn config(&self) -> &FrankWolfeConfig {
+    #[must_use] 
+    pub const fn config(&self) -> &FrankWolfeConfig {
         &self.config
     }
 
     /// Run Frank-Wolfe projection.
+    ///
+    /// The Frank-Wolfe algorithm (also known as conditional gradient descent) projects
+    /// market prices onto the marginal polytope M by iteratively solving:
+    ///   min_{mu ∈ M} D(mu || theta)
+    ///
+    /// where D is the Bregman divergence. This is useful for arbitrage detection:
+    /// if theta lies outside M, the projection distance indicates arbitrage profit.
     ///
     /// # Arguments
     /// * `theta` - Current market prices (may be outside M)
@@ -77,7 +86,11 @@ impl FrankWolfe {
             });
         }
 
-        // Initialize mu at theta (or feasible point if theta infeasible)
+        // ========================================================================
+        // STEP 1: Initialize with current prices
+        // ========================================================================
+        // Start with mu = theta. If theta is already in M, we converge immediately.
+        // If theta is outside M, the algorithm will iteratively move mu toward M.
         let mut mu = theta.to_vec();
         let mut iterations = 0;
         let mut gap = Decimal::MAX;
@@ -85,10 +98,24 @@ impl FrankWolfe {
         for _ in 0..self.config.max_iterations {
             iterations += 1;
 
-            // Compute gradient of Bregman divergence at mu
+            // ====================================================================
+            // STEP 2: Compute Bregman gradient
+            // ====================================================================
+            // The gradient of D(mu || theta) with respect to mu tells us the
+            // direction of steepest ascent in divergence. For LMSR's Bregman
+            // divergence, this is: grad_i = log(mu_i) - log(theta_i)
             let grad = bregman_gradient(&mu, theta);
 
-            // Solve linear minimization oracle: min_{s ∈ M} <grad, s>
+            // ====================================================================
+            // STEP 3: Solve ILP oracle to find minimizing vertex
+            // ====================================================================
+            // The key insight of Frank-Wolfe: instead of projecting directly onto M
+            // (which requires solving a complex optimization), we solve a LINEAR
+            // minimization over M: find s = argmin_{s ∈ M} <grad, s>
+            //
+            // For prediction markets, M is the marginal polytope (valid probability
+            // distributions), and the ILP finds the vertex (extreme point) of M
+            // that most decreases the Bregman divergence.
             let oracle_problem = IlpProblem {
                 lp: LpProblem {
                     objective: grad.clone(),
@@ -106,7 +133,13 @@ impl FrankWolfe {
 
             let s = &solution.values;
 
-            // Compute Frank-Wolfe gap: <grad, mu - s>
+            // ====================================================================
+            // STEP 5: Check convergence via duality gap
+            // ====================================================================
+            // The Frank-Wolfe gap <grad, mu - s> provides an upper bound on the
+            // suboptimality of the current solution. When gap ≈ 0, we've found
+            // the projection. This gap also approximates the arbitrage profit:
+            // it measures how far theta is from the nearest valid price vector.
             gap = grad
                 .iter()
                 .zip(mu.iter())
@@ -114,16 +147,21 @@ impl FrankWolfe {
                 .map(|((g, m), si)| *g * (*m - *si))
                 .sum();
 
-            // Check convergence
             if gap.abs() < self.config.tolerance {
                 break;
             }
 
-            // Line search: find optimal step size gamma
-            // For LMSR, closed-form gamma is complex; use simple 2/(t+2) schedule
+            // ====================================================================
+            // STEP 4: Update toward the minimizing vertex with step size
+            // ====================================================================
+            // Move mu toward the oracle solution s using a convex combination:
+            //   mu_new = (1 - gamma) * mu + gamma * s
+            //
+            // The step size gamma ∈ [0,1] determines how far to move. We use the
+            // classic 2/(t+2) schedule which guarantees O(1/t) convergence rate.
+            // For LMSR, exact line search is complex, so this schedule works well.
             let gamma = Decimal::TWO / Decimal::from(iterations + 2);
 
-            // Update: mu = (1 - gamma) * mu + gamma * s
             let one_minus_gamma = Decimal::ONE - gamma;
             for i in 0..n {
                 mu[i] = one_minus_gamma * mu[i] + gamma * s[i];
@@ -131,6 +169,7 @@ impl FrankWolfe {
         }
 
         // Compute final divergence (arbitrage profit potential)
+        // This measures how far the original prices theta were from the polytope M
         let divergence = bregman_divergence(&mu, theta);
 
         Ok(FrankWolfeResult {
@@ -157,6 +196,7 @@ pub struct FrankWolfeResult {
 
 impl FrankWolfeResult {
     /// Check if significant arbitrage exists.
+    #[must_use] 
     pub fn has_arbitrage(&self, threshold: Decimal) -> bool {
         self.gap > threshold
     }

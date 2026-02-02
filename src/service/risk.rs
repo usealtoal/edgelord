@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::AppState;
-use crate::domain::Opportunity;
+use crate::domain::{Opportunity, Position};
 use crate::error::RiskError;
 
 /// Result of a risk check.
@@ -23,12 +23,14 @@ pub enum RiskCheckResult {
 
 impl RiskCheckResult {
     /// Check if approved.
-    pub fn is_approved(&self) -> bool {
+    #[must_use] 
+    pub const fn is_approved(&self) -> bool {
         matches!(self, RiskCheckResult::Approved)
     }
 
     /// Get rejection error if rejected.
-    pub fn rejection_error(&self) -> Option<&RiskError> {
+    #[must_use] 
+    pub const fn rejection_error(&self) -> Option<&RiskError> {
         match self {
             RiskCheckResult::Rejected(e) => Some(e),
             RiskCheckResult::Approved => None,
@@ -43,11 +45,12 @@ pub struct RiskManager {
 
 impl RiskManager {
     /// Create a new risk manager with shared state.
-    pub fn new(state: Arc<AppState>) -> Self {
+    pub const fn new(state: Arc<AppState>) -> Self {
         Self { state }
     }
 
     /// Check if an opportunity passes all risk checks.
+    #[must_use] 
     pub fn check(&self, opportunity: &Opportunity) -> RiskCheckResult {
         // Check circuit breaker first
         if let Err(e) = self.check_circuit_breaker() {
@@ -129,7 +132,7 @@ impl RiskManager {
             .positions()
             .open_positions()
             .filter(|p| p.market_id() == market_id)
-            .map(|p| p.entry_cost())
+            .map(Position::entry_cost)
             .sum::<Decimal>();
 
         let additional = opportunity.total_cost() * opportunity.volume();
@@ -275,5 +278,47 @@ mod tests {
 
         risk.reset_circuit_breaker();
         assert!(!state.is_circuit_breaker_active());
+    }
+
+    #[test]
+    fn test_check_position_limit() {
+        use crate::domain::{Position, PositionLeg, PositionStatus};
+
+        let limits = RiskLimits {
+            max_position_per_market: dec!(100), // Only $100 per market
+            min_profit_threshold: dec!(0),
+            ..Default::default()
+        };
+        let state = Arc::new(AppState::new(limits));
+
+        // Add existing position in this market
+        {
+            let mut positions = state.positions_mut();
+            let position = Position::new(
+                positions.next_id(),
+                MarketId::from("test-market"),
+                vec![
+                    PositionLeg::new(TokenId::from("yes"), dec!(50), dec!(0.45)),
+                    PositionLeg::new(TokenId::from("no"), dec!(50), dec!(0.45)),
+                ],
+                dec!(45), // $45 entry cost
+                dec!(50),
+                chrono::Utc::now(),
+                PositionStatus::Open,
+            );
+            positions.add(position);
+        }
+
+        let risk = RiskManager::new(state);
+
+        // Try to add $90 more (45 + 90 = 135 > 100 limit)
+        let opp = make_opportunity(dec!(100), dec!(0.45), dec!(0.45)); // $90 cost
+        let result = risk.check(&opp);
+
+        assert!(!result.is_approved());
+        assert!(matches!(
+            result.rejection_error(),
+            Some(RiskError::PositionLimitExceeded { .. })
+        ));
     }
 }

@@ -3,8 +3,8 @@
 //! This module provides a pluggable strategy system supporting multiple
 //! detection algorithms:
 //!
-//! - **SingleCondition**: YES + NO < $1 (26.7% of historical profits)
-//! - **MarketRebalancing**: Sum of outcomes < $1 (73.1% of historical profits)
+//! - **`SingleCondition`**: YES + NO < $1 (26.7% of historical profits)
+//! - **`MarketRebalancing`**: Sum of outcomes < $1 (73.1% of historical profits)
 //! - **Combinatorial**: Frank-Wolfe + ILP for correlated markets (0.24%)
 //!
 //! # Architecture
@@ -29,7 +29,7 @@
 
 mod context;
 pub mod single_condition;
-mod market_rebalancing;
+pub mod market_rebalancing;
 pub mod combinatorial;
 
 pub use context::{DetectionContext, DetectionResult, MarketContext};
@@ -80,6 +80,7 @@ pub struct StrategyRegistry {
 
 impl StrategyRegistry {
     /// Create a new empty registry.
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -92,16 +93,19 @@ impl StrategyRegistry {
     }
 
     /// Get all registered strategies.
+    #[must_use] 
     pub fn strategies(&self) -> &[Box<dyn Strategy>] {
         &self.strategies
     }
 
     /// Number of registered strategies.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.strategies.len()
     }
 
     /// Check if registry is empty.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.strategies.is_empty()
     }
@@ -109,6 +113,7 @@ impl StrategyRegistry {
     /// Run all applicable strategies and collect opportunities.
     ///
     /// Only strategies where `applies_to()` returns true are run.
+    #[must_use] 
     pub fn detect_all(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
         let market_ctx = ctx.market_context();
         self.strategies

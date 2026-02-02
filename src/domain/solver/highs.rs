@@ -1,7 +1,7 @@
-//! HiGHS solver implementation via good_lp.
+//! `HiGHS` solver implementation via `good_lp`.
 //!
-//! HiGHS is a high-performance open-source linear/mixed-integer programming solver.
-//! This implementation wraps it using the good_lp crate for ergonomic Rust usage.
+//! `HiGHS` is a high-performance open-source linear/mixed-integer programming solver.
+//! This implementation wraps it using the `good_lp` crate for ergonomic Rust usage.
 
 // Allow large error types - inherited from parent module's unified Error type
 #![allow(clippy::result_large_err)]
@@ -19,8 +19,9 @@ use crate::error::Result;
 pub struct HiGHSSolver;
 
 impl HiGHSSolver {
-    /// Create a new HiGHS solver instance.
-    pub fn new() -> Self {
+    /// Create a new `HiGHS` solver instance.
+    #[must_use] 
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -39,7 +40,7 @@ impl Solver for HiGHSSolver {
     }
 }
 
-/// Internal solver implementation using good_lp.
+/// Internal solver implementation using `good_lp`.
 fn solve_with_good_lp(problem: &LpProblem, integer_vars: &[usize]) -> Result<LpSolution> {
     let n = problem.num_vars();
 

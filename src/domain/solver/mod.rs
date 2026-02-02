@@ -1,7 +1,7 @@
 //! Solver abstraction for linear and integer programming.
 //!
 //! This module provides a trait-based abstraction over LP/ILP solvers,
-//! allowing different backends (HiGHS, Gurobi, etc.) to be swapped.
+//! allowing different backends (`HiGHS`, Gurobi, etc.) to be swapped.
 
 // Allow large error types in Result - Error includes WebSocket variant for unified error handling
 #![allow(clippy::result_large_err)]
@@ -39,6 +39,7 @@ pub struct LpProblem {
 
 impl LpProblem {
     /// Create a new LP problem.
+    #[must_use] 
     pub fn new(num_vars: usize) -> Self {
         Self {
             objective: vec![Decimal::ZERO; num_vars],
@@ -48,7 +49,8 @@ impl LpProblem {
     }
 
     /// Number of variables.
-    pub fn num_vars(&self) -> usize {
+    #[must_use] 
+    pub const fn num_vars(&self) -> usize {
         self.objective.len()
     }
 }
@@ -64,11 +66,13 @@ pub struct IlpProblem {
 
 impl IlpProblem {
     /// Create from an LP problem with specified integer variables.
-    pub fn new(lp: LpProblem, integer_vars: Vec<usize>) -> Self {
+    #[must_use] 
+    pub const fn new(lp: LpProblem, integer_vars: Vec<usize>) -> Self {
         Self { lp, integer_vars }
     }
 
     /// Create with all variables as binary (0-1).
+    #[must_use] 
     pub fn all_binary(lp: LpProblem) -> Self {
         let integer_vars: Vec<usize> = (0..lp.num_vars()).collect();
         Self { lp, integer_vars }
@@ -88,7 +92,8 @@ pub struct Constraint {
 
 impl Constraint {
     /// Create a >= constraint.
-    pub fn geq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    #[must_use] 
+    pub const fn geq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::GreaterEqual,
@@ -97,7 +102,8 @@ impl Constraint {
     }
 
     /// Create a <= constraint.
-    pub fn leq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    #[must_use] 
+    pub const fn leq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::LessEqual,
@@ -106,7 +112,8 @@ impl Constraint {
     }
 
     /// Create an = constraint.
-    pub fn eq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
+    #[must_use] 
+    pub const fn eq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
             sense: ConstraintSense::Equal,
@@ -143,7 +150,8 @@ impl Default for VariableBounds {
 
 impl VariableBounds {
     /// Binary variable bounds [0, 1].
-    pub fn binary() -> Self {
+    #[must_use] 
+    pub const fn binary() -> Self {
         Self {
             lower: Some(Decimal::ZERO),
             upper: Some(Decimal::ONE),
@@ -151,7 +159,8 @@ impl VariableBounds {
     }
 
     /// Free variable (no bounds).
-    pub fn free() -> Self {
+    #[must_use] 
+    pub const fn free() -> Self {
         Self {
             lower: None,
             upper: None,
@@ -159,12 +168,14 @@ impl VariableBounds {
     }
 
     /// Non-negative variable [0, +inf).
+    #[must_use] 
     pub fn non_negative() -> Self {
         Self::default()
     }
 
     /// Bounded variable [lower, upper].
-    pub fn bounded(lower: Decimal, upper: Decimal) -> Self {
+    #[must_use] 
+    pub const fn bounded(lower: Decimal, upper: Decimal) -> Self {
         Self {
             lower: Some(lower),
             upper: Some(upper),
@@ -185,6 +196,7 @@ pub struct LpSolution {
 
 impl LpSolution {
     /// Check if solution is optimal.
+    #[must_use] 
     pub fn is_optimal(&self) -> bool {
         self.status == SolutionStatus::Optimal
     }

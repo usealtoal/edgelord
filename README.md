@@ -89,7 +89,7 @@ src/
 │   └── telegram.rs        # Telegram notifier (feature-gated)
 │
 ├── exchange/              # Exchange abstraction layer
-│   └── traits.rs          # ExchangeClient, OrderExecutor traits
+│   └── traits.rs          # OrderExecutor trait
 │
 └── adapter/               # Exchange implementations
     └── polymarket/        # Polymarket implementation

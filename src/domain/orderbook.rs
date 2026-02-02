@@ -15,17 +15,20 @@ pub struct PriceLevel {
 
 impl PriceLevel {
     /// Create a new price level
-    pub fn new(price: Price, size: Volume) -> Self {
+    #[must_use] 
+    pub const fn new(price: Price, size: Volume) -> Self {
         Self { price, size }
     }
 
     /// Get the price
-    pub fn price(&self) -> Price {
+    #[must_use] 
+    pub const fn price(&self) -> Price {
         self.price
     }
 
     /// Get the size/volume
-    pub fn size(&self) -> Volume {
+    #[must_use] 
+    pub const fn size(&self) -> Volume {
         self.size
     }
 }
@@ -40,7 +43,8 @@ pub struct OrderBook {
 
 impl OrderBook {
     /// Create a new empty order book
-    pub fn new(token_id: TokenId) -> Self {
+    #[must_use] 
+    pub const fn new(token_id: TokenId) -> Self {
         Self {
             token_id,
             bids: Vec::new(),
@@ -49,7 +53,8 @@ impl OrderBook {
     }
 
     /// Create an order book with initial levels
-    pub fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
+    #[must_use] 
+    pub const fn with_levels(token_id: TokenId, bids: Vec<PriceLevel>, asks: Vec<PriceLevel>) -> Self {
         Self {
             token_id,
             bids,
@@ -58,26 +63,31 @@ impl OrderBook {
     }
 
     /// Get the token ID
-    pub fn token_id(&self) -> &TokenId {
+    #[must_use] 
+    pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
     /// Get all bid levels
+    #[must_use] 
     pub fn bids(&self) -> &[PriceLevel] {
         &self.bids
     }
 
     /// Get all ask levels
+    #[must_use] 
     pub fn asks(&self) -> &[PriceLevel] {
         &self.asks
     }
 
     /// Best bid (highest buy price)
+    #[must_use] 
     pub fn best_bid(&self) -> Option<&PriceLevel> {
         self.bids.first()
     }
 
     /// Best ask (lowest sell price)
+    #[must_use] 
     pub fn best_ask(&self) -> Option<&PriceLevel> {
         self.asks.first()
     }
@@ -89,6 +99,7 @@ pub struct OrderBookCache {
 }
 
 impl OrderBookCache {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             books: RwLock::new(HashMap::new()),

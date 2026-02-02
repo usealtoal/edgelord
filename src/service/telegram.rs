@@ -12,7 +12,7 @@ use super::{Event, Notifier};
 /// Configuration for Telegram notifier.
 #[derive(Debug, Clone)]
 pub struct TelegramConfig {
-    /// Bot token from @BotFather.
+    /// Bot token from @`BotFather`.
     pub bot_token: String,
     /// Chat ID to send notifications to.
     pub chat_id: i64,
@@ -26,6 +26,7 @@ pub struct TelegramConfig {
 
 impl TelegramConfig {
     /// Create config from environment variables.
+    #[must_use] 
     pub fn from_env() -> Option<Self> {
         let bot_token = std::env::var("TELEGRAM_BOT_TOKEN").ok()?;
         let chat_id = std::env::var("TELEGRAM_CHAT_ID")
@@ -51,6 +52,7 @@ pub struct TelegramNotifier {
 
 impl TelegramNotifier {
     /// Create a new Telegram notifier and spawn the background task.
+    #[must_use] 
     pub fn new(config: TelegramConfig) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 
@@ -158,7 +160,7 @@ async fn telegram_worker(config: TelegramConfig, mut receiver: mpsc::UnboundedRe
     warn!("Telegram worker shutting down");
 }
 
-/// Escape special characters for Telegram MarkdownV2.
+/// Escape special characters for Telegram `MarkdownV2`.
 fn escape_markdown(text: &str) -> String {
     let special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
     let mut result = String::with_capacity(text.len() * 2);
@@ -176,6 +178,10 @@ fn escape_markdown(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Mutex to serialize tests that modify environment variables.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_escape_markdown() {
@@ -183,5 +189,74 @@ mod tests {
         assert_eq!(escape_markdown("hello_world"), "hello\\_world");
         assert_eq!(escape_markdown("*bold*"), "\\*bold\\*");
         assert_eq!(escape_markdown("test.com"), "test\\.com");
+    }
+
+    #[test]
+    fn test_from_env_missing_token() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        // Clear env vars
+        std::env::remove_var("TELEGRAM_BOT_TOKEN");
+        std::env::remove_var("TELEGRAM_CHAT_ID");
+
+        assert!(TelegramConfig::from_env().is_none());
+    }
+
+    #[test]
+    fn test_from_env_missing_chat_id() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TELEGRAM_BOT_TOKEN", "test-token");
+        std::env::remove_var("TELEGRAM_CHAT_ID");
+
+        let result = TelegramConfig::from_env();
+        assert!(result.is_none());
+
+        // Cleanup
+        std::env::remove_var("TELEGRAM_BOT_TOKEN");
+    }
+
+    #[test]
+    fn test_from_env_invalid_chat_id() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TELEGRAM_BOT_TOKEN", "test-token");
+        std::env::set_var("TELEGRAM_CHAT_ID", "not-a-number");
+
+        let result = TelegramConfig::from_env();
+        assert!(result.is_none());
+
+        // Cleanup
+        std::env::remove_var("TELEGRAM_BOT_TOKEN");
+        std::env::remove_var("TELEGRAM_CHAT_ID");
+    }
+
+    #[test]
+    fn test_from_env_valid() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TELEGRAM_BOT_TOKEN", "test-token");
+        std::env::set_var("TELEGRAM_CHAT_ID", "12345");
+        std::env::set_var("TELEGRAM_NOTIFY_OPPORTUNITIES", "true");
+
+        let config = TelegramConfig::from_env().unwrap();
+        assert_eq!(config.bot_token, "test-token");
+        assert_eq!(config.chat_id, 12345);
+        assert!(config.notify_opportunities);
+        assert!(config.notify_executions);
+        assert!(config.notify_risk_rejections);
+
+        // Cleanup
+        std::env::remove_var("TELEGRAM_BOT_TOKEN");
+        std::env::remove_var("TELEGRAM_CHAT_ID");
+        std::env::remove_var("TELEGRAM_NOTIFY_OPPORTUNITIES");
+    }
+
+    #[test]
+    fn test_escape_markdown_all_special_chars() {
+        let special = "_*[]()~`>#+-=|{}.!";
+        let escaped = escape_markdown(special);
+        assert_eq!(escaped, "\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!");
+    }
+
+    #[test]
+    fn test_escape_markdown_empty() {
+        assert_eq!(escape_markdown(""), "");
     }
 }

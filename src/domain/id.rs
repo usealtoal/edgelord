@@ -10,12 +10,13 @@ use std::fmt;
 pub struct TokenId(String);
 
 impl TokenId {
-    /// Create a new TokenId from a string.
+    /// Create a new `TokenId` from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
     /// Get the token ID as a string slice.
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -47,12 +48,13 @@ impl From<&str> for TokenId {
 pub struct MarketId(String);
 
 impl MarketId {
-    /// Create a new MarketId from a string.
+    /// Create a new `MarketId` from a string.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
     /// Get the market ID as a string slice.
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.0
     }

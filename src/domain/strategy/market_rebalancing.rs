@@ -29,11 +29,11 @@ fn default_min_edge() -> Decimal {
     Decimal::new(3, 2) // 0.03 (3%)
 }
 
-fn default_min_profit() -> Decimal {
+const fn default_min_profit() -> Decimal {
     Decimal::ONE // $1.00
 }
 
-fn default_max_outcomes() -> usize {
+const fn default_max_outcomes() -> usize {
     10
 }
 
@@ -57,12 +57,14 @@ pub struct MarketRebalancingStrategy {
 
 impl MarketRebalancingStrategy {
     /// Create a new strategy with the given configuration.
-    pub fn new(config: MarketRebalancingConfig) -> Self {
+    #[must_use] 
+    pub const fn new(config: MarketRebalancingConfig) -> Self {
         Self { config }
     }
 
     /// Get the strategy configuration.
-    pub fn config(&self) -> &MarketRebalancingConfig {
+    #[must_use] 
+    pub const fn config(&self) -> &MarketRebalancingConfig {
         &self.config
     }
 }
@@ -78,13 +80,38 @@ impl Strategy for MarketRebalancingStrategy {
         ctx.is_multi_outcome() && ctx.outcome_count <= self.config.max_outcomes
     }
 
-    fn detect(&self, _ctx: &DetectionContext) -> Vec<Opportunity> {
-        // Note: Full implementation requires multi-outcome market info.
-        // Currently, DetectionContext only provides MarketPair (binary).
-        // This is a placeholder - real implementation needs token list.
-        //
-        // When we have full market info, this would call:
-        // detect_rebalancing(&market_id, &question, &token_ids, cache, &config)
+    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
+        let token_ids = ctx.token_ids();
+
+        // Need at least 3 outcomes for rebalancing (binary handled by single_condition)
+        if token_ids.len() < 3 {
+            return vec![];
+        }
+
+        // Use the existing detection function
+        if let Some(rebal_opp) = detect_rebalancing(
+            ctx.pair.market_id(),
+            ctx.pair.question(),
+            token_ids,
+            ctx.cache,
+            &self.config,
+        ) {
+            // Convert RebalancingOpportunity to standard Opportunity
+            // Use first two legs as placeholder YES/NO (simplified)
+            if rebal_opp.legs.len() >= 2 {
+                if let Ok(opp) = Opportunity::builder()
+                    .market_id(rebal_opp.market_id.clone())
+                    .question(&rebal_opp.question)
+                    .yes_token(rebal_opp.legs[0].token_id.clone(), rebal_opp.legs[0].price)
+                    .no_token(rebal_opp.legs[1].token_id.clone(), rebal_opp.legs[1].price)
+                    .volume(rebal_opp.volume)
+                    .build()
+                {
+                    return vec![opp];
+                }
+            }
+        }
+
         vec![]
     }
 }
@@ -102,7 +129,8 @@ pub struct RebalancingLeg {
 
 impl RebalancingLeg {
     /// Create a new rebalancing leg.
-    pub fn new(token_id: TokenId, price: Price, volume: Volume) -> Self {
+    #[must_use] 
+    pub const fn new(token_id: TokenId, price: Price, volume: Volume) -> Self {
         Self {
             token_id,
             price,
@@ -135,7 +163,8 @@ pub struct RebalancingOpportunity {
 
 impl RebalancingOpportunity {
     /// Number of outcomes in this opportunity.
-    pub fn outcome_count(&self) -> usize {
+    #[must_use] 
+    pub const fn outcome_count(&self) -> usize {
         self.legs.len()
     }
 }
@@ -151,7 +180,6 @@ impl RebalancingOpportunity {
 ///
 /// # Returns
 /// `Some(RebalancingOpportunity)` if sum of best asks < $1.00
-#[allow(dead_code)] // Used in tests; may be useful as a standalone utility
 pub fn detect_rebalancing(
     market_id: &MarketId,
     question: &str,

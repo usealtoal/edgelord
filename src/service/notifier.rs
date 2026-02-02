@@ -55,22 +55,23 @@ pub struct ExecutionEvent {
 }
 
 impl ExecutionEvent {
+    #[must_use] 
     pub fn from_result(market_id: &str, result: &ArbitrageExecutionResult) -> Self {
         match result {
             ArbitrageExecutionResult::Success { yes_order_id, no_order_id } => Self {
                 market_id: market_id.to_string(),
                 success: true,
-                details: format!("YES: {}, NO: {}", yes_order_id, no_order_id),
+                details: format!("YES: {yes_order_id}, NO: {no_order_id}"),
             },
             ArbitrageExecutionResult::PartialFill { filled_leg, error, .. } => Self {
                 market_id: market_id.to_string(),
                 success: false,
-                details: format!("Partial fill ({}): {}", filled_leg, error),
+                details: format!("Partial fill ({filled_leg}): {error}"),
             },
             ArbitrageExecutionResult::Failed { reason } => Self {
                 market_id: market_id.to_string(),
                 success: false,
-                details: format!("Failed: {}", reason),
+                details: format!("Failed: {reason}"),
             },
         }
     }
@@ -84,6 +85,7 @@ pub struct RiskEvent {
 }
 
 impl RiskEvent {
+    #[must_use]
     pub fn new(market_id: &str, error: &RiskError) -> Self {
         Self {
             market_id: market_id.to_string(),
@@ -119,6 +121,7 @@ pub struct NotifierRegistry {
 
 impl NotifierRegistry {
     /// Create an empty registry.
+    #[must_use] 
     pub fn new() -> Self {
         Self { notifiers: vec![] }
     }
@@ -136,11 +139,13 @@ impl NotifierRegistry {
     }
 
     /// Number of registered notifiers.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.notifiers.len()
     }
 
     /// Check if registry is empty.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.notifiers.is_empty()
     }
