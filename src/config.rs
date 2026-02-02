@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
-use crate::detector::DetectorConfig;
+use crate::domain::DetectorConfig;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Deserialize)]
@@ -25,8 +25,8 @@ pub struct LoggingConfig {
     pub format: String,
 }
 
-#[allow(clippy::result_large_err)]
 impl Config {
+    #[allow(clippy::result_large_err)]
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| Error::Config(format!("Failed to read config file: {}", e)))?;
