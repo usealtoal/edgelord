@@ -235,7 +235,9 @@ fn handle_message(
                 }
             }
         }
-        WsMessage::PriceChange(_) => {}
+            // Price changes are incremental updates; we only need full book snapshots
+            // for arbitrage detection since we need both bid and ask sides
+            WsMessage::PriceChange(_) => {}
         _ => {}
     }
 }
