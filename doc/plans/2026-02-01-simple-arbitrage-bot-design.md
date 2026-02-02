@@ -696,32 +696,31 @@ edgelord/
 │   ├── main.rs              # Entry, tokio runtime, task spawning
 │   ├── config.rs            # Load and validate configuration
 │   ├── error.rs             # Error types
-│   ├── types.rs             # Core domain types
 │   │
-│   ├── websocket/
+│   ├── polymarket/          # Polymarket-specific code
 │   │   ├── mod.rs           # Re-exports
-│   │   ├── handler.rs       # Connection, reconnect, subscription
-│   │   └── messages.rs      # Parse Polymarket messages
+│   │   ├── client.rs        # REST API client (PolymarketClient)
+│   │   ├── websocket.rs     # WebSocket connection and handling
+│   │   ├── messages.rs      # WebSocket message types
+│   │   ├── types.rs         # API response types (Market, Token)
+│   │   └── registry.rs      # MarketRegistry (YES/NO pair mapping)
 │   │
-│   ├── orderbook/
-│   │   ├── mod.rs
-│   │   └── cache.rs         # Thread-safe orderbook storage
+│   ├── domain/              # Exchange-agnostic business logic
+│   │   ├── mod.rs           # Re-exports
+│   │   ├── types.rs         # Core types (TokenId, MarketId, OrderBook, etc.)
+│   │   ├── orderbook.rs     # Thread-safe OrderBookCache
+│   │   └── detector.rs      # Detection logic + DetectorConfig
 │   │
-│   ├── detector/
-│   │   ├── mod.rs
-│   │   ├── single.rs        # YES+NO detection
-│   │   └── rebalance.rs     # Multi-outcome detection
-│   │
-│   ├── executor/
+│   ├── executor/            # (Phase 3+)
 │   │   ├── mod.rs
 │   │   ├── orders.rs        # Build and submit orders
 │   │   └── positions.rs     # Track open positions
 │   │
-│   ├── risk/
+│   ├── risk/                # (Phase 4+)
 │   │   ├── mod.rs
 │   │   └── manager.rs       # Limits, circuit breakers
 │   │
-│   └── telegram/
+│   └── telegram/            # (Phase 4+)
 │       ├── mod.rs
 │       ├── bot.rs           # Command handlers
 │       └── alerts.rs        # Send notifications
@@ -793,30 +792,30 @@ tokio-test = "0.4"
 
 ## Development Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✅ COMPLETE
 
 **Goal:** Connect to Polymarket and see live data.
 
 **Tasks:**
-- Initialize Cargo project with dependencies
-- Implement config loading (`config.rs`)
-- Connect to WebSocket (`websocket/handler.rs`)
-- Parse market messages (`websocket/messages.rs`)
-- Print updates to stdout
+- ✅ Initialize Cargo project with dependencies
+- ✅ Implement config loading (`config.rs`)
+- ✅ Connect to WebSocket (`polymarket/websocket.rs`)
+- ✅ Parse market messages (`polymarket/messages.rs`)
+- ✅ Print updates to stdout
 
 **Milestone:** Terminal shows live price updates.
 
-### Phase 2: Detection
+### Phase 2: Detection ✅ COMPLETE
 
 **Goal:** Find arbitrage opportunities in real-time.
 
 **Tasks:**
-- Build OrderBook cache (`orderbook/cache.rs`)
-- Implement single-condition detector (`detector/single.rs`)
-- Wire detector to WebSocket updates
-- Log opportunities with details
+- ✅ Build OrderBook cache (`domain/orderbook.rs`)
+- ✅ Implement single-condition detector (`domain/detector.rs`)
+- ✅ Wire detector to WebSocket updates
+- ✅ Log opportunities with details
 
-**Milestone:** Logs "Found $0.06 edge on [market]".
+**Milestone:** Logs "ARBITRAGE DETECTED" with edge, volume, expected profit.
 
 ### Phase 3: Execution (Testnet)
 
