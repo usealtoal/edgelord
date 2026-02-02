@@ -39,6 +39,7 @@ impl Config {
         Ok(config)
     }
 
+    #[allow(clippy::result_large_err)]
     fn validate(&self) -> Result<()> {
         if self.network.ws_url.is_empty() {
             return Err(Error::Config("ws_url cannot be empty".into()));

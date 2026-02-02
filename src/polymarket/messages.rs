@@ -22,6 +22,7 @@ impl SubscribeMessage {
 /// Messages received from Polymarket WebSocket
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event_type")]
+#[allow(dead_code)]
 pub enum WsMessage {
     #[serde(rename = "book")]
     Book(BookMessage),
@@ -37,6 +38,7 @@ pub enum WsMessage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct BookMessage {
     pub asset_id: String,
     pub market: Option<String>,
@@ -47,6 +49,7 @@ pub struct BookMessage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PriceChangeMessage {
     pub asset_id: String,
     pub market: Option<String>,
