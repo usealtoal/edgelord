@@ -1,6 +1,8 @@
 [network]
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
+# Chain ID: 80002 for Amoy testnet (default), 137 for Polygon mainnet
+chain_id = 80002
 
 [logging]
 level = "info"
@@ -9,3 +11,8 @@ format = "pretty"
 [detector]
 min_edge = 0.05
 min_profit = 0.50
+
+# Wallet configuration
+# Note: Private key is loaded from WALLET_PRIVATE_KEY environment variable
+# for security reasons. Never store private keys in config files.
+[wallet]

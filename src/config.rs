@@ -11,12 +11,31 @@ pub struct Config {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub detector: DetectorConfig,
+    #[serde(default)]
+    pub wallet: WalletConfig,
+}
+
+/// Wallet configuration for signing orders.
+/// Private key is loaded from WALLET_PRIVATE_KEY env var at runtime (never from config file).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct WalletConfig {
+    /// Private key loaded from WALLET_PRIVATE_KEY env var at runtime
+    #[serde(skip)]
+    pub private_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NetworkConfig {
     pub ws_url: String,
     pub api_url: String,
+    /// Chain ID: 80002 for Amoy testnet, 137 for Polygon mainnet
+    #[serde(default = "default_chain_id")]
+    pub chain_id: u64,
+}
+
+/// Default chain ID is Amoy testnet (80002) for safety
+fn default_chain_id() -> u64 {
+    80002
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,8 +50,11 @@ impl Config {
         let content = std::fs::read_to_string(path)
             .map_err(|e| Error::Config(format!("Failed to read config file: {}", e)))?;
 
-        let config: Config = toml::from_str(&content)
+        let mut config: Config = toml::from_str(&content)
             .map_err(|e| Error::Config(format!("Failed to parse config: {}", e)))?;
+
+        // Load private key from environment variable (never from config file for security)
+        config.wallet.private_key = std::env::var("WALLET_PRIVATE_KEY").ok();
 
         config.validate()?;
 
@@ -57,12 +79,14 @@ impl Default for Config {
             network: NetworkConfig {
                 ws_url: "wss://ws-subscriptions-clob.polymarket.com/ws/market".into(),
                 api_url: "https://clob.polymarket.com".into(),
+                chain_id: default_chain_id(),
             },
             logging: LoggingConfig {
                 level: "info".into(),
                 format: "pretty".into(),
             },
             detector: DetectorConfig::default(),
+            wallet: WalletConfig::default(),
         }
     }
 }
