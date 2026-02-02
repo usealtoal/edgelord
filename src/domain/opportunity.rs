@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 use std::fmt;
 
-use super::ids::{MarketId, TokenId};
+use super::id::{MarketId, TokenId};
 use super::money::{Price, Volume};
 
 /// Error returned when building an Opportunity fails.

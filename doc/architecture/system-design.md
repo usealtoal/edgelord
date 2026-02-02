@@ -55,7 +55,7 @@ src/
 ├── app.rs                 # Application orchestration
 │
 ├── domain/                # Exchange-agnostic (NO exchange imports)
-│   ├── ids.rs             # TokenId, MarketId (newtypes)
+│   ├── id.rs             # TokenId, MarketId (newtypes)
 │   ├── money.rs           # Price, Volume types
 │   ├── market.rs          # MarketPair, MarketInfo
 │   ├── orderbook.rs       # OrderBook, OrderBookCache

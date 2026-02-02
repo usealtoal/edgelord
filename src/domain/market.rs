@@ -1,6 +1,6 @@
 //! Market-related domain types with proper encapsulation.
 
-use super::ids::{MarketId, TokenId};
+use super::id::{MarketId, TokenId};
 
 /// Information about a token in a market.
 #[derive(Debug, Clone)]

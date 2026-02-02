@@ -1,7 +1,7 @@
 //! Exchange-agnostic domain logic.
 
 mod detector;
-mod ids;
+mod id;
 mod market;
 mod money;
 mod opportunity;
@@ -12,7 +12,7 @@ pub mod solver;
 pub mod strategy;
 
 // Core domain types
-pub use ids::{MarketId, TokenId};
+pub use id::{MarketId, TokenId};
 pub use market::{MarketInfo, MarketPair, TokenInfo};
 pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityBuildError, OpportunityBuilder};

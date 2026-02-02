@@ -3,7 +3,7 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use super::ids::TokenId;
+use super::id::TokenId;
 use super::money::{Price, Volume};
 
 /// A single price level in the order book

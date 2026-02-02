@@ -69,7 +69,7 @@ src/
 ├── error.rs               # Structured error types
 │
 ├── domain/                # Exchange-agnostic core
-│   ├── ids.rs             # TokenId, MarketId (newtypes)
+│   ├── id.rs             # TokenId, MarketId (newtypes)
 │   ├── money.rs           # Price, Volume (type aliases)
 │   ├── market.rs          # MarketPair, MarketInfo
 │   ├── orderbook.rs       # PriceLevel, OrderBook, OrderBookCache

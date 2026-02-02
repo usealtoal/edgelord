@@ -704,7 +704,7 @@ edgelord/
 │   │
 │   ├── domain/              # Exchange-agnostic core (no exchange imports!)
 │   │   ├── mod.rs           # Public exports
-│   │   ├── ids.rs           # TokenId, MarketId (newtypes with encapsulation)
+│   │   ├── id.rs           # TokenId, MarketId (newtypes with encapsulation)
 │   │   ├── money.rs         # Price, Volume (type aliases + constants)
 │   │   ├── market.rs        # MarketPair, MarketInfo, TokenInfo
 │   │   ├── orderbook.rs     # PriceLevel, OrderBook, OrderBookCache

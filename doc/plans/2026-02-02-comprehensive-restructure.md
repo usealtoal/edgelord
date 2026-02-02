@@ -22,7 +22,7 @@ src/
 │
 ├── domain/                     # Exchange-agnostic core
 │   ├── mod.rs                  # Public exports
-│   ├── ids.rs                  # TokenId, MarketId (newtypes)
+│   ├── id.rs                  # TokenId, MarketId (newtypes)
 │   ├── money.rs                # Price, Volume (type aliases + helpers)
 │   ├── orderbook.rs            # PriceLevel, OrderBook, OrderBookCache
 │   ├── opportunity.rs          # Opportunity type with builder
@@ -258,13 +258,13 @@ git commit -m "feat: add exchange abstraction traits"
 ## Task 3: Restructure Domain Module - Core Types
 
 **Files:**
-- Create: `src/domain/ids.rs`
+- Create: `src/domain/id.rs`
 - Create: `src/domain/money.rs`
 - Create: `src/domain/market.rs`
 - Modify: `src/domain/mod.rs`
 - Delete content from: `src/domain/types.rs` (will be removed)
 
-**Step 1: Create domain/ids.rs with identifier newtypes**
+**Step 1: Create domain/id.rs with identifier newtypes**
 
 ```rust
 //! Strongly-typed identifiers.
@@ -1985,7 +1985,7 @@ git commit -m "chore: final cleanup and documentation"
 ## Task 14: Delete Old Types File
 
 **Files:**
-- Delete: `src/domain/types.rs` (contents moved to ids.rs, money.rs, market.rs)
+- Delete: `src/domain/types.rs` (contents moved to id.rs, money.rs, market.rs)
 
 **Step 1: Ensure all types are properly moved**
 
@@ -2025,7 +2025,7 @@ Before marking complete:
 |--------|-------|
 | `executor/` at top level | `polymarket/executor.rs` |
 | `domain/` imports polymarket | Clean separation |
-| `types.rs` monolith | `ids.rs`, `money.rs`, `market.rs` |
+| `types.rs` monolith | `id.rs`, `money.rs`, `market.rs` |
 | `pub` fields everywhere | Private fields + accessors |
 | `Error::Execution(String)` | Structured `ExecutionError` |
 | No lib.rs | Proper library structure |
