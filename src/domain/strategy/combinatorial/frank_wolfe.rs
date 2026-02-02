@@ -8,6 +8,9 @@
 //! Instead of full projection, it uses a linear minimization oracle (ILP)
 //! to iteratively improve the solution.
 
+// Allow large error types - inherited from crate's unified Error type
+#![allow(clippy::result_large_err)]
+
 use rust_decimal::Decimal;
 
 use crate::domain::solver::{IlpProblem, LpProblem, Solver, SolutionStatus};

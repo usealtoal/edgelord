@@ -3,6 +3,9 @@
 //! This module contains the main application logic for running
 //! the edgelord arbitrage detection and execution system.
 
+// Allow many arguments for handler functions that coordinate multiple services
+#![allow(clippy::too_many_arguments)]
+
 use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};

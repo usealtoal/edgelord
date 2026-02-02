@@ -151,6 +151,7 @@ impl RebalancingOpportunity {
 ///
 /// # Returns
 /// `Some(RebalancingOpportunity)` if sum of best asks < $1.00
+#[allow(dead_code)] // Used in tests; may be useful as a standalone utility
 pub fn detect_rebalancing(
     market_id: &MarketId,
     question: &str,
