@@ -14,4 +14,4 @@ pub use registry::MarketRegistry;
 // Re-export for future use
 #[allow(unused_imports)]
 pub use types::{Market, Token};
-pub use websocket::WebSocketHandler;
+pub use websocket::{DataStream, WebSocketHandler};

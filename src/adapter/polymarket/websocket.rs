@@ -22,13 +22,16 @@
 //! }).await?;
 //! ```
 
+use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
 use super::messages::{SubscribeMessage, WsMessage};
+use crate::domain::TokenId;
 use crate::error::Result;
+use crate::exchange::{MarketDataStream, MarketEvent};
 
 /// WebSocket handler for Polymarket real-time data feed.
 ///
@@ -209,5 +212,102 @@ impl WebSocketHandler {
         }
 
         Ok(())
+    }
+}
+
+/// Polymarket market data stream implementing the `MarketDataStream` trait.
+///
+/// Provides an async iterator-style interface for receiving market events.
+pub struct DataStream {
+    url: String,
+    ws: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+}
+
+impl DataStream {
+    /// Create a new data stream for the given WebSocket URL.
+    #[must_use]
+    pub fn new(url: String) -> Self {
+        Self { url, ws: None }
+    }
+}
+
+#[async_trait]
+impl MarketDataStream for DataStream {
+    async fn connect(&mut self) -> Result<()> {
+        info!(url = %self.url, "Connecting to WebSocket");
+        let (ws_stream, response) = connect_async(&self.url).await?;
+        info!(status = %response.status(), "WebSocket connected");
+        self.ws = Some(ws_stream);
+        Ok(())
+    }
+
+    async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<()> {
+        let ws = self.ws.as_mut().ok_or_else(|| {
+            crate::error::Error::Connection("Not connected".into())
+        })?;
+
+        let asset_ids: Vec<String> = token_ids.iter().map(|t| t.as_str().to_string()).collect();
+        let msg = SubscribeMessage::new(asset_ids.clone());
+        let json = serde_json::to_string(&msg)?;
+
+        info!(assets = ?asset_ids, "Subscribing to assets");
+        ws.send(Message::Text(json)).await?;
+        Ok(())
+    }
+
+    async fn next_event(&mut self) -> Option<MarketEvent> {
+        let ws = self.ws.as_mut()?;
+
+        loop {
+            match ws.next().await? {
+                Ok(Message::Text(text)) => {
+                    debug!(raw = %text, "Received message");
+                    match serde_json::from_str::<WsMessage>(&text) {
+                        Ok(WsMessage::Book(book)) => {
+                            let order_book = book.to_orderbook();
+                            let token_id = TokenId::from(book.asset_id);
+                            return Some(MarketEvent::OrderBookSnapshot {
+                                token_id,
+                                book: order_book,
+                            });
+                        }
+                        Ok(WsMessage::PriceChange(_)) => {
+                            // Price changes are incremental; skip for now
+                            continue;
+                        }
+                        Ok(_) => continue,
+                        Err(e) => {
+                            warn!(error = %e, raw = %text, "Failed to parse message");
+                            continue;
+                        }
+                    }
+                }
+                Ok(Message::Ping(data)) => {
+                    debug!("Received ping");
+                    if ws.send(Message::Pong(data)).await.is_err() {
+                        return Some(MarketEvent::Disconnected {
+                            reason: "Failed to send pong".into(),
+                        });
+                    }
+                }
+                Ok(Message::Close(frame)) => {
+                    info!(frame = ?frame, "WebSocket closed by server");
+                    return Some(MarketEvent::Disconnected {
+                        reason: frame.map(|f| f.reason.to_string()).unwrap_or_default(),
+                    });
+                }
+                Ok(_) => continue,
+                Err(e) => {
+                    error!(error = %e, "WebSocket error");
+                    return Some(MarketEvent::Disconnected {
+                        reason: e.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn exchange_name(&self) -> &'static str {
+        "Polymarket"
     }
 }

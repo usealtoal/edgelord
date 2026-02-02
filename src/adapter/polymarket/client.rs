@@ -3,11 +3,13 @@
 //! Provides HTTP client functionality for interacting with the Polymarket
 //! CLOB API to fetch market data and metadata.
 
+use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use tracing::{debug, info};
 
 use super::types::{Market, MarketsResponse};
 use crate::error::Result;
+use crate::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 
 /// HTTP client for the Polymarket REST API.
 ///
@@ -55,5 +57,35 @@ impl Client {
         debug!(count = markets.len(), "Fetched markets");
 
         Ok(markets)
+    }
+}
+
+#[async_trait]
+impl MarketFetcher for Client {
+    async fn get_markets(&self, limit: usize) -> Result<Vec<MarketInfo>> {
+        let markets = self.get_active_markets(limit).await?;
+        Ok(markets.into_iter().map(MarketInfo::from).collect())
+    }
+
+    fn exchange_name(&self) -> &'static str {
+        "Polymarket"
+    }
+}
+
+impl From<Market> for MarketInfo {
+    fn from(m: Market) -> Self {
+        Self {
+            id: m.condition_id,
+            question: m.question.unwrap_or_default(),
+            outcomes: m
+                .tokens
+                .into_iter()
+                .map(|t| OutcomeInfo {
+                    token_id: t.token_id,
+                    name: t.outcome,
+                })
+                .collect(),
+            active: m.active && !m.closed,
+        }
     }
 }

@@ -97,6 +97,9 @@ pub enum Error {
     #[error("URL parse error: {0}")]
     Url(#[from] url::ParseError),
 
+    #[error("connection error: {0}")]
+    Connection(String),
+
     #[cfg(feature = "polymarket")]
     #[error("Polymarket SDK error: {0}")]
     Polymarket(#[from] polymarket_client_sdk::error::Error),
