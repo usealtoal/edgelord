@@ -164,6 +164,7 @@ impl OpportunityBuilder {
     }
 
     /// Set the market question.
+    #[must_use]
     pub fn question(mut self, question: impl Into<String>) -> Self {
         self.question = Some(question.into());
         self

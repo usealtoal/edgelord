@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::AppState;
-use crate::domain::Opportunity;
+use crate::domain::{Opportunity, Position};
 use crate::error::RiskError;
 
 /// Result of a risk check.
@@ -132,7 +132,7 @@ impl RiskManager {
             .positions()
             .open_positions()
             .filter(|p| p.market_id() == market_id)
-            .map(|p| p.entry_cost())
+            .map(Position::entry_cost)
             .sum::<Decimal>();
 
         let additional = opportunity.total_cost() * opportunity.volume();

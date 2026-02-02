@@ -245,7 +245,7 @@ impl PositionTracker {
     #[must_use] 
     pub fn total_exposure(&self) -> Price {
         self.open_positions()
-            .map(|p| p.entry_cost())
+            .map(Position::entry_cost)
             .fold(Decimal::ZERO, |acc, cost| acc + cost)
     }
 
