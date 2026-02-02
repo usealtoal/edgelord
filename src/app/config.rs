@@ -14,8 +14,20 @@ use crate::domain::strategy::{
 };
 use crate::error::{ConfigError, Result};
 
+/// Supported exchanges.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Exchange {
+    #[default]
+    Polymarket,
+    Kalshi,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    /// Which exchange to connect to.
+    #[serde(default)]
+    pub exchange: Exchange,
     pub network: NetworkConfig,
     pub logging: LoggingConfig,
     #[serde(default)]
@@ -187,6 +199,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            exchange: Exchange::default(),
             network: NetworkConfig {
                 ws_url: "wss://ws-subscriptions-clob.polymarket.com/ws/market".into(),
                 api_url: "https://clob.polymarket.com".into(),

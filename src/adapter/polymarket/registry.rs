@@ -1,4 +1,4 @@
-//! Polymarket-specific market registry for YES/NO pairs.
+//! Market registry for YES/NO pairs.
 //!
 //! This module provides a registry that maps token IDs to their associated
 //! market pairs, enabling efficient lookup of market information from order
@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use super::types::Market;
 use crate::domain::{MarketId, MarketPair, TokenId};
+use crate::exchange::MarketInfo;
 
 /// Registry mapping tokens to their market pairs.
 ///
@@ -56,6 +57,49 @@ impl MarketRegistry {
                 let pair = MarketPair::new(
                     MarketId::from(market.condition_id.clone()),
                     market.question.clone().unwrap_or_default(),
+                    TokenId::from(yes.token_id.clone()),
+                    TokenId::from(no.token_id.clone()),
+                );
+
+                registry
+                    .token_to_market
+                    .insert(pair.yes_token().clone(), pair.clone());
+                registry
+                    .token_to_market
+                    .insert(pair.no_token().clone(), pair.clone());
+                registry.pairs.push(pair);
+            }
+        }
+
+        registry
+    }
+
+    /// Build a registry from generic market info.
+    ///
+    /// Works with the exchange-agnostic `MarketInfo` type, extracting YES/NO pairs
+    /// from binary markets.
+    #[must_use]
+    pub fn from_market_info(markets: &[MarketInfo]) -> Self {
+        let mut registry = Self::new();
+
+        for market in markets {
+            if market.outcomes.len() != 2 {
+                continue;
+            }
+
+            let yes = market
+                .outcomes
+                .iter()
+                .find(|o| o.name.to_lowercase() == "yes");
+            let no = market
+                .outcomes
+                .iter()
+                .find(|o| o.name.to_lowercase() == "no");
+
+            if let (Some(yes), Some(no)) = (yes, no) {
+                let pair = MarketPair::new(
+                    MarketId::from(market.id.clone()),
+                    market.question.clone(),
                     TokenId::from(yes.token_id.clone()),
                     TokenId::from(no.token_id.clone()),
                 );

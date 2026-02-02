@@ -10,18 +10,16 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::adapter::polymarket::{
-    ArbitrageExecutionResult, Client as PolymarketClient, Executor as PolymarketExecutor,
-    MarketRegistry, WebSocketHandler, WsMessage,
-};
+use crate::adapter::polymarket::{ArbitrageExecutionResult, Executor as PolymarketExecutor, MarketRegistry};
 use crate::app::config::Config;
 use crate::app::state::AppState;
 use crate::domain::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
-use crate::domain::{Opportunity, OrderBookCache};
+use crate::domain::{Opportunity, OrderBookCache, TokenId};
 use crate::error::Result;
+use crate::exchange::{ExchangeFactory, MarketEvent};
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
@@ -36,6 +34,8 @@ pub struct App;
 impl App {
     /// Run the main application loop.
     pub async fn run(config: Config) -> Result<()> {
+        info!(exchange = ?config.exchange, "Starting edgelord");
+
         // Initialize shared state
         let state = Arc::new(AppState::new(config.risk.clone().into()));
 
@@ -46,7 +46,7 @@ impl App {
         let notifiers = Arc::new(build_notifier_registry(&config));
         info!(notifiers = notifiers.len(), "Notifiers initialized");
 
-        // Initialize executor (optional)
+        // Initialize executor (optional) - still Polymarket-specific for now
         let executor = init_executor(&config).await;
 
         // Build strategy registry
@@ -56,16 +56,18 @@ impl App {
             "Strategies loaded"
         );
 
-        // Fetch markets
-        let client = PolymarketClient::new(config.network.api_url.clone());
-        let markets = client.get_active_markets(20).await?;
+        // Fetch markets using exchange-agnostic trait
+        let market_fetcher = ExchangeFactory::create_market_fetcher(&config);
+        info!(exchange = market_fetcher.exchange_name(), "Fetching markets");
+        let markets = market_fetcher.get_markets(20).await?;
 
         if markets.is_empty() {
             warn!("No active markets found");
             return Ok(());
         }
 
-        let registry = MarketRegistry::from_markets(&markets);
+        // Build registry from generic MarketInfo
+        let registry = MarketRegistry::from_market_info(&markets);
 
         info!(
             total_markets = markets.len(),
@@ -86,10 +88,10 @@ impl App {
             );
         }
 
-        let token_ids: Vec<String> = registry
+        let token_ids: Vec<TokenId> = registry
             .pairs()
             .iter()
-            .flat_map(|p| vec![p.yes_token().to_string(), p.no_token().to_string()])
+            .flat_map(|p| vec![p.yes_token().clone(), p.no_token().clone()])
             .collect();
 
         info!(tokens = token_ids.len(), "Subscribing to tokens");
@@ -97,31 +99,26 @@ impl App {
         let cache = Arc::new(OrderBookCache::new());
         let registry = Arc::new(registry);
 
-        let handler = WebSocketHandler::new(config.network.ws_url);
+        // Create data stream using exchange-agnostic trait
+        let mut data_stream = ExchangeFactory::create_data_stream(&config);
+        data_stream.connect().await?;
+        data_stream.subscribe(&token_ids).await?;
 
-        // Clone Arcs for closure
-        let cache_clone = cache.clone();
-        let registry_clone = registry.clone();
-        let strategies_clone = strategies.clone();
-        let executor_clone = executor.clone();
-        let risk_manager_clone = risk_manager.clone();
-        let notifiers_clone = notifiers.clone();
-        let state_clone = state.clone();
+        info!("Listening for market events...");
 
-        handler
-            .run(token_ids, move |msg| {
-                handle_message(
-                    msg,
-                    &cache_clone,
-                    &registry_clone,
-                    &strategies_clone,
-                    executor_clone.clone(),
-                    &risk_manager_clone,
-                    &notifiers_clone,
-                    &state_clone,
-                );
-            })
-            .await?;
+        // Event loop using trait-based stream
+        while let Some(event) = data_stream.next_event().await {
+            handle_market_event(
+                event,
+                &cache,
+                &registry,
+                &strategies,
+                executor.clone(),
+                &risk_manager,
+                &notifiers,
+                &state,
+            );
+        }
 
         Ok(())
     }
@@ -209,9 +206,9 @@ async fn init_executor(config: &Config) -> Option<Arc<PolymarketExecutor>> {
     }
 }
 
-/// Handle incoming WebSocket messages.
-fn handle_message(
-    msg: WsMessage,
+/// Handle incoming market events from the data stream.
+fn handle_market_event(
+    event: MarketEvent,
     cache: &OrderBookCache,
     registry: &MarketRegistry,
     strategies: &StrategyRegistry,
@@ -220,11 +217,9 @@ fn handle_message(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
 ) {
-    match msg {
-        WsMessage::Book(book) => {
-            let orderbook = book.to_orderbook();
-            let token_id = orderbook.token_id().clone();
-            cache.update(orderbook);
+    match event {
+        MarketEvent::OrderBookSnapshot { token_id, book } => {
+            cache.update(book);
 
             if let Some(pair) = registry.get_market_for_token(&token_id) {
                 let ctx = DetectionContext::new(pair, cache);
@@ -235,10 +230,25 @@ fn handle_message(
                 }
             }
         }
-            // Price changes are incremental updates; we only need full book snapshots
-            // for arbitrage detection since we need both bid and ask sides
-            WsMessage::PriceChange(_) => {}
-        _ => {}
+        MarketEvent::OrderBookDelta { token_id, book } => {
+            // For now, treat deltas as snapshots (simple approach)
+            cache.update(book);
+
+            if let Some(pair) = registry.get_market_for_token(&token_id) {
+                let ctx = DetectionContext::new(pair, cache);
+                let opportunities = strategies.detect_all(&ctx);
+
+                for opp in opportunities {
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
+                }
+            }
+        }
+        MarketEvent::Connected => {
+            info!("Data stream connected");
+        }
+        MarketEvent::Disconnected { reason } => {
+            warn!(reason = %reason, "Data stream disconnected");
+        }
     }
 }
 
