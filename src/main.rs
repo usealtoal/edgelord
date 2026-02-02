@@ -5,7 +5,8 @@ mod websocket;
 
 use api::ApiClient;
 use config::Config;
-use tracing::{error, info};
+use tokio::signal;
+use tracing::{error, info, warn};
 use websocket::{WebSocketHandler, WsMessage};
 
 #[tokio::main]
@@ -24,23 +25,30 @@ async fn main() {
 
     info!("edgelord starting");
 
-    if let Err(e) = run(config).await {
-        error!(error = %e, "Fatal error");
-        std::process::exit(1);
+    tokio::select! {
+        result = run(config) => {
+            if let Err(e) = result {
+                error!(error = %e, "Fatal error");
+                std::process::exit(1);
+            }
+        }
+        _ = signal::ctrl_c() => {
+            info!("Shutdown signal received");
+        }
     }
+
+    info!("edgelord stopped");
 }
 
 async fn run(config: Config) -> error::Result<()> {
-    // Fetch some active markets
     let api = ApiClient::new(config.network.api_url.clone());
     let markets = api.get_active_markets(5).await?;
 
     if markets.is_empty() {
-        info!("No active markets found");
+        warn!("No active markets found");
         return Ok(());
     }
 
-    // Collect token IDs to subscribe to
     let token_ids: Vec<String> = markets
         .iter()
         .flat_map(|m| m.token_ids())
@@ -56,54 +64,33 @@ async fn run(config: Config) -> error::Result<()> {
         info!(
             condition_id = %market.condition_id,
             question = ?market.question,
-            tokens = market.tokens.len(),
             "Market"
         );
     }
 
-    // Connect to WebSocket and listen
     let handler = WebSocketHandler::new(config.network.ws_url);
 
     handler.run(token_ids, |msg| {
         match msg {
             WsMessage::Book(book) => {
-                info!(
-                    asset_id = %book.asset_id,
-                    bids = book.bids.len(),
-                    asks = book.asks.len(),
-                    "Order book snapshot"
-                );
+                let best_bid = book.bids.first().map(|b| b.price.as_str()).unwrap_or("-");
+                let best_ask = book.asks.first().map(|a| a.price.as_str()).unwrap_or("-");
 
-                if let Some(best_bid) = book.bids.first() {
-                    info!(
-                        asset_id = %book.asset_id,
-                        price = %best_bid.price,
-                        size = %best_bid.size,
-                        "Best bid"
-                    );
-                }
-                if let Some(best_ask) = book.asks.first() {
-                    info!(
-                        asset_id = %book.asset_id,
-                        price = %best_ask.price,
-                        size = %best_ask.size,
-                        "Best ask"
-                    );
-                }
+                info!(
+                    asset = %book.asset_id,
+                    bid = %best_bid,
+                    ask = %best_ask,
+                    "Book"
+                );
             }
             WsMessage::PriceChange(change) => {
                 info!(
-                    asset_id = %change.asset_id,
+                    asset = %change.asset_id,
                     price = ?change.price,
-                    "Price change"
+                    "Price"
                 );
             }
-            WsMessage::TickSizeChange(_) => {
-                info!("Tick size change");
-            }
-            WsMessage::Unknown => {
-                // Ignore unknown messages
-            }
+            _ => {}
         }
     }).await?;
 
