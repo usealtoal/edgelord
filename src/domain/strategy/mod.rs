@@ -29,7 +29,7 @@
 
 mod context;
 pub mod single_condition;
-mod market_rebalancing;
+pub mod market_rebalancing;
 pub mod combinatorial;
 
 pub use context::{DetectionContext, DetectionResult, MarketContext};
