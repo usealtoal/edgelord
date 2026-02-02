@@ -13,6 +13,14 @@ min_edge = 0.05
 min_profit = 0.50
 
 # Wallet configuration
-# Note: Private key is loaded from WALLET_PRIVATE_KEY environment variable
-# for security reasons. Never store private keys in config files.
+# Private key is loaded from WALLET_PRIVATE_KEY environment variable.
+# Never store private keys in config files!
+#
+# Testnet setup:
+# 1. Create a test wallet (e.g., via MetaMask)
+# 2. Get test MATIC from Polygon Amoy faucet
+# 3. Export private key and set: export WALLET_PRIVATE_KEY=0x...
+# 4. Run with chain_id = 80002 (Amoy testnet)
+#
+# For mainnet (chain_id = 137), use a dedicated trading wallet with limited funds.
 [wallet]
