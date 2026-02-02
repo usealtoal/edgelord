@@ -57,6 +57,11 @@ chrono = { version = "0.4", features = ["serde"] }
 # URL parsing
 url = "2"
 
+# Linear programming solver (HiGHS)
+good_lp = { version = "1.8", default-features = false, features = ["highs"] }
+
+# Decimal macros for tests and constants
+rust_decimal_macros = "1"
+
 [dev-dependencies]
 tokio-test = "0.4"
-rust_decimal_macros = "1"
