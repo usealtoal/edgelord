@@ -2,6 +2,10 @@
 //!
 //! This module contains the main application logic for running
 //! the edgelord arbitrage detection and execution system.
+//!
+//! Requires the `polymarket` feature.
+
+#![cfg(feature = "polymarket")]
 
 use std::sync::Arc;
 

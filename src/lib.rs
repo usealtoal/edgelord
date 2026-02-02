@@ -19,6 +19,9 @@ pub mod config;
 pub mod domain;
 pub mod error;
 pub mod exchange;
+
+#[cfg(feature = "polymarket")]
 pub mod polymarket;
 
+#[cfg(feature = "polymarket")]
 pub mod app;
