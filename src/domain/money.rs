@@ -9,6 +9,7 @@ pub type Price = Decimal;
 pub type Volume = Decimal;
 
 /// Common monetary constants.
+#[allow(unused)]
 pub mod constants {
     use rust_decimal::Decimal;
 

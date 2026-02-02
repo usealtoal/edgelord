@@ -1,10 +1,24 @@
 //! Edgelord - Polymarket arbitrage detection and execution.
 //!
+//! This crate provides tools for detecting and executing arbitrage opportunities
+//! on prediction markets, specifically binary YES/NO markets where the combined
+//! price of both outcomes should equal $1.00.
+//!
 //! # Architecture
 //!
-//! - `domain` - Exchange-agnostic types and logic
-//! - `exchange` - Trait definitions for exchange implementations
-//! - `polymarket` - Polymarket-specific implementation
+//! The crate is organized into exchange-agnostic core logic and exchange-specific
+//! implementations:
+//!
+//! - [`config`] - Configuration loading from TOML files
+//! - [`domain`] - Exchange-agnostic types: order books, opportunities, positions
+//! - [`error`] - Error types for the crate
+//! - [`exchange`] - Trait definitions for exchange implementations
+//! - [`polymarket`] - Polymarket-specific implementation (requires `polymarket` feature)
+//! - [`app`] - Application orchestration (requires `polymarket` feature)
+//!
+//! # Features
+//!
+//! - `polymarket` - Enable Polymarket exchange support (WebSocket, REST API, execution)
 //!
 //! # Example
 //!

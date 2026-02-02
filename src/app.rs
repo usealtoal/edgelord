@@ -5,8 +5,6 @@
 //!
 //! Requires the `polymarket` feature.
 
-#![cfg(feature = "polymarket")]
-
 use std::sync::Arc;
 
 use crate::config::Config;
