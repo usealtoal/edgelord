@@ -3,7 +3,7 @@
 //! Provides HTTP client functionality for interacting with the Polymarket
 //! CLOB API to fetch market data and metadata.
 
-use reqwest::Client;
+use reqwest::Client as HttpClient;
 use tracing::{debug, info};
 
 use super::types::{Market, MarketsResponse};
@@ -13,12 +13,12 @@ use crate::error::Result;
 ///
 /// Handles fetching market data from the Polymarket CLOB (Central Limit Order Book)
 /// API endpoints.
-pub struct PolymarketClient {
-    client: Client,
+pub struct Client {
+    http: HttpClient,
     base_url: String,
 }
 
-impl PolymarketClient {
+impl Client {
     /// Create a new Polymarket client with the given base URL.
     ///
     /// # Arguments
@@ -28,7 +28,7 @@ impl PolymarketClient {
     #[must_use] 
     pub fn new(base_url: String) -> Self {
         Self {
-            client: Client::new(),
+            http: HttpClient::new(),
             base_url,
         }
     }
@@ -49,7 +49,7 @@ impl PolymarketClient {
 
         info!(url = %url, "Fetching active markets");
 
-        let response: MarketsResponse = self.client.get(&url).send().await?.json().await?;
+        let response: MarketsResponse = self.http.get(&url).send().await?.json().await?;
 
         let markets = response.data.unwrap_or_default();
         debug!(count = markets.len(), "Fetched markets");

@@ -7,8 +7,8 @@ mod registry;
 mod types;
 mod websocket;
 
-pub use client::PolymarketClient;
-pub use executor::{ArbitrageExecutionResult, PolymarketExecutor};
+pub use client::Client;
+pub use executor::{ArbitrageExecutionResult, Executor};
 pub use messages::{BookMessage, WsMessage, WsPriceLevel};
 pub use registry::MarketRegistry;
 // Re-export for future use

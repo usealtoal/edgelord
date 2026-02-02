@@ -45,14 +45,14 @@ pub enum ArbitrageExecutionResult {
 type AuthenticatedClient = Client<Authenticated<Normal>>;
 
 /// Executes trades on Polymarket CLOB.
-pub struct PolymarketExecutor {
+pub struct Executor {
     /// The authenticated CLOB client.
     client: Arc<AuthenticatedClient>,
     /// The signer for signing orders.
     signer: Arc<PrivateKeySigner>,
 }
 
-impl PolymarketExecutor {
+impl Executor {
     /// Create new executor by authenticating with Polymarket CLOB.
     pub async fn new(config: &Config) -> Result<Self> {
         let private_key = config
@@ -220,7 +220,7 @@ impl PolymarketExecutor {
 }
 
 #[async_trait]
-impl OrderExecutor for PolymarketExecutor {
+impl OrderExecutor for Executor {
     async fn execute(&self, order: &OrderRequest) -> Result<ExecutionResult> {
         let side = match order.side {
             OrderSide::Buy => Side::Buy,

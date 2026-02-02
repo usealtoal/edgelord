@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::adapter::polymarket::{
-    ArbitrageExecutionResult, MarketRegistry, PolymarketClient, PolymarketExecutor,
-    WebSocketHandler, WsMessage,
+    ArbitrageExecutionResult, Client as PolymarketClient, Executor as PolymarketExecutor,
+    MarketRegistry, WebSocketHandler, WsMessage,
 };
 use crate::app::config::Config;
 use crate::app::state::AppState;
