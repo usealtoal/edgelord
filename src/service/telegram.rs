@@ -26,6 +26,7 @@ pub struct TelegramConfig {
 
 impl TelegramConfig {
     /// Create config from environment variables.
+    #[must_use] 
     pub fn from_env() -> Option<Self> {
         let bot_token = std::env::var("TELEGRAM_BOT_TOKEN").ok()?;
         let chat_id = std::env::var("TELEGRAM_CHAT_ID")
@@ -51,6 +52,7 @@ pub struct TelegramNotifier {
 
 impl TelegramNotifier {
     /// Create a new Telegram notifier and spawn the background task.
+    #[must_use] 
     pub fn new(config: TelegramConfig) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 

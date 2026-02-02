@@ -59,56 +59,67 @@ pub struct Opportunity {
 
 impl Opportunity {
     /// Create a new builder for constructing an Opportunity.
+    #[must_use] 
     pub fn builder() -> OpportunityBuilder {
         OpportunityBuilder::new()
     }
 
     /// Get the market ID.
+    #[must_use] 
     pub fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the market question.
+    #[must_use] 
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the YES token ID.
+    #[must_use] 
     pub fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
+    #[must_use] 
     pub fn no_token(&self) -> &TokenId {
         &self.no_token
     }
 
     /// Get the YES ask price.
+    #[must_use] 
     pub fn yes_ask(&self) -> Price {
         self.yes_ask
     }
 
     /// Get the NO ask price.
+    #[must_use] 
     pub fn no_ask(&self) -> Price {
         self.no_ask
     }
 
     /// Get the total cost (yes_ask + no_ask).
+    #[must_use] 
     pub fn total_cost(&self) -> Price {
         self.total_cost
     }
 
     /// Get the edge (1.0 - total_cost).
+    #[must_use] 
     pub fn edge(&self) -> Price {
         self.edge
     }
 
     /// Get the volume.
+    #[must_use] 
     pub fn volume(&self) -> Volume {
         self.volume
     }
 
     /// Get the expected profit (edge * volume).
+    #[must_use] 
     pub fn expected_profit(&self) -> Price {
         self.expected_profit
     }
@@ -140,11 +151,13 @@ pub struct OpportunityBuilder {
 
 impl OpportunityBuilder {
     /// Create a new empty builder.
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the market ID.
+    #[must_use] 
     pub fn market_id(mut self, market_id: MarketId) -> Self {
         self.market_id = Some(market_id);
         self
@@ -157,6 +170,7 @@ impl OpportunityBuilder {
     }
 
     /// Set the YES token and its ask price.
+    #[must_use] 
     pub fn yes_token(mut self, token: TokenId, ask: Price) -> Self {
         self.yes_token = Some(token);
         self.yes_ask = Some(ask);
@@ -164,6 +178,7 @@ impl OpportunityBuilder {
     }
 
     /// Set the NO token and its ask price.
+    #[must_use] 
     pub fn no_token(mut self, token: TokenId, ask: Price) -> Self {
         self.no_token = Some(token);
         self.no_ask = Some(ask);
@@ -171,6 +186,7 @@ impl OpportunityBuilder {
     }
 
     /// Set the volume.
+    #[must_use] 
     pub fn volume(mut self, volume: Volume) -> Self {
         self.volume = Some(volume);
         self

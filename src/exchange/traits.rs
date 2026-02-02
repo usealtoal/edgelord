@@ -18,6 +18,7 @@ impl OrderId {
     }
 
     /// Get the underlying ID string.
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -53,21 +54,25 @@ pub enum ExecutionResult {
 
 impl ExecutionResult {
     /// Check if the execution was successful (fully filled).
+    #[must_use] 
     pub fn is_success(&self) -> bool {
         matches!(self, ExecutionResult::Success { .. })
     }
 
     /// Check if the execution resulted in a partial fill.
+    #[must_use] 
     pub fn is_partial(&self) -> bool {
         matches!(self, ExecutionResult::PartialFill { .. })
     }
 
     /// Check if the execution failed.
+    #[must_use] 
     pub fn is_failed(&self) -> bool {
         matches!(self, ExecutionResult::Failed { .. })
     }
 
     /// Get the order ID if available.
+    #[must_use] 
     pub fn order_id(&self) -> Option<&OrderId> {
         match self {
             ExecutionResult::Success { order_id, .. } => Some(order_id),

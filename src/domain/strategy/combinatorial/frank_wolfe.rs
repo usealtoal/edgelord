@@ -43,11 +43,13 @@ pub struct FrankWolfe {
 
 impl FrankWolfe {
     /// Create a new Frank-Wolfe instance with the given configuration.
+    #[must_use] 
     pub fn new(config: FrankWolfeConfig) -> Self {
         Self { config }
     }
 
     /// Get the configuration.
+    #[must_use] 
     pub fn config(&self) -> &FrankWolfeConfig {
         &self.config
     }
@@ -194,6 +196,7 @@ pub struct FrankWolfeResult {
 
 impl FrankWolfeResult {
     /// Check if significant arbitrage exists.
+    #[must_use] 
     pub fn has_arbitrage(&self, threshold: Decimal) -> bool {
         self.gap > threshold
     }

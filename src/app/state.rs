@@ -45,6 +45,7 @@ pub struct AppState {
 
 impl AppState {
     /// Create new app state with given risk limits.
+    #[must_use] 
     pub fn new(risk_limits: RiskLimits) -> Self {
         Self {
             positions: RwLock::new(PositionTracker::new()),

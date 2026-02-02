@@ -19,11 +19,13 @@ impl TokenInfo {
     }
 
     /// Get the token ID.
+    #[must_use] 
     pub fn id(&self) -> &TokenId {
         &self.id
     }
 
     /// Get the outcome description.
+    #[must_use] 
     pub fn outcome(&self) -> &str {
         &self.outcome
     }
@@ -48,16 +50,19 @@ impl MarketInfo {
     }
 
     /// Get the market ID.
+    #[must_use] 
     pub fn id(&self) -> &MarketId {
         &self.id
     }
 
     /// Get the market question.
+    #[must_use] 
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the tokens in this market.
+    #[must_use] 
     pub fn tokens(&self) -> &[TokenInfo] {
         &self.tokens
     }
@@ -89,21 +94,25 @@ impl MarketPair {
     }
 
     /// Get the market ID.
+    #[must_use] 
     pub fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the market question.
+    #[must_use] 
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the YES token ID.
+    #[must_use] 
     pub fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
+    #[must_use] 
     pub fn no_token(&self) -> &TokenId {
         &self.no_token
     }

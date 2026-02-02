@@ -55,6 +55,7 @@ pub struct ExecutionEvent {
 }
 
 impl ExecutionEvent {
+    #[must_use] 
     pub fn from_result(market_id: &str, result: &ArbitrageExecutionResult) -> Self {
         match result {
             ArbitrageExecutionResult::Success { yes_order_id, no_order_id } => Self {
@@ -120,6 +121,7 @@ pub struct NotifierRegistry {
 
 impl NotifierRegistry {
     /// Create an empty registry.
+    #[must_use] 
     pub fn new() -> Self {
         Self { notifiers: vec![] }
     }
@@ -137,11 +139,13 @@ impl NotifierRegistry {
     }
 
     /// Number of registered notifiers.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.notifiers.len()
     }
 
     /// Check if registry is empty.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.notifiers.is_empty()
     }

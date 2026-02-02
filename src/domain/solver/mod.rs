@@ -39,6 +39,7 @@ pub struct LpProblem {
 
 impl LpProblem {
     /// Create a new LP problem.
+    #[must_use] 
     pub fn new(num_vars: usize) -> Self {
         Self {
             objective: vec![Decimal::ZERO; num_vars],
@@ -48,6 +49,7 @@ impl LpProblem {
     }
 
     /// Number of variables.
+    #[must_use] 
     pub fn num_vars(&self) -> usize {
         self.objective.len()
     }
@@ -64,11 +66,13 @@ pub struct IlpProblem {
 
 impl IlpProblem {
     /// Create from an LP problem with specified integer variables.
+    #[must_use] 
     pub fn new(lp: LpProblem, integer_vars: Vec<usize>) -> Self {
         Self { lp, integer_vars }
     }
 
     /// Create with all variables as binary (0-1).
+    #[must_use] 
     pub fn all_binary(lp: LpProblem) -> Self {
         let integer_vars: Vec<usize> = (0..lp.num_vars()).collect();
         Self { lp, integer_vars }
@@ -88,6 +92,7 @@ pub struct Constraint {
 
 impl Constraint {
     /// Create a >= constraint.
+    #[must_use] 
     pub fn geq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
@@ -97,6 +102,7 @@ impl Constraint {
     }
 
     /// Create a <= constraint.
+    #[must_use] 
     pub fn leq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
@@ -106,6 +112,7 @@ impl Constraint {
     }
 
     /// Create an = constraint.
+    #[must_use] 
     pub fn eq(coefficients: Vec<Decimal>, rhs: Decimal) -> Self {
         Self {
             coefficients,
@@ -143,6 +150,7 @@ impl Default for VariableBounds {
 
 impl VariableBounds {
     /// Binary variable bounds [0, 1].
+    #[must_use] 
     pub fn binary() -> Self {
         Self {
             lower: Some(Decimal::ZERO),
@@ -151,6 +159,7 @@ impl VariableBounds {
     }
 
     /// Free variable (no bounds).
+    #[must_use] 
     pub fn free() -> Self {
         Self {
             lower: None,
@@ -159,11 +168,13 @@ impl VariableBounds {
     }
 
     /// Non-negative variable [0, +inf).
+    #[must_use] 
     pub fn non_negative() -> Self {
         Self::default()
     }
 
     /// Bounded variable [lower, upper].
+    #[must_use] 
     pub fn bounded(lower: Decimal, upper: Decimal) -> Self {
         Self {
             lower: Some(lower),
@@ -185,6 +196,7 @@ pub struct LpSolution {
 
 impl LpSolution {
     /// Check if solution is optimal.
+    #[must_use] 
     pub fn is_optimal(&self) -> bool {
         self.status == SolutionStatus::Optimal
     }

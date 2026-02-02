@@ -57,11 +57,13 @@ pub struct MarketRebalancingStrategy {
 
 impl MarketRebalancingStrategy {
     /// Create a new strategy with the given configuration.
+    #[must_use] 
     pub fn new(config: MarketRebalancingConfig) -> Self {
         Self { config }
     }
 
     /// Get the strategy configuration.
+    #[must_use] 
     pub fn config(&self) -> &MarketRebalancingConfig {
         &self.config
     }
@@ -127,6 +129,7 @@ pub struct RebalancingLeg {
 
 impl RebalancingLeg {
     /// Create a new rebalancing leg.
+    #[must_use] 
     pub fn new(token_id: TokenId, price: Price, volume: Volume) -> Self {
         Self {
             token_id,
@@ -160,6 +163,7 @@ pub struct RebalancingOpportunity {
 
 impl RebalancingOpportunity {
     /// Number of outcomes in this opportunity.
+    #[must_use] 
     pub fn outcome_count(&self) -> usize {
         self.legs.len()
     }

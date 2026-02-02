@@ -29,6 +29,7 @@ pub struct Token {
 
 impl Market {
     #[allow(dead_code)]
+    #[must_use] 
     pub fn token_ids(&self) -> Vec<String> {
         self.tokens.iter().map(|t| t.token_id.clone()).collect()
     }

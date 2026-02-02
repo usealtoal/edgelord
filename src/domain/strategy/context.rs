@@ -23,6 +23,7 @@ pub struct MarketContext {
 
 impl MarketContext {
     /// Create context for a simple binary market (YES/NO).
+    #[must_use] 
     pub fn binary() -> Self {
         Self {
             outcome_count: 2,
@@ -32,6 +33,7 @@ impl MarketContext {
     }
 
     /// Create context for a multi-outcome market.
+    #[must_use] 
     pub fn multi_outcome(count: usize) -> Self {
         Self {
             outcome_count: count,
@@ -41,6 +43,7 @@ impl MarketContext {
     }
 
     /// Create context for a market with dependencies.
+    #[must_use] 
     pub fn with_dependencies(mut self, markets: Vec<MarketId>) -> Self {
         self.has_dependencies = !markets.is_empty();
         self.correlated_markets = markets;
@@ -48,11 +51,13 @@ impl MarketContext {
     }
 
     /// Check if this is a binary market.
+    #[must_use] 
     pub fn is_binary(&self) -> bool {
         self.outcome_count == 2
     }
 
     /// Check if this is a multi-outcome market.
+    #[must_use] 
     pub fn is_multi_outcome(&self) -> bool {
         self.outcome_count > 2
     }
@@ -105,17 +110,20 @@ impl<'a> DetectionContext<'a> {
     }
 
     /// Set custom market context.
+    #[must_use] 
     pub fn with_market_context(mut self, ctx: MarketContext) -> Self {
         self.market_ctx = ctx;
         self
     }
 
     /// Get the market context.
+    #[must_use] 
     pub fn market_context(&self) -> MarketContext {
         self.market_ctx.clone()
     }
 
     /// Get the token IDs for multi-outcome markets.
+    #[must_use] 
     pub fn token_ids(&self) -> &[crate::domain::TokenId] {
         &self.token_ids
     }
@@ -136,11 +144,13 @@ pub struct DetectionResult {
 
 impl DetectionResult {
     /// Create an empty result.
+    #[must_use] 
     pub fn empty() -> Self {
         Self::default()
     }
 
     /// Create a result with opportunity count.
+    #[must_use] 
     pub fn with_count(count: usize) -> Self {
         Self {
             opportunity_count: count,

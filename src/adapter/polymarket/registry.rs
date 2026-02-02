@@ -21,6 +21,7 @@ pub struct MarketRegistry {
 
 impl MarketRegistry {
     /// Create an empty market registry.
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             token_to_market: HashMap::new(),
@@ -33,6 +34,7 @@ impl MarketRegistry {
     /// Parses the market data and extracts YES/NO token pairs. Markets with
     /// more or fewer than 2 outcomes are skipped. Each token ID is mapped
     /// to its containing market pair for efficient lookup.
+    #[must_use] 
     pub fn from_markets(markets: &[Market]) -> Self {
         let mut registry = Self::new();
 
@@ -75,21 +77,25 @@ impl MarketRegistry {
     ///
     /// Returns the complete market pair if the token is registered, or `None`
     /// if the token is not found in any registered market.
+    #[must_use] 
     pub fn get_market_for_token(&self, token_id: &TokenId) -> Option<&MarketPair> {
         self.token_to_market.get(token_id)
     }
 
     /// Get all registered market pairs.
+    #[must_use] 
     pub fn pairs(&self) -> &[MarketPair] {
         &self.pairs
     }
 
     /// Get the number of registered market pairs.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.pairs.len()
     }
 
     /// Check if the registry is empty.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.pairs.is_empty()
     }

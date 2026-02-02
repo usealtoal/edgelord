@@ -99,6 +99,7 @@ pub struct CombinatorialStrategy {
 
 impl CombinatorialStrategy {
     /// Create a new strategy with the given configuration.
+    #[must_use] 
     pub fn new(config: CombinatorialConfig) -> Self {
         let fw_config = FrankWolfeConfig {
             max_iterations: config.max_iterations,
@@ -111,11 +112,13 @@ impl CombinatorialStrategy {
     }
 
     /// Get the strategy configuration.
+    #[must_use] 
     pub fn config(&self) -> &CombinatorialConfig {
         &self.config
     }
 
     /// Get the Frank-Wolfe algorithm instance.
+    #[must_use] 
     pub fn frank_wolfe(&self) -> &FrankWolfe {
         &self.fw
     }
