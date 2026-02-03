@@ -1,6 +1,7 @@
 exchange = "polymarket"
 
-[polymarket]
+[exchange_config]
+type = "polymarket"
 environment = "testnet"
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"

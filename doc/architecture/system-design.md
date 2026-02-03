@@ -291,6 +291,13 @@ flowchart TD
 ## Configuration
 
 ```toml
+exchange = "polymarket"
+
+[exchange_config]
+type = "polymarket"
+environment = "testnet"        # or "mainnet"
+chain_id = 80002               # 80002=testnet, 137=mainnet
+
 [strategies]
 enabled = ["single_condition", "market_rebalancing"]
 

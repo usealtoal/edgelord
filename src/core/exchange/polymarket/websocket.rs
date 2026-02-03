@@ -100,7 +100,14 @@ impl PolymarketWebSocketHandler {
         let msg = PolymarketSubscribeMessage::new(asset_ids.clone());
         let json = serde_json::to_string(&msg)?;
 
-        info!(assets = ?asset_ids, "Subscribing to assets");
+        // Log a truncated view of assets to avoid spam
+        let total = asset_ids.len();
+        if total <= 5 {
+            info!(assets = ?asset_ids, "Subscribing to assets");
+        } else {
+            let preview: Vec<_> = asset_ids.iter().take(5).collect();
+            info!(assets = ?preview, more = total - 5, "Subscribing to assets");
+        }
         ws.send(Message::Text(json)).await?;
 
         Ok(())
@@ -250,7 +257,14 @@ impl MarketDataStream for PolymarketDataStream {
         let msg = PolymarketSubscribeMessage::new(asset_ids.clone());
         let json = serde_json::to_string(&msg)?;
 
-        info!(assets = ?asset_ids, "Subscribing to assets");
+        // Log a truncated view of assets to avoid spam
+        let total = asset_ids.len();
+        if total <= 5 {
+            info!(assets = ?asset_ids, "Subscribing to assets");
+        } else {
+            let preview: Vec<_> = asset_ids.iter().take(5).collect();
+            info!(assets = ?preview, more = total - 5, "Subscribing to assets");
+        }
         ws.send(Message::Text(json)).await?;
         Ok(())
     }

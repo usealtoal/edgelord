@@ -2,8 +2,10 @@
 # Copy to /opt/edgelord/config.toml on deployment
 
 exchange = "polymarket"
+status_file = "/var/run/edgelord/status.json"
 
-[polymarket]
+[exchange_config]
+type = "polymarket"
 environment = "mainnet"
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"

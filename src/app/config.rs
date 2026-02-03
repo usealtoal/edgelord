@@ -74,12 +74,9 @@ pub struct Config {
     #[serde(default)]
     pub dry_run: bool,
     /// Path to the status file for external monitoring.
-    #[serde(default = "default_status_file")]
+    /// Set to enable status file writing (e.g., "/var/run/edgelord/status.json").
+    #[serde(default)]
     pub status_file: Option<PathBuf>,
-}
-
-fn default_status_file() -> Option<PathBuf> {
-    Some(PathBuf::from("/var/run/edgelord/status.json"))
 }
 
 /// Configuration for all detection strategies.
@@ -311,7 +308,7 @@ impl Default for Config {
             risk: RiskConfig::default(),
             telegram: TelegramAppConfig::default(),
             dry_run: false,
-            status_file: default_status_file(),
+            status_file: None,
         }
     }
 }
