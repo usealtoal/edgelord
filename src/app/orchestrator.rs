@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::Executor as PolymarketExecutor;
+use crate::core::exchange::polymarket::PolymarketExecutor;
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::core::domain::MarketRegistry;
 use crate::app::config::Config;
