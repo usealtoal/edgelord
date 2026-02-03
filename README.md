@@ -154,6 +154,13 @@ enabled = false                  # Set to true to enable
 notify_opportunities = false     # Alert on new opportunities
 notify_executions = true         # Alert on trade executions
 notify_risk_rejections = true    # Alert when risk manager rejects
+
+[reconnection]
+initial_delay_ms = 1000        # Initial reconnection delay
+max_delay_ms = 60000           # Maximum backoff delay (60s)
+backoff_multiplier = 2.0       # Exponential backoff factor
+max_consecutive_failures = 10  # Circuit breaker threshold
+circuit_breaker_cooldown_ms = 300000  # 5 minute cooldown after tripping
 ```
 
 ## CLI Usage

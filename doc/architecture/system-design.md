@@ -368,6 +368,54 @@ struct RiskLimits {
 
 ---
 
+## Connection Resilience
+
+### Automatic Reconnection
+
+The `ReconnectingDataStream` wrapper provides automatic reconnection for WebSocket streams:
+
+- **Exponential Backoff:** Delays between reconnection attempts double each time (1s → 2s → 4s → ...) up to a configurable maximum
+- **Circuit Breaker:** After N consecutive failures, reconnection pauses for a cooldown period to avoid hammering a dead server
+- **Automatic Resubscription:** Token subscriptions are restored after successful reconnection
+
+### Configuration
+
+```toml
+[reconnection]
+initial_delay_ms = 1000        # 1 second initial delay
+max_delay_ms = 60000           # Cap at 60 seconds
+backoff_multiplier = 2.0       # Double delay each failure
+max_consecutive_failures = 10  # Trip circuit breaker
+circuit_breaker_cooldown_ms = 300000  # 5 minute cooldown
+```
+
+### State Machine
+
+```
+                    ┌─────────────┐
+                    │  Connected  │
+                    └──────┬──────┘
+                           │ disconnect
+                           ▼
+                    ┌─────────────┐
+           ┌───────▶│ Reconnecting│◀───────┐
+           │        └──────┬──────┘        │
+           │               │               │
+      success         failure < N     failure ≥ N
+           │               │               │
+           │               ▼               ▼
+           │        ┌─────────────┐ ┌─────────────┐
+           └────────│   Backoff   │ │Circuit Open │
+                    └─────────────┘ └──────┬──────┘
+                                           │ cooldown
+                                           ▼
+                                    ┌─────────────┐
+                                    │Circuit Close│
+                                    └─────────────┘
+```
+
+---
+
 ## Tech Stack
 
 ```toml
