@@ -69,8 +69,9 @@ fix/<name>        # Bug fix branches
 
 - One public type per file when possible
 - `mod.rs` re-exports only, no logic
-- `core/domain/` must not import from exchange implementations
-- `core/` contains all reusable library code (domain, exchange, strategy, solver, service)
+- `core/domain/` contains pure types only (no state, no I/O, no exchange imports)
+- `core/cache/` contains stateful caches and repositories (`OrderBookCache`, `PositionTracker`)
+- `core/` contains all reusable library code (cache, domain, exchange, strategy, solver, service)
 - `app/` contains application orchestration (config, orchestrator, state)
 - Exchange implementations (e.g., `polymarket/`) live in `core/exchange/` and implement exchange traits
 - Tests live in `tests/` for integration, inline `#[cfg(test)]` for unit

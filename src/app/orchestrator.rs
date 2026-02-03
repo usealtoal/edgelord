@@ -17,7 +17,8 @@ use crate::core::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
-use crate::core::domain::{Opportunity, OrderBookCache, TokenId};
+use crate::core::cache::OrderBookCache;
+use crate::core::domain::{Opportunity, TokenId};
 use crate::error::{Result, RiskError};
 use crate::core::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
 use rust_decimal::Decimal;

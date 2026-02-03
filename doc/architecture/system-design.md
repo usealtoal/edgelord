@@ -44,14 +44,19 @@ src/
 ├── core/                  # Reusable library components
 │   ├── mod.rs             # Module exports
 │   │
+│   ├── cache/             # Stateful caches and repositories
+│   │   ├── mod.rs         # Module exports
+│   │   ├── orderbook.rs   # OrderBookCache (thread-safe)
+│   │   └── position.rs    # PositionTracker
+│   │
 │   ├── domain/            # Pure domain types (NO exchange imports)
 │   │   ├── mod.rs         # Module exports
 │   │   ├── id.rs          # TokenId, MarketId (newtypes)
 │   │   ├── money.rs       # Price, Volume types
 │   │   ├── market.rs      # MarketPair
-│   │   ├── orderbook.rs   # OrderBook, OrderBookCache
+│   │   ├── orderbook.rs   # PriceLevel, OrderBook
 │   │   ├── opportunity.rs # Opportunity with builder
-│   │   └── position.rs    # Position tracking
+│   │   └── position.rs    # Position, PositionId, PositionLeg, PositionStatus
 │   │
 │   ├── exchange/          # Exchange traits + implementations
 │   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, MarketDataStream)
@@ -420,6 +425,7 @@ tracing = "0.1"
 - [x] Move `service/` to `core/`
 - [x] Keep `app/` at top level for application orchestration
 - [x] Update all imports throughout codebase
+- [x] Extract stateful caches (`OrderBookCache`, `PositionTracker`) to `core/cache/`
 
 ### Phase 5: Mainnet
 - [ ] Switch config to mainnet
