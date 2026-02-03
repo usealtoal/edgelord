@@ -7,7 +7,8 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::core::domain::{MarketId, Opportunity, OrderBookCache, Price, TokenId, Volume};
+use crate::core::cache::OrderBookCache;
+use crate::core::domain::{MarketId, Opportunity, Price, TokenId, Volume};
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]

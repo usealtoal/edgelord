@@ -5,7 +5,8 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::domain::{MarketId, MarketPair, OrderBookCache, TokenId};
+use crate::core::cache::OrderBookCache;
+use crate::core::domain::{MarketId, MarketPair, TokenId};
 
 /// Context describing the market being analyzed.
 ///

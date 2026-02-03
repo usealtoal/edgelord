@@ -7,7 +7,8 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::core::domain::{MarketPair, Opportunity, OrderBookCache};
+use crate::core::cache::OrderBookCache;
+use crate::core::domain::{MarketPair, Opportunity};
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
