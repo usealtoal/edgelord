@@ -63,13 +63,17 @@ src/
 ├── error.rs               # Structured error types
 │
 ├── core/                  # Reusable library components
+│   ├── cache/             # Stateful caches and repositories
+│   │   ├── orderbook.rs   # OrderBookCache (thread-safe)
+│   │   └── position.rs    # PositionTracker
+│   │
 │   ├── domain/            # Pure domain types (exchange-agnostic)
 │   │   ├── id.rs          # TokenId, MarketId (newtypes)
 │   │   ├── money.rs       # Price, Volume (type aliases)
 │   │   ├── market.rs      # MarketPair
-│   │   ├── orderbook.rs   # PriceLevel, OrderBook, OrderBookCache
+│   │   ├── orderbook.rs   # PriceLevel, OrderBook
 │   │   ├── opportunity.rs # Opportunity with builder pattern
-│   │   └── position.rs    # Position tracking
+│   │   └── position.rs    # Position, PositionId, PositionLeg, PositionStatus
 │   │
 │   ├── exchange/          # Exchange traits + implementations
 │   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, etc.)
