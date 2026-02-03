@@ -215,3 +215,188 @@ impl<S: MarketDataStream + Send> MarketDataStream for ReconnectingDataStream<S> 
         self.inner.exchange_name()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+
+    use crate::core::domain::OrderBook;
+
+    /// Mock data stream for testing reconnection logic.
+    struct MockDataStream {
+        connect_results: VecDeque<Result<(), Error>>,
+        events: VecDeque<Option<MarketEvent>>,
+        connect_count: Arc<AtomicU32>,
+        subscribe_count: Arc<AtomicU32>,
+    }
+
+    impl MockDataStream {
+        fn new() -> Self {
+            Self {
+                connect_results: VecDeque::new(),
+                events: VecDeque::new(),
+                connect_count: Arc::new(AtomicU32::new(0)),
+                subscribe_count: Arc::new(AtomicU32::new(0)),
+            }
+        }
+
+        fn with_connect_results(mut self, results: Vec<Result<(), Error>>) -> Self {
+            self.connect_results = results.into();
+            self
+        }
+
+        fn with_events(mut self, events: Vec<Option<MarketEvent>>) -> Self {
+            self.events = events.into();
+            self
+        }
+
+        fn connect_count(&self) -> u32 {
+            self.connect_count.load(Ordering::SeqCst)
+        }
+
+        fn subscribe_count(&self) -> u32 {
+            self.subscribe_count.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl MarketDataStream for MockDataStream {
+        async fn connect(&mut self) -> Result<(), Error> {
+            self.connect_count.fetch_add(1, Ordering::SeqCst);
+            self.connect_results
+                .pop_front()
+                .unwrap_or(Ok(()))
+        }
+
+        async fn subscribe(&mut self, _token_ids: &[TokenId]) -> Result<(), Error> {
+            self.subscribe_count.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn next_event(&mut self) -> Option<MarketEvent> {
+            self.events.pop_front().flatten()
+        }
+
+        fn exchange_name(&self) -> &'static str {
+            "mock"
+        }
+    }
+
+    fn test_config() -> ReconnectionConfig {
+        ReconnectionConfig {
+            initial_delay_ms: 10, // Fast for tests
+            max_delay_ms: 100,
+            backoff_multiplier: 2.0,
+            max_consecutive_failures: 3,
+            circuit_breaker_cooldown_ms: 50,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_successful_connection() {
+        let mock = MockDataStream::new()
+            .with_events(vec![
+                Some(MarketEvent::OrderBookSnapshot {
+                    token_id: TokenId::from("token1".to_string()),
+                    book: OrderBook::new(TokenId::from("token1".to_string())),
+                }),
+            ]);
+
+        let mut stream = ReconnectingDataStream::new(mock, test_config());
+        stream.connect().await.unwrap();
+
+        let event = stream.next_event().await;
+        assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_after_disconnect() {
+        let mock = MockDataStream::new()
+            .with_events(vec![
+                Some(MarketEvent::Disconnected { reason: "test".into() }),
+                Some(MarketEvent::OrderBookSnapshot {
+                    token_id: TokenId::from("token1".to_string()),
+                    book: OrderBook::new(TokenId::from("token1".to_string())),
+                }),
+            ]);
+
+        let mut stream = ReconnectingDataStream::new(mock, test_config());
+        stream.connect().await.unwrap();
+        stream.subscribe(&[TokenId::from("token1".to_string())]).await.unwrap();
+
+        // First call should trigger reconnect, second should return snapshot
+        let event = stream.next_event().await;
+        assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+
+        // Should have reconnected (connect called twice total)
+        assert!(stream.inner.connect_count() >= 2);
+        // Should have resubscribed
+        assert!(stream.inner.subscribe_count() >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_exponential_backoff() {
+        let mut stream = ReconnectingDataStream::new(
+            MockDataStream::new(),
+            test_config(),
+        );
+
+        // Initial delay
+        let delay1 = stream.next_delay();
+        assert_eq!(delay1.as_millis(), 10);
+
+        // After one failure, delay doubles
+        let delay2 = stream.next_delay();
+        assert_eq!(delay2.as_millis(), 20);
+
+        // After two failures, delay doubles again
+        let delay3 = stream.next_delay();
+        assert_eq!(delay3.as_millis(), 40);
+
+        // Should cap at max_delay_ms
+        let delay4 = stream.next_delay();
+        assert_eq!(delay4.as_millis(), 80);
+
+        let delay5 = stream.next_delay();
+        assert_eq!(delay5.as_millis(), 100); // Capped at max
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_trips() {
+        let mut stream = ReconnectingDataStream::new(
+            MockDataStream::new(),
+            test_config(),
+        );
+
+        // Record failures up to threshold
+        for _ in 0..3 {
+            stream.record_failure();
+        }
+
+        // Circuit should be open
+        assert!(matches!(stream.circuit_state, CircuitState::Open { .. }));
+        assert!(!stream.circuit_allows_connection());
+    }
+
+    #[tokio::test]
+    async fn test_reset_backoff() {
+        let mut stream = ReconnectingDataStream::new(
+            MockDataStream::new(),
+            test_config(),
+        );
+
+        // Simulate some failures
+        stream.consecutive_failures = 5;
+        stream.current_delay_ms = 1000;
+
+        // Reset
+        stream.reset_backoff();
+
+        assert_eq!(stream.consecutive_failures, 0);
+        assert_eq!(stream.current_delay_ms, 10); // Back to initial
+        assert!(matches!(stream.circuit_state, CircuitState::Closed));
+    }
+}
