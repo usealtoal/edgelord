@@ -33,14 +33,14 @@ impl TokenInfo {
 
 /// Information about a market.
 #[derive(Debug, Clone)]
-pub struct MarketInfo {
+pub struct DomainMarket {
     id: MarketId,
     question: String,
     tokens: Vec<TokenInfo>,
 }
 
-impl MarketInfo {
-    /// Create a new `MarketInfo`.
+impl DomainMarket {
+    /// Create a new `DomainMarket`.
     pub fn new(id: MarketId, question: impl Into<String>, tokens: Vec<TokenInfo>) -> Self {
         Self {
             id,
@@ -135,7 +135,7 @@ mod tests {
             TokenInfo::new(TokenId::from("yes"), "Yes"),
             TokenInfo::new(TokenId::from("no"), "No"),
         ];
-        let info = MarketInfo::new(MarketId::from("market-1"), "Will it rain?", tokens);
+        let info = DomainMarket::new(MarketId::from("market-1"), "Will it rain?", tokens);
 
         assert_eq!(info.id().as_str(), "market-1");
         assert_eq!(info.question(), "Will it rain?");
