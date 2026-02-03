@@ -1,51 +1,34 @@
-use edgelord::app::Config;
-#[cfg(feature = "polymarket")]
-use edgelord::app::App;
-use tokio::signal;
-use tracing::{error, info};
+use clap::Parser;
+use edgelord::cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let config = match Config::load("config.toml") {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to load config: {e}");
-            std::process::exit(1);
+    let cli = Cli::parse();
+
+    let result = match &cli.command {
+        Commands::Run(args) => edgelord::cli::run::execute(&cli, args).await,
+        Commands::Status => {
+            eprintln!("Status command not yet implemented");
+            Ok(())
+        }
+        Commands::Logs(_args) => {
+            eprintln!("Logs command not yet implemented");
+            Ok(())
+        }
+        Commands::Install(_args) => {
+            eprintln!("Install command not yet implemented");
+            Ok(())
+        }
+        Commands::Uninstall => {
+            eprintln!("Uninstall command not yet implemented");
+            Ok(())
         }
     };
 
-    config.init_logging();
-    info!("edgelord starting");
-
-    #[cfg(feature = "polymarket")]
-    {
-        tokio::select! {
-            result = App::run(config) => {
-                if let Err(e) = result {
-                    error!(error = %e, "Fatal error");
-                    std::process::exit(1);
-                }
-            }
-            _ = signal::ctrl_c() => {
-                info!("Shutdown signal received");
-            }
-        }
+    if let Err(e) = result {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
     }
-
-    #[cfg(not(feature = "polymarket"))]
-    {
-        // Without polymarket feature, the binary just loads config and exits
-        // This allows testing that core domain/exchange modules compile
-        let _ = config;
-        info!("No exchange features enabled - exiting");
-        tokio::select! {
-            _ = signal::ctrl_c() => {
-                info!("Shutdown signal received");
-            }
-        }
-    }
-
-    info!("edgelord stopped");
 }

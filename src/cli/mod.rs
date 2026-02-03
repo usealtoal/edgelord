@@ -1,6 +1,7 @@
 //! Command-line interface definitions.
 
 pub mod banner;
+pub mod run;
 
 use clap::{Parser, Subcommand};
 use rust_decimal::Decimal;
