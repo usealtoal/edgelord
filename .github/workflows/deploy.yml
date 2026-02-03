@@ -1,12 +1,13 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - 'LICENSE'
+  # Uncomment to enable automatic deployment on push to main
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '*.md'
+  #     - 'LICENSE'
   workflow_dispatch:
     inputs:
       skip_deploy:
