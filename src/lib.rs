@@ -25,3 +25,4 @@ pub mod exchange;
 pub mod adapter;
 pub mod service;
 pub mod app;
+pub mod cli;
