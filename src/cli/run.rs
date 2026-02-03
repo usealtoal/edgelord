@@ -1,6 +1,6 @@
 //! Handler for the `run` command.
 
-use crate::app::Config;
+use crate::app::{Config, ExchangeSpecificConfig};
 #[cfg(feature = "polymarket")]
 use crate::app::App;
 use crate::cli::{banner, Cli, RunArgs};
@@ -15,7 +15,11 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
 
     // Apply CLI overrides
     if let Some(chain_id) = cli.chain_id {
-        config.polymarket.chain_id = chain_id;
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(poly) => {
+                poly.chain_id = chain_id;
+            }
+        }
     }
     if let Some(ref level) = cli.log_level {
         config.logging.level = level.clone();
