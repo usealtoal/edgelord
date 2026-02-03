@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
+use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor, MarketDataStream, ReconnectingDataStream};
 use crate::core::domain::MarketRegistry;
 use crate::app::config::Config;
 use crate::app::state::AppState;
@@ -130,8 +130,9 @@ impl App {
         let cache = Arc::new(OrderBookCache::new());
         let registry = Arc::new(registry);
 
-        // Create data stream using exchange-agnostic trait
-        let mut data_stream = ExchangeFactory::create_data_stream(&config);
+        // Create data stream with reconnection support
+        let inner_stream = ExchangeFactory::create_data_stream(&config);
+        let mut data_stream = ReconnectingDataStream::new(inner_stream, config.reconnection.clone());
         data_stream.connect().await?;
         data_stream.subscribe(&token_ids).await?;
 
