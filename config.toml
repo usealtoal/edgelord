@@ -1,10 +1,10 @@
 exchange = "polymarket"
 
 [polymarket]
+environment = "testnet"
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
-# Chain ID: 80002 for Amoy testnet (default), 137 for Polygon mainnet
-chain_id = 80002
+chain_id = 80002  # Amoy testnet
 
 [logging]
 level = "info"

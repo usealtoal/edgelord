@@ -4,6 +4,7 @@
 exchange = "polymarket"
 
 [polymarket]
+environment = "mainnet"
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
 chain_id = 137  # Polygon mainnet

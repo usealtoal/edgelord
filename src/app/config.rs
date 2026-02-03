@@ -22,6 +22,24 @@ pub enum Exchange {
     Polymarket,
 }
 
+/// Exchange environment (testnet vs mainnet).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    #[default]
+    Testnet,
+    Mainnet,
+}
+
+impl std::fmt::Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Testnet => write!(f, "testnet"),
+            Self::Mainnet => write!(f, "mainnet"),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     /// Which exchange to connect to.
@@ -163,6 +181,7 @@ impl From<RiskConfig> for RiskLimits {
 /// Common network configuration returned by exchanges.
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
+    pub environment: Environment,
     pub ws_url: String,
     pub api_url: String,
     pub chain_id: u64,
@@ -171,6 +190,9 @@ pub struct NetworkConfig {
 /// Polymarket exchange configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketConfig {
+    /// Environment: testnet or mainnet.
+    #[serde(default)]
+    pub environment: Environment,
     /// WebSocket URL for market data.
     #[serde(default = "default_polymarket_ws_url")]
     pub ws_url: String,
@@ -198,6 +220,7 @@ const fn default_polymarket_chain_id() -> u64 {
 impl Default for PolymarketConfig {
     fn default() -> Self {
         Self {
+            environment: Environment::default(),
             ws_url: default_polymarket_ws_url(),
             api_url: default_polymarket_api_url(),
             chain_id: default_polymarket_chain_id(),
@@ -244,6 +267,7 @@ impl Config {
     pub fn network(&self) -> NetworkConfig {
         match self.exchange {
             Exchange::Polymarket => NetworkConfig {
+                environment: self.polymarket.environment,
                 ws_url: self.polymarket.ws_url.clone(),
                 api_url: self.polymarket.api_url.clone(),
                 chain_id: self.polymarket.chain_id,

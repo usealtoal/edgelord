@@ -51,13 +51,10 @@ impl App {
 
         // Initialize status writer if configured
         let status_writer = config.status_file.as_ref().map(|path| {
+            let network = config.network();
             let status_config = StatusConfig {
-                chain_id: config.network().chain_id,
-                network: if config.network().chain_id == 137 {
-                    "mainnet".to_string()
-                } else {
-                    "testnet".to_string()
-                },
+                chain_id: network.chain_id,
+                network: network.environment.to_string(),
                 strategies: config.strategies.enabled.clone(),
                 dry_run: config.dry_run,
             };
