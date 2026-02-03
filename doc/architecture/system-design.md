@@ -7,8 +7,9 @@
 1. **Hot path must be <40ms** — Compete with sophisticated actors
 2. **Strategy pattern** — Pluggable detection algorithms
 3. **Domain-driven design** — Exchange-agnostic core, exchange-specific adapters
-4. **Solver abstraction** — Swappable LP/ILP backends
-5. **Fail safe** — Never lose money on a "guaranteed" trade
+4. **Exchange abstraction** — Generic traits (`MarketDataStream`, `ArbitrageExecutor`), Polymarket-prefixed implementations
+5. **Solver abstraction** — Swappable LP/ILP backends
+6. **Fail safe** — Never lose money on a "guaranteed" trade
 
 ---
 
@@ -17,8 +18,8 @@
 ```mermaid
 flowchart TB
     subgraph core["RUST CORE (tokio async)"]
-        WS[WebSocket Handler] --> SR[Strategy Registry]
-        SR --> EX[Executor<br/>traits]
+        WS[MarketDataStream<br/>trait] --> SR[Strategy Registry]
+        SR --> RM[Risk Manager]
         WS --> OBC[OrderBook Cache<br/>RwLock]
 
         subgraph strategies[Strategies]
@@ -29,8 +30,15 @@ flowchart TB
 
         SR --> strategies
         strategies --> HiGHS[HiGHS Solver<br/>LP/ILP]
-        EX --> PM[Polymarket Executor]
+        RM --> EX[ArbitrageExecutor<br/>trait]
     end
+
+    subgraph exchanges["Exchange Implementations"]
+        PM[Polymarket<br/>PolymarketDataStream<br/>PolymarketExecutor]
+    end
+
+    WS -.-> PM
+    EX -.-> PM
 ```
 
 ## Module Structure
@@ -53,22 +61,24 @@ src/
 │   │   ├── mod.rs         # Module exports
 │   │   ├── id.rs          # TokenId, MarketId (newtypes)
 │   │   ├── money.rs       # Price, Volume types
-│   │   ├── market.rs      # MarketPair
+│   │   ├── market.rs      # Market (N outcomes), Outcome
+│   │   ├── market_registry.rs # MarketRegistry (token→market lookup)
 │   │   ├── orderbook.rs   # PriceLevel, OrderBook
-│   │   ├── opportunity.rs # Opportunity with builder
+│   │   ├── opportunity.rs # Opportunity, OpportunityLeg
 │   │   └── position.rs    # Position, PositionId, PositionLeg, PositionStatus
 │   │
 │   ├── exchange/          # Exchange traits + implementations
-│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, MarketDataStream)
+│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, MarketDataStream, ArbitrageExecutor)
+│   │   ├── traits.rs      # ExchangeConfig trait for exchange-specific settings
 │   │   ├── factory.rs     # ExchangeFactory for runtime exchange selection
-│   │   └── polymarket/    # Polymarket implementation
+│   │   └── polymarket/    # Polymarket implementation (all types prefixed)
 │   │       ├── mod.rs     # Module exports
-│   │       ├── client.rs  # REST client (MarketFetcher impl)
-│   │       ├── executor.rs# OrderExecutor implementation
-│   │       ├── websocket.rs# MarketDataStream implementation
-│   │       ├── messages.rs# WS types + to_orderbook()
-│   │       ├── registry.rs# YES/NO pair mapping
-│   │       └── types.rs   # API types
+│   │       ├── client.rs  # PolymarketClient (MarketFetcher impl)
+│   │       ├── config.rs  # PolymarketExchangeConfig, POLYMARKET_PAYOUT
+│   │       ├── executor.rs# PolymarketExecutor (OrderExecutor, ArbitrageExecutor)
+│   │       ├── websocket.rs# PolymarketDataStream, PolymarketWebSocketHandler
+│   │       ├── messages.rs# PolymarketWsMessage, PolymarketBookMessage
+│   │       └── types.rs   # PolymarketMarket, PolymarketToken
 │   │
 │   ├── strategy/          # Pluggable detection strategies
 │   │   ├── mod.rs         # Strategy trait + StrategyRegistry
@@ -426,6 +436,15 @@ tracing = "0.1"
 - [x] Keep `app/` at top level for application orchestration
 - [x] Update all imports throughout codebase
 - [x] Extract stateful caches (`OrderBookCache`, `PositionTracker`) to `core/cache/`
+
+### Multi-Exchange Abstraction ✅ COMPLETE
+- [x] Generic domain types: `Market` (N outcomes), `Outcome`, `MarketRegistry`
+- [x] `ExchangeConfig` trait with `default_payout()`, `binary_outcome_names()`
+- [x] `ArbitrageExecutor` trait for decoupled order execution
+- [x] `ExchangeFactory` with `create_arbitrage_executor()` for runtime exchange selection
+- [x] Index-based outcome access in strategies (not hardcoded names)
+- [x] `ExchangeSpecificConfig` enum for organized config structure
+- [x] Consistent `Polymarket` prefix on all exchange-specific types
 
 ### Phase 5: Mainnet
 - [ ] Switch config to mainnet

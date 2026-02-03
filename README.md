@@ -21,7 +21,7 @@ Based on research showing $40M in arbitrage profits extracted from Polymarket in
 ```mermaid
 flowchart TB
     subgraph core["RUST CORE (tokio)"]
-        WS[WebSocket Handler] --> SR[Strategy Registry]
+        WS[MarketDataStream<br/>trait] --> SR[Strategy Registry]
         SR --> RM[Risk Manager]
         WS --> OBC[OrderBook Cache]
 
@@ -34,7 +34,7 @@ flowchart TB
         SR --> strategies
         strategies --> HiGHS[HiGHS Solver<br/>LP/ILP]
 
-        RM --> EX[Executor<br/>Polymarket]
+        RM --> EX[ArbitrageExecutor<br/>trait]
         EX --> NR[Notifier Registry]
 
         subgraph notifiers[Notifiers]
@@ -44,10 +44,18 @@ flowchart TB
 
         NR --> notifiers
     end
+
+    subgraph exchanges["Exchange Implementations"]
+        PM[Polymarket<br/>PolymarketDataStream<br/>PolymarketExecutor]
+    end
+
+    WS -.-> PM
+    EX -.-> PM
 ```
 
 **Design principles:**
 - **Strategy pattern:** Pluggable detection algorithms via `Strategy` trait
+- **Exchange abstraction:** Generic `Market`, `Opportunity` types with configurable payouts; Polymarket-specific code isolated with `Polymarket` prefix
 - **Domain-driven:** Exchange-agnostic core logic in `core/domain/`
 - **Solver abstraction:** Swappable LP/ILP backends (HiGHS by default)
 - **Type safety:** Newtypes for identifiers, Decimal for money (never floats)
@@ -70,19 +78,23 @@ src/
 │   ├── domain/            # Pure domain types (exchange-agnostic)
 │   │   ├── id.rs          # TokenId, MarketId (newtypes)
 │   │   ├── money.rs       # Price, Volume (type aliases)
-│   │   ├── market.rs      # MarketPair
+│   │   ├── market.rs      # Market (N outcomes), Outcome
+│   │   ├── market_registry.rs # MarketRegistry (token→market lookup)
 │   │   ├── orderbook.rs   # PriceLevel, OrderBook
-│   │   ├── opportunity.rs # Opportunity with builder pattern
+│   │   ├── opportunity.rs # Opportunity, OpportunityLeg
 │   │   └── position.rs    # Position, PositionId, PositionLeg, PositionStatus
 │   │
 │   ├── exchange/          # Exchange traits + implementations
-│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, etc.)
+│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, ArbitrageExecutor, etc.)
+│   │   ├── traits.rs      # ExchangeConfig trait for exchange-specific settings
 │   │   ├── factory.rs     # ExchangeFactory for runtime exchange selection
-│   │   └── polymarket/    # Polymarket implementation
-│   │       ├── client.rs  # REST API client
-│   │       ├── executor.rs# Order execution
-│   │       ├── websocket.rs# WebSocket handler
-│   │       └── registry.rs# YES/NO market pair mapping
+│   │   └── polymarket/    # Polymarket implementation (all types prefixed)
+│   │       ├── client.rs  # PolymarketClient (MarketFetcher impl)
+│   │       ├── config.rs  # PolymarketExchangeConfig, POLYMARKET_PAYOUT
+│   │       ├── executor.rs# PolymarketExecutor (OrderExecutor, ArbitrageExecutor)
+│   │       ├── websocket.rs# PolymarketDataStream (MarketDataStream impl)
+│   │       ├── messages.rs# PolymarketWsMessage, PolymarketBookMessage
+│   │       └── types.rs   # PolymarketMarket, PolymarketToken
 │   │
 │   ├── strategy/          # Pluggable detection strategies
 │   │   ├── single_condition.rs    # YES + NO < $1
@@ -218,6 +230,7 @@ doc/
 - [x] **Multi-Strategy** — Pluggable strategy system with Frank-Wolfe + ILP
 - [x] **Phase 4: Risk & Alerts** — Risk manager, circuit breakers, Telegram notifications
 - [x] **Structure Refactor** — Reorganized into `core/` and `app/` hierarchy
+- [x] **Multi-Exchange Abstraction** — Generic types, `ExchangeConfig` trait, orchestrator decoupled from Polymarket
 - [ ] **Phase 5: Mainnet** — Production deployment with real funds
 
 ## References

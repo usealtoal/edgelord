@@ -51,7 +51,8 @@ fix/<name>        # Bug fix branches
 
 - **Domain-driven design** — Exchange-agnostic types in `core/domain/`, no exchange imports allowed
 - **Core library** — All reusable components in `core/` (domain, exchange, strategy, solver, service)
-- **Trait-based abstractions** — `OrderExecutor`, `MarketFetcher`, `MarketDataStream` for multi-exchange support
+- **Trait-based abstractions** — `OrderExecutor`, `MarketFetcher`, `MarketDataStream`, `ArbitrageExecutor` for multi-exchange support
+- **Exchange prefix convention** — All exchange-specific types prefixed with exchange name (e.g., `PolymarketClient`, `PolymarketExecutor`, `PolymarketDataStream`)
 - **Builder patterns** — Use builders for complex types (e.g., `Opportunity::builder()`)
 - **Proper encapsulation** — Private fields with accessor methods, not public structs
 - **Newtypes** — `TokenId`, `MarketId` instead of raw strings
@@ -73,7 +74,7 @@ fix/<name>        # Bug fix branches
 - `core/cache/` contains stateful caches and repositories (`OrderBookCache`, `PositionTracker`)
 - `core/` contains all reusable library code (cache, domain, exchange, strategy, solver, service)
 - `app/` contains application orchestration (config, orchestrator, state)
-- Exchange implementations (e.g., `polymarket/`) live in `core/exchange/` and implement exchange traits
+- Exchange implementations (e.g., `polymarket/`) live in `core/exchange/` and implement exchange traits (`ExchangeConfig`, `MarketFetcher`, `MarketDataStream`, `ArbitrageExecutor`)
 - Tests live in `tests/` for integration, inline `#[cfg(test)]` for unit
 
 ---
