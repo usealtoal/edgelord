@@ -15,9 +15,9 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::Config;
-use crate::domain::{Opportunity, TokenId};
+use crate::core::domain::{Opportunity, TokenId};
 use crate::error::{ConfigError, ExecutionError, Result};
-use crate::exchange::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
+use super::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
 
 /// Result of executing an arbitrage opportunity (both legs).
 #[derive(Debug, Clone)]

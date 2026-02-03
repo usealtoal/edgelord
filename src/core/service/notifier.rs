@@ -3,7 +3,7 @@
 //! The `Notifier` trait defines the interface for notification handlers.
 //! Multiple notifiers can be registered with the `NotifierRegistry`.
 
-use crate::adapter::polymarket::ArbitrageExecutionResult;
+use crate::core::exchange::polymarket::ArbitrageExecutionResult;
 use crate::core::domain::Opportunity;
 use crate::error::RiskError;
 

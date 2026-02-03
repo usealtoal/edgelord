@@ -1,13 +1,19 @@
-//! Exchange trait definitions.
+//! Exchange abstraction layer.
 //!
-//! These traits define the interface that any exchange implementation must provide.
-//! Adapters for specific exchanges (Polymarket, Kalshi, etc.) implement these traits
-//! to provide a unified interface for the application layer.
+//! Defines traits that exchange implementations must fulfill,
+//! enabling multi-exchange support with a common interface.
+
+mod factory;
+pub mod polymarket;
+
+pub use factory::ExchangeFactory;
+
+// === Trait definitions ===
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-use crate::domain::{OrderBook, TokenId};
+use crate::core::domain::{OrderBook, TokenId};
 use crate::error::Error;
 
 /// Unique identifier for an order on an exchange.
@@ -21,7 +27,7 @@ impl OrderId {
     }
 
     /// Get the underlying ID string.
-    #[must_use] 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -57,25 +63,25 @@ pub enum ExecutionResult {
 
 impl ExecutionResult {
     /// Check if the execution was successful (fully filled).
-    #[must_use] 
+    #[must_use]
     pub const fn is_success(&self) -> bool {
         matches!(self, Self::Success { .. })
     }
 
     /// Check if the execution resulted in a partial fill.
-    #[must_use] 
+    #[must_use]
     pub const fn is_partial(&self) -> bool {
         matches!(self, Self::PartialFill { .. })
     }
 
     /// Check if the execution failed.
-    #[must_use] 
+    #[must_use]
     pub const fn is_failed(&self) -> bool {
         matches!(self, Self::Failed { .. })
     }
 
     /// Get the order ID if available.
-    #[must_use] 
+    #[must_use]
     pub const fn order_id(&self) -> Option<&OrderId> {
         match self {
             Self::Success { order_id, .. } => Some(order_id),

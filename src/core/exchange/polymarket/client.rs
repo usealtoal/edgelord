@@ -9,7 +9,7 @@ use tracing::{debug, info};
 
 use super::types::{Market, MarketsResponse};
 use crate::error::Result;
-use crate::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
+use super::{MarketFetcher, MarketInfo, OutcomeInfo};
 
 /// HTTP client for the Polymarket REST API.
 ///

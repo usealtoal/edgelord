@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{OrderBook, PriceLevel, TokenId};
+use crate::core::domain::{OrderBook, PriceLevel, TokenId};
 
 /// Subscription request sent to Polymarket WebSocket
 #[derive(Debug, Serialize)]

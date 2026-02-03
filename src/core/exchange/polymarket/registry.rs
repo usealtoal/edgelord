@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use super::types::Market;
-use crate::domain::{MarketId, MarketPair, TokenId};
-use crate::exchange::MarketInfo;
+use crate::core::domain::{MarketId, MarketPair, TokenId};
+use super::MarketInfo;
 
 /// Registry mapping tokens to their market pairs.
 ///
@@ -154,7 +154,7 @@ impl Default for MarketRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::polymarket::types::Token;
+    use super::types::Token;
 
     fn make_market(condition_id: &str, question: &str, yes_id: &str, no_id: &str) -> Market {
         Market {

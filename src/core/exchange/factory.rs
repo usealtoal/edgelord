@@ -15,7 +15,7 @@ impl ExchangeFactory {
     pub fn create_market_fetcher(config: &Config) -> Box<dyn MarketFetcher> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(crate::adapter::polymarket::Client::new(
+                Box::new(super::polymarket::Client::new(
                     config.network.api_url.clone(),
                 ))
             }
@@ -29,7 +29,7 @@ impl ExchangeFactory {
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(crate::adapter::polymarket::DataStream::new(
+                Box::new(super::polymarket::DataStream::new(
                     config.network.ws_url.clone(),
                 ))
             }
@@ -49,7 +49,7 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = crate::adapter::polymarket::Executor::new(config).await?;
+                let executor = super::polymarket::Executor::new(config).await?;
                 Ok(Some(Box::new(executor)))
             }
             Exchange::Kalshi => {
