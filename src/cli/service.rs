@@ -10,7 +10,7 @@ const SERVICE_PATH: &str = "/etc/systemd/system/edgelord.service";
 fn generate_service_file(args: &InstallArgs, binary_path: &str) -> String {
     format!(
         r#"[Unit]
-Description=Edgelord Arbitrage Service
+Description=Multi-strategy arbitrage detection and execution system for prediction markets
 After=network-online.target
 Wants=network-online.target
 
