@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::{ArbitrageExecutionResult, Executor as PolymarketExecutor, MarketRegistry};
+use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, MarketRegistry};
+use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::app::config::Config;
 use crate::app::state::AppState;
 use crate::app::status_file::{StatusConfig, StatusWriter};
@@ -21,7 +22,7 @@ use crate::core::strategy::{
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{Opportunity, TokenId};
 use crate::error::{Result, RiskError};
-use crate::core::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
+use crate::core::exchange::{ExchangeFactory, MarketEvent, OrderId};
 use rust_decimal::Decimal;
 use crate::core::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
@@ -361,27 +362,25 @@ fn handle_opportunity(
     }
 }
 
-/// Get the maximum slippage across both legs.
+/// Get the maximum slippage across all legs.
 /// Returns None if prices cannot be determined (books not in cache or empty).
 fn get_max_slippage(opportunity: &Opportunity, cache: &OrderBookCache) -> Option<Decimal> {
-    let yes_book = cache.get(opportunity.yes_token())?;
-    let no_book = cache.get(opportunity.no_token())?;
+    let mut max_slippage = Decimal::ZERO;
 
-    let yes_current = yes_book.best_ask()?.price();
-    let no_current = no_book.best_ask()?.price();
+    for leg in opportunity.legs() {
+        let book = cache.get(leg.token_id())?;
+        let current_price = book.best_ask()?.price();
+        let expected_price = leg.ask_price();
 
-    let yes_expected = opportunity.yes_ask();
-    let no_expected = opportunity.no_ask();
+        if expected_price == Decimal::ZERO {
+            return None;
+        }
 
-    // Avoid division by zero
-    if yes_expected == Decimal::ZERO || no_expected == Decimal::ZERO {
-        return None;
+        let slippage = ((current_price - expected_price).abs()) / expected_price;
+        max_slippage = max_slippage.max(slippage);
     }
 
-    let yes_slippage = ((yes_current - yes_expected).abs()) / yes_expected;
-    let no_slippage = ((no_current - no_expected).abs()) / no_expected;
-
-    Some(yes_slippage.max(no_slippage))
+    Some(max_slippage)
 }
 
 /// Spawn async execution without blocking message processing.
@@ -420,25 +419,28 @@ fn spawn_execution(
                             }
                         }
                     }
-                    ArbitrageExecutionResult::PartialFill {
-                        filled_leg,
-                        filled_order_id,
-                        failed_leg,
-                        error: err_msg,
-                    } => {
+                    ArbitrageExecutionResult::PartialFill { filled, failed } => {
+                        let filled_ids: Vec<_> = filled.iter().map(|f| f.token_id.to_string()).collect();
+                        let failed_ids: Vec<_> = failed.iter().map(|f| f.token_id.to_string()).collect();
                         warn!(
-                            filled_leg = %filled_leg,
-                            failed_leg = %failed_leg,
-                            error = %err_msg,
+                            filled = ?filled_ids,
+                            failed = ?failed_ids,
                             "Partial fill detected, attempting recovery"
                         );
 
-                        // Try to cancel the filled order
-                        let order_id = OrderId::new(filled_order_id.clone());
-                        if let Err(cancel_err) = executor.cancel(&order_id).await {
-                            warn!(error = %cancel_err, "Failed to cancel filled leg, recording partial position");
-                            record_partial_position(&state, &opportunity, filled_leg);
-                            // Update runtime stats for partial position
+                        // Try to cancel all filled orders
+                        let mut cancel_failed = false;
+                        for fill in filled {
+                            let order_id = OrderId::new(fill.order_id.clone());
+                            if let Err(cancel_err) = ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await {
+                                warn!(error = %cancel_err, token = %fill.token_id, "Failed to cancel filled leg");
+                                cancel_failed = true;
+                            }
+                        }
+
+                        if cancel_failed {
+                            warn!("Some cancellations failed, recording partial position");
+                            record_partial_position(&state, &opportunity, filled, failed);
                             if let Some(ref writer) = status_writer {
                                 let positions = state.positions();
                                 let open_count = positions.open_positions().count();
@@ -450,7 +452,7 @@ fn spawn_execution(
                                 }
                             }
                         } else {
-                            info!("Successfully cancelled filled leg, no position recorded");
+                            info!("Successfully cancelled all filled legs, no position recorded");
                         }
                     }
                     ArbitrageExecutionResult::Failed { .. } => {}
@@ -477,22 +479,17 @@ fn spawn_execution(
 fn record_position(state: &AppState, opportunity: &Opportunity) {
     use crate::core::domain::{Position, PositionLeg, PositionStatus};
 
+    let position_legs: Vec<PositionLeg> = opportunity
+        .legs()
+        .iter()
+        .map(|leg| PositionLeg::new(leg.token_id().clone(), opportunity.volume(), leg.ask_price()))
+        .collect();
+
     let mut positions = state.positions_mut();
     let position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
-        vec![
-            PositionLeg::new(
-                opportunity.yes_token().clone(),
-                opportunity.volume(),
-                opportunity.yes_ask(),
-            ),
-            PositionLeg::new(
-                opportunity.no_token().clone(),
-                opportunity.volume(),
-                opportunity.no_ask(),
-            ),
-        ],
+        position_legs,
         opportunity.total_cost() * opportunity.volume(),
         opportunity.volume(),
         chrono::Utc::now(),
@@ -501,35 +498,39 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
     positions.add(position);
 }
 
-/// Record a partial fill position (only one leg filled).
-fn record_partial_position(state: &AppState, opportunity: &Opportunity, filled_leg: &TokenId) {
+/// Record a partial fill position.
+fn record_partial_position(
+    state: &AppState,
+    opportunity: &Opportunity,
+    filled: &[crate::core::exchange::FilledLeg],
+    failed: &[crate::core::exchange::FailedLeg],
+) {
     use crate::core::domain::{Position, PositionLeg, PositionStatus};
 
-    let (token, price, missing) = if filled_leg == opportunity.yes_token() {
-        (
-            opportunity.yes_token().clone(),
-            opportunity.yes_ask(),
-            opportunity.no_token().clone(),
-        )
-    } else {
-        (
-            opportunity.no_token().clone(),
-            opportunity.no_ask(),
-            opportunity.yes_token().clone(),
-        )
-    };
+    let filled_token_ids: Vec<TokenId> = filled.iter().map(|f| f.token_id.clone()).collect();
+    let missing_token_ids: Vec<TokenId> = failed.iter().map(|f| f.token_id.clone()).collect();
+
+    // Build position legs from filled legs
+    let position_legs: Vec<PositionLeg> = opportunity
+        .legs()
+        .iter()
+        .filter(|leg| filled_token_ids.contains(leg.token_id()))
+        .map(|leg| PositionLeg::new(leg.token_id().clone(), opportunity.volume(), leg.ask_price()))
+        .collect();
+
+    let entry_cost: Decimal = position_legs.iter().map(|l| l.entry_price() * l.size()).sum();
 
     let mut positions = state.positions_mut();
     let position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
-        vec![PositionLeg::new(token.clone(), opportunity.volume(), price)],
-        price * opportunity.volume(),
+        position_legs,
+        entry_cost,
         opportunity.volume(),
         chrono::Utc::now(),
         PositionStatus::PartialFill {
-            filled: vec![token],
-            missing: vec![missing],
+            filled: filled_token_ids,
+            missing: missing_token_ids,
         },
     );
     positions.add(position);

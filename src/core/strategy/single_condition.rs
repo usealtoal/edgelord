@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketPair, Opportunity};
+use crate::core::domain::{MarketPair, Opportunity, OpportunityLeg};
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -125,15 +125,19 @@ pub fn detect_single_condition(
         return None;
     }
 
-    // Build opportunity using the builder pattern
-    Opportunity::builder()
-        .market_id(pair.market_id().clone())
-        .question(pair.question())
-        .yes_token(pair.yes_token().clone(), yes_ask.price())
-        .no_token(pair.no_token().clone(), no_ask.price())
-        .volume(volume)
-        .build()
-        .ok()
+    // Build opportunity
+    let legs = vec![
+        OpportunityLeg::new(pair.yes_token().clone(), yes_ask.price()),
+        OpportunityLeg::new(pair.no_token().clone(), no_ask.price()),
+    ];
+
+    Some(Opportunity::new(
+        pair.market_id().clone(),
+        pair.question(),
+        legs,
+        volume,
+        Decimal::ONE, // Binary markets pay out $1
+    ))
 }
 
 #[cfg(test)]

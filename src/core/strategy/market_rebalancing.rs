@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketId, Opportunity, Price, TokenId, Volume};
+use crate::core::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -98,19 +98,20 @@ impl Strategy for MarketRebalancingStrategy {
             &self.config,
         ) {
             // Convert RebalancingOpportunity to standard Opportunity
-            // Use first two legs as placeholder YES/NO (simplified)
-            if rebal_opp.legs.len() >= 2 {
-                if let Ok(opp) = Opportunity::builder()
-                    .market_id(rebal_opp.market_id.clone())
-                    .question(&rebal_opp.question)
-                    .yes_token(rebal_opp.legs[0].token_id.clone(), rebal_opp.legs[0].price)
-                    .no_token(rebal_opp.legs[1].token_id.clone(), rebal_opp.legs[1].price)
-                    .volume(rebal_opp.volume)
-                    .build()
-                {
-                    return vec![opp];
-                }
-            }
+            let legs: Vec<OpportunityLeg> = rebal_opp
+                .legs
+                .iter()
+                .map(|leg| OpportunityLeg::new(leg.token_id.clone(), leg.price))
+                .collect();
+
+            let opp = Opportunity::new(
+                rebal_opp.market_id.clone(),
+                &rebal_opp.question,
+                legs,
+                rebal_opp.volume,
+                Decimal::ONE, // Multi-outcome markets also pay out $1
+            );
+            return vec![opp];
         }
 
         vec![]

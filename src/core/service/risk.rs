@@ -183,18 +183,21 @@ impl RiskManager {
 mod tests {
     use super::*;
     use crate::app::RiskLimits;
-    use crate::core::domain::{MarketId, TokenId};
+    use crate::core::domain::{MarketId, OpportunityLeg, TokenId};
     use rust_decimal_macros::dec;
 
     fn make_opportunity(volume: Decimal, yes_ask: Decimal, no_ask: Decimal) -> Opportunity {
-        Opportunity::builder()
-            .market_id(MarketId::from("test-market"))
-            .question("Test?")
-            .yes_token(TokenId::from("yes"), yes_ask)
-            .no_token(TokenId::from("no"), no_ask)
-            .volume(volume)
-            .build()
-            .unwrap()
+        let legs = vec![
+            OpportunityLeg::new(TokenId::from("yes"), yes_ask),
+            OpportunityLeg::new(TokenId::from("no"), no_ask),
+        ];
+        Opportunity::new(
+            MarketId::from("test-market"),
+            "Test?",
+            legs,
+            volume,
+            Decimal::ONE,
+        )
     }
 
     #[test]
