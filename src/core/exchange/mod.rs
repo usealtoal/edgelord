@@ -24,9 +24,11 @@
 
 mod factory;
 pub mod polymarket;
+mod reconnecting;
 mod traits;
 
 pub use factory::ExchangeFactory;
+pub use reconnecting::ReconnectingDataStream;
 pub use traits::ExchangeConfig;
 
 // === Trait definitions ===
