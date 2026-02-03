@@ -1,4 +1,6 @@
-[network]
+exchange = "polymarket"
+
+[polymarket]
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
 # Chain ID: 80002 for Amoy testnet (default), 137 for Polygon mainnet

@@ -16,11 +16,8 @@ impl ExchangeFactory {
         match config.exchange {
             Exchange::Polymarket => {
                 Box::new(super::polymarket::Client::new(
-                    config.network.api_url.clone(),
+                    config.network().api_url.clone(),
                 ))
-            }
-            Exchange::Kalshi => {
-                unimplemented!("Kalshi market fetcher not yet implemented")
             }
         }
     }
@@ -30,11 +27,8 @@ impl ExchangeFactory {
         match config.exchange {
             Exchange::Polymarket => {
                 Box::new(super::polymarket::DataStream::new(
-                    config.network.ws_url.clone(),
+                    config.network().ws_url.clone(),
                 ))
-            }
-            Exchange::Kalshi => {
-                unimplemented!("Kalshi data stream not yet implemented")
             }
         }
     }
@@ -51,9 +45,6 @@ impl ExchangeFactory {
             Exchange::Polymarket => {
                 let executor = super::polymarket::Executor::new(config).await?;
                 Ok(Some(Box::new(executor)))
-            }
-            Exchange::Kalshi => {
-                unimplemented!("Kalshi executor not yet implemented")
             }
         }
     }

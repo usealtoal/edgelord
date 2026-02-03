@@ -15,7 +15,7 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
 
     // Apply CLI overrides
     if let Some(chain_id) = cli.chain_id {
-        config.network.chain_id = chain_id;
+        config.polymarket.chain_id = chain_id;
     }
     if let Some(ref level) = cli.log_level {
         config.logging.level = level.clone();
@@ -56,7 +56,7 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
     }
 
     info!(
-        chain_id = config.network.chain_id,
+        chain_id = config.network().chain_id,
         strategies = ?config.strategies.enabled,
         "edgelord starting"
     );

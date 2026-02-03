@@ -1,7 +1,9 @@
 # Production configuration for edgelord
 # Copy to /opt/edgelord/config.toml on deployment
 
-[network]
+exchange = "polymarket"
+
+[polymarket]
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
 chain_id = 137  # Polygon mainnet

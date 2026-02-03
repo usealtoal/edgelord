@@ -20,7 +20,6 @@ use crate::error::{ConfigError, Result};
 pub enum Exchange {
     #[default]
     Polymarket,
-    Kalshi,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,7 +27,9 @@ pub struct Config {
     /// Which exchange to connect to.
     #[serde(default)]
     pub exchange: Exchange,
-    pub network: NetworkConfig,
+    /// Polymarket-specific configuration.
+    #[serde(default)]
+    pub polymarket: PolymarketConfig,
     pub logging: LoggingConfig,
     #[serde(default)]
     pub strategies: StrategiesConfig,
@@ -159,19 +160,51 @@ impl From<RiskConfig> for RiskLimits {
     }
 }
 
-#[derive(Debug, Deserialize)]
+/// Common network configuration returned by exchanges.
+#[derive(Debug, Clone)]
 pub struct NetworkConfig {
     pub ws_url: String,
     pub api_url: String,
-    /// Chain ID: 80002 for Amoy testnet, 137 for Polygon mainnet
-    #[serde(default = "default_chain_id")]
     pub chain_id: u64,
 }
 
+/// Polymarket exchange configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PolymarketConfig {
+    /// WebSocket URL for market data.
+    #[serde(default = "default_polymarket_ws_url")]
+    pub ws_url: String,
+    /// REST API URL.
+    #[serde(default = "default_polymarket_api_url")]
+    pub api_url: String,
+    /// Chain ID: 80002 for Amoy testnet, 137 for Polygon mainnet.
+    #[serde(default = "default_polymarket_chain_id")]
+    pub chain_id: u64,
+}
+
+fn default_polymarket_ws_url() -> String {
+    "wss://ws-subscriptions-clob.polymarket.com/ws/market".into()
+}
+
+fn default_polymarket_api_url() -> String {
+    "https://clob.polymarket.com".into()
+}
+
 /// Default chain ID is Amoy testnet (80002) for safety
-const fn default_chain_id() -> u64 {
+const fn default_polymarket_chain_id() -> u64 {
     80002
 }
+
+impl Default for PolymarketConfig {
+    fn default() -> Self {
+        Self {
+            ws_url: default_polymarket_ws_url(),
+            api_url: default_polymarket_api_url(),
+            chain_id: default_polymarket_chain_id(),
+        }
+    }
+}
+
 
 #[derive(Debug, Deserialize)]
 pub struct LoggingConfig {
@@ -196,13 +229,26 @@ impl Config {
 
     #[allow(clippy::result_large_err)]
     fn validate(&self) -> Result<()> {
-        if self.network.ws_url.is_empty() {
+        let network = self.network();
+        if network.ws_url.is_empty() {
             return Err(ConfigError::MissingField { field: "ws_url" }.into());
         }
-        if self.network.api_url.is_empty() {
+        if network.api_url.is_empty() {
             return Err(ConfigError::MissingField { field: "api_url" }.into());
         }
         Ok(())
+    }
+
+    /// Get the network configuration for the active exchange.
+    #[must_use]
+    pub fn network(&self) -> NetworkConfig {
+        match self.exchange {
+            Exchange::Polymarket => NetworkConfig {
+                ws_url: self.polymarket.ws_url.clone(),
+                api_url: self.polymarket.api_url.clone(),
+                chain_id: self.polymarket.chain_id,
+            },
+        }
     }
 }
 
@@ -210,11 +256,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             exchange: Exchange::default(),
-            network: NetworkConfig {
-                ws_url: "wss://ws-subscriptions-clob.polymarket.com/ws/market".into(),
-                api_url: "https://clob.polymarket.com".into(),
-                chain_id: default_chain_id(),
-            },
+            polymarket: PolymarketConfig::default(),
             logging: LoggingConfig {
                 level: "info".into(),
                 format: "pretty".into(),

@@ -60,7 +60,8 @@ impl Executor {
                 field: "WALLET_PRIVATE_KEY",
             })?;
 
-        let chain_id = config.network.chain_id;
+        let network = config.network();
+        let chain_id = network.chain_id;
 
         // Create signer from private key
         let signer = PrivateKeySigner::from_str(private_key)
@@ -77,7 +78,7 @@ impl Executor {
         );
 
         // Create and authenticate client
-        let client = Client::new(&config.network.api_url, ClobConfig::default())
+        let client = Client::new(&network.api_url, ClobConfig::default())
             .map_err(|e| ExecutionError::AuthFailed(format!("Failed to create CLOB client: {e}")))?
             .authentication_builder(&signer)
             .authenticate()

@@ -52,8 +52,8 @@ impl App {
         // Initialize status writer if configured
         let status_writer = config.status_file.as_ref().map(|path| {
             let status_config = StatusConfig {
-                chain_id: config.network.chain_id,
-                network: if config.network.chain_id == 137 {
+                chain_id: config.network().chain_id,
+                network: if config.network().chain_id == 137 {
                     "mainnet".to_string()
                 } else {
                     "testnet".to_string()
