@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use tracing::{debug, info};
 
-use super::types::{Market, MarketsResponse};
+use super::types::{MarketsResponse, PolymarketMarket};
 use crate::error::Result;
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 
@@ -43,7 +43,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `limit` - Maximum number of markets to fetch
-    pub async fn get_active_markets(&self, limit: usize) -> Result<Vec<Market>> {
+    pub async fn get_active_markets(&self, limit: usize) -> Result<Vec<PolymarketMarket>> {
         let url = format!(
             "{}/markets?active=true&closed=false&limit={}",
             self.base_url, limit
@@ -72,8 +72,8 @@ impl MarketFetcher for Client {
     }
 }
 
-impl From<Market> for MarketInfo {
-    fn from(m: Market) -> Self {
+impl From<PolymarketMarket> for MarketInfo {
+    fn from(m: PolymarketMarket) -> Self {
         Self {
             id: m.condition_id,
             question: m.question.unwrap_or_default(),

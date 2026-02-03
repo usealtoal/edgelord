@@ -1,26 +1,32 @@
-//! Market registry for YES/NO pairs.
+//! Polymarket-specific registry for YES/NO pairs.
 //!
-//! This module provides a registry that maps token IDs to their associated
-//! market pairs, enabling efficient lookup of market information from order
-//! book events that only contain token IDs.
+//! This module provides a Polymarket-specific registry that maps token IDs to
+//! their associated market pairs, enabling efficient lookup of market information
+//! from order book events that only contain token IDs.
+//!
+//! For a generic registry that works with any market structure, see
+//! `crate::core::domain::MarketRegistry`.
 
 use std::collections::HashMap;
 
-use super::types::Market;
+use super::types::PolymarketMarket;
 use crate::core::domain::{MarketId, MarketPair, TokenId};
 use crate::core::exchange::MarketInfo;
 
-/// Registry mapping tokens to their market pairs.
+/// Polymarket-specific registry mapping tokens to their market pairs.
 ///
-/// This is Polymarket-specific because it understands the YES/NO token structure.
-/// The registry maintains bidirectional mappings: given a token ID, you can find
+/// This registry understands the YES/NO token structure specific to Polymarket.
+/// It maintains bidirectional mappings: given a token ID, you can find
 /// the complete market pair including both YES and NO tokens.
-pub struct MarketRegistry {
+///
+/// For a generic registry that works with any market structure (including
+/// multi-outcome markets), see `crate::core::domain::MarketRegistry`.
+pub struct PolymarketRegistry {
     token_to_market: HashMap<TokenId, MarketPair>,
     pairs: Vec<MarketPair>,
 }
 
-impl MarketRegistry {
+impl PolymarketRegistry {
     /// Create an empty market registry.
     #[must_use] 
     pub fn new() -> Self {
@@ -35,8 +41,8 @@ impl MarketRegistry {
     /// Parses the market data and extracts YES/NO token pairs. Markets with
     /// more or fewer than 2 outcomes are skipped. Each token ID is mapped
     /// to its containing market pair for efficient lookup.
-    #[must_use] 
-    pub fn from_markets(markets: &[Market]) -> Self {
+    #[must_use]
+    pub fn from_markets(markets: &[PolymarketMarket]) -> Self {
         let mut registry = Self::new();
 
         for market in markets {
@@ -145,7 +151,7 @@ impl MarketRegistry {
     }
 }
 
-impl Default for MarketRegistry {
+impl Default for PolymarketRegistry {
     fn default() -> Self {
         Self::new()
     }
@@ -154,19 +160,19 @@ impl Default for MarketRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::exchange::polymarket::types::Token;
+    use crate::core::exchange::polymarket::types::PolymarketToken;
 
-    fn make_market(condition_id: &str, question: &str, yes_id: &str, no_id: &str) -> Market {
-        Market {
+    fn make_market(condition_id: &str, question: &str, yes_id: &str, no_id: &str) -> PolymarketMarket {
+        PolymarketMarket {
             condition_id: condition_id.to_string(),
             question: Some(question.to_string()),
             tokens: vec![
-                Token {
+                PolymarketToken {
                     token_id: yes_id.to_string(),
                     outcome: "Yes".to_string(),
                     price: Some(0.5),
                 },
-                Token {
+                PolymarketToken {
                     token_id: no_id.to_string(),
                     outcome: "No".to_string(),
                     price: Some(0.5),
@@ -179,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_registry_new() {
-        let registry = MarketRegistry::new();
+        let registry = PolymarketRegistry::new();
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
     }
@@ -191,7 +197,7 @@ mod tests {
             make_market("cond-2", "Question 2?", "yes-2", "no-2"),
         ];
 
-        let registry = MarketRegistry::from_markets(&markets);
+        let registry = PolymarketRegistry::from_markets(&markets);
 
         assert_eq!(registry.len(), 2);
         assert!(!registry.is_empty());
@@ -200,13 +206,13 @@ mod tests {
     #[test]
     fn test_registry_skips_non_binary() {
         let mut market = make_market("cond-1", "Multi?", "a", "b");
-        market.tokens.push(Token {
+        market.tokens.push(PolymarketToken {
             token_id: "c".to_string(),
             outcome: "Maybe".to_string(),
             price: None,
         });
 
-        let registry = MarketRegistry::from_markets(&[market]);
+        let registry = PolymarketRegistry::from_markets(&[market]);
 
         assert!(registry.is_empty());
     }
@@ -214,7 +220,7 @@ mod tests {
     #[test]
     fn test_get_market_for_token() {
         let markets = vec![make_market("cond-1", "Q?", "yes-1", "no-1")];
-        let registry = MarketRegistry::from_markets(&markets);
+        let registry = PolymarketRegistry::from_markets(&markets);
 
         let yes_token = TokenId::from("yes-1");
         let no_token = TokenId::from("no-1");

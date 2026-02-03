@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, MarketRegistry, POLYMARKET_PAYOUT};
+use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, PolymarketRegistry, POLYMARKET_PAYOUT};
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::app::config::Config;
 use crate::app::state::AppState;
@@ -91,7 +91,7 @@ impl App {
         }
 
         // Build registry from generic MarketInfo
-        let registry = MarketRegistry::from_market_info(&markets);
+        let registry = PolymarketRegistry::from_market_info(&markets);
 
         info!(
             total_markets = markets.len(),
@@ -238,7 +238,7 @@ async fn init_executor(config: &Config) -> Option<Arc<PolymarketExecutor>> {
 fn handle_market_event(
     event: MarketEvent,
     cache: &OrderBookCache,
-    registry: &MarketRegistry,
+    registry: &PolymarketRegistry,
     strategies: &StrategyRegistry,
     executor: Option<Arc<PolymarketExecutor>>,
     risk_manager: &RiskManager,
