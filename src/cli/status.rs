@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use crate::app::status_file::StatusFile;
 
@@ -39,6 +39,11 @@ fn try_read_status_file(path: &str) -> Option<StatusFile> {
         return None;
     }
 
+    // Check if status file is stale (not updated in 5 minutes)
+    if status.updated_at < Utc::now() - Duration::minutes(5) {
+        return None;
+    }
+
     Some(status)
 }
 
@@ -46,7 +51,12 @@ fn try_read_status_file(path: &str) -> Option<StatusFile> {
 fn is_pid_alive(pid: u32) -> bool {
     // Use kill with signal 0 to check if process exists
     // This doesn't actually send a signal, just checks existence
-    unsafe { libc::kill(pid as i32, 0) == 0 }
+    let result = unsafe { libc::kill(pid as i32, 0) };
+    if result == 0 {
+        return true;
+    }
+    // EPERM means process exists but we can't signal it
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 /// Format uptime as "3d 14h 22m" style.
