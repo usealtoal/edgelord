@@ -111,19 +111,28 @@ impl StatusWriter {
     /// Uses write-to-temp-then-rename pattern for atomicity.
     #[allow(clippy::result_large_err)]
     pub fn write(&self) -> Result<()> {
-        let mut status = self.status.lock();
-        status.updated_at = Utc::now();
-
-        let json = serde_json::to_string_pretty(&*status)?;
+        // Clone status while holding lock, release before I/O
+        let json = {
+            let mut status = self.status.lock();
+            status.updated_at = Utc::now();
+            serde_json::to_string_pretty(&*status)?
+        };
 
         // Write to temp file first for atomicity
         let temp_path = self.path.with_extension("tmp");
         let mut file = fs::File::create(&temp_path)?;
-        file.write_all(json.as_bytes())?;
-        file.sync_all()?;
+
+        // Helper to clean up temp file on failure
+        let cleanup_and_err = |e| {
+            let _ = fs::remove_file(&temp_path);
+            e
+        };
+
+        file.write_all(json.as_bytes()).map_err(cleanup_and_err)?;
+        file.sync_all().map_err(cleanup_and_err)?;
 
         // Atomic rename
-        fs::rename(&temp_path, &self.path)?;
+        fs::rename(&temp_path, &self.path).map_err(cleanup_and_err)?;
 
         Ok(())
     }
