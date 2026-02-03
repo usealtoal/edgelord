@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::domain::{MarketPair, Opportunity, OrderBookCache};
+use crate::core::domain::{MarketPair, Opportunity, OrderBookCache};
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -138,7 +138,7 @@ pub fn detect_single_condition(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{MarketId, OrderBook, PriceLevel, TokenId};
+    use crate::core::domain::{MarketId, OrderBook, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
     fn make_pair() -> MarketPair {

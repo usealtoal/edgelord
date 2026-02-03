@@ -35,7 +35,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::domain::Opportunity;
+use crate::core::domain::Opportunity;
 
 /// Configuration for combinatorial strategy.
 #[derive(Debug, Clone, Deserialize)]
@@ -183,7 +183,7 @@ mod tests {
 
         // Should apply to markets with dependencies
         let ctx_with_deps = MarketContext::binary()
-            .with_dependencies(vec![crate::domain::MarketId::from("other")]);
+            .with_dependencies(vec![crate::core::domain::MarketId::from("other")]);
         assert!(strategy.applies_to(&ctx_with_deps));
     }
 

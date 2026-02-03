@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::domain::{MarketId, Opportunity, OrderBookCache, Price, TokenId, Volume};
+use crate::core::domain::{MarketId, Opportunity, OrderBookCache, Price, TokenId, Volume};
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -242,7 +242,7 @@ pub fn detect_rebalancing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{OrderBook, PriceLevel};
+    use crate::core::domain::{OrderBook, PriceLevel};
     use rust_decimal_macros::dec;
 
     fn make_config() -> MarketRebalancingConfig {

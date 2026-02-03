@@ -1,10 +1,10 @@
 //! Integration tests for strategy system.
 
-use edgelord::domain::strategy::{
+use edgelord::core::strategy::{
     DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };
-use edgelord::domain::{MarketId, MarketPair, OrderBook, OrderBookCache, PriceLevel, TokenId};
+use edgelord::core::domain::{MarketId, MarketPair, OrderBook, OrderBookCache, PriceLevel, TokenId};
 use rust_decimal_macros::dec;
 
 fn make_pair() -> MarketPair {

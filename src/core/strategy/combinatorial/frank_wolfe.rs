@@ -13,7 +13,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::domain::solver::{IlpProblem, LpProblem, Solver, SolutionStatus};
+use crate::core::solver::{IlpProblem, LpProblem, Solver, SolutionStatus};
 use crate::error::Result;
 
 use super::bregman::{bregman_divergence, bregman_gradient};
@@ -205,7 +205,7 @@ impl FrankWolfeResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::solver::{Constraint, ConstraintSense, HiGHSSolver, VariableBounds};
+    use crate::core::solver::{Constraint, ConstraintSense, HiGHSSolver, VariableBounds};
     use rust_decimal_macros::dec;
 
     #[test]

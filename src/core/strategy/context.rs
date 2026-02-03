@@ -5,7 +5,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::domain::{MarketId, MarketPair, OrderBookCache, TokenId};
+use crate::core::domain::{MarketId, MarketPair, OrderBookCache, TokenId};
 
 /// Context describing the market being analyzed.
 ///
@@ -98,7 +98,7 @@ impl<'a> DetectionContext<'a> {
     pub const fn multi_outcome(
         pair: &'a MarketPair,
         cache: &'a OrderBookCache,
-        token_ids: Vec<crate::domain::TokenId>,
+        token_ids: Vec<crate::core::domain::TokenId>,
     ) -> Self {
         let outcome_count = token_ids.len();
         Self {
@@ -124,7 +124,7 @@ impl<'a> DetectionContext<'a> {
 
     /// Get the token IDs for multi-outcome markets.
     #[must_use] 
-    pub fn token_ids(&self) -> &[crate::domain::TokenId] {
+    pub fn token_ids(&self) -> &[crate::core::domain::TokenId] {
         &self.token_ids
     }
 }

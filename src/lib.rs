@@ -4,24 +4,20 @@
 //!
 //! ```text
 //! src/
-//! ├── domain/          # Exchange-agnostic business logic
-//! │   ├── strategy/    # Pluggable detection strategies
-//! │   └── solver/      # LP/ILP solver abstraction
-//! ├── exchange/        # Exchange trait definitions
-//! ├── adapter/         # Exchange implementations
-//! │   └── polymarket/  # Polymarket CLOB integration
-//! ├── service/         # Cross-cutting services (risk, notifications)
-//! └── app/             # Application layer (config, state, orchestration)
+//! ├── core/             # Reusable library components
+//! │   ├── domain/       # Pure domain types
+//! │   ├── exchange/     # Exchange traits + implementations
+//! │   ├── strategy/     # Detection algorithms
+//! │   ├── solver/       # LP/ILP solver abstraction
+//! │   └── service/      # Cross-cutting services
+//! └── app/              # Application orchestration
 //! ```
 //!
 //! # Features
 //!
 //! - `polymarket` - Enable Polymarket exchange support (default)
-//! - `telegram` - Enable Telegram notifications (coming soon)
+//! - `telegram` - Enable Telegram notifications
 
-pub mod domain;
+pub mod core;
 pub mod error;
-pub mod exchange;
-pub mod adapter;
-pub mod service;
 pub mod app;

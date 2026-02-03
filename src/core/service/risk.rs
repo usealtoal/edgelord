@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::AppState;
-use crate::domain::{Opportunity, Position};
+use crate::core::domain::{Opportunity, Position};
 use crate::error::RiskError;
 
 /// Result of a risk check.
@@ -183,7 +183,7 @@ impl RiskManager {
 mod tests {
     use super::*;
     use crate::app::RiskLimits;
-    use crate::domain::{MarketId, TokenId};
+    use crate::core::domain::{MarketId, TokenId};
     use rust_decimal_macros::dec;
 
     fn make_opportunity(volume: Decimal, yes_ask: Decimal, no_ask: Decimal) -> Opportunity {
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_check_position_limit() {
-        use crate::domain::{Position, PositionLeg, PositionStatus};
+        use crate::core::domain::{Position, PositionLeg, PositionStatus};
 
         let limits = RiskLimits {
             max_position_per_market: dec!(100), // Only $100 per market

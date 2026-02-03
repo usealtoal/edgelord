@@ -48,7 +48,7 @@ flowchart TB
 
 **Design principles:**
 - **Strategy pattern:** Pluggable detection algorithms via `Strategy` trait
-- **Domain-driven:** Exchange-agnostic core logic in `domain/`
+- **Domain-driven:** Exchange-agnostic core logic in `core/domain/`
 - **Solver abstraction:** Swappable LP/ILP backends (HiGHS by default)
 - **Type safety:** Newtypes for identifiers, Decimal for money (never floats)
 
@@ -62,41 +62,41 @@ src/
 ├── main.rs                # Thin binary entry point
 ├── error.rs               # Structured error types
 │
-├── app/                   # Application layer
-│   ├── config.rs          # Configuration loading
-│   ├── orchestrator.rs    # Main application loop
-│   └── state.rs           # Shared application state
-│
-├── domain/                # Exchange-agnostic core
-│   ├── id.rs             # TokenId, MarketId (newtypes)
-│   ├── money.rs           # Price, Volume (type aliases)
-│   ├── market.rs          # MarketPair, MarketInfo
-│   ├── orderbook.rs       # PriceLevel, OrderBook, OrderBookCache
-│   ├── opportunity.rs     # Opportunity with builder pattern
-│   ├── position.rs        # Position tracking
+├── core/                  # Reusable library components
+│   ├── domain/            # Pure domain types (exchange-agnostic)
+│   │   ├── id.rs          # TokenId, MarketId (newtypes)
+│   │   ├── money.rs       # Price, Volume (type aliases)
+│   │   ├── market.rs      # MarketPair
+│   │   ├── orderbook.rs   # PriceLevel, OrderBook, OrderBookCache
+│   │   ├── opportunity.rs # Opportunity with builder pattern
+│   │   └── position.rs    # Position tracking
+│   │
+│   ├── exchange/          # Exchange traits + implementations
+│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, etc.)
+│   │   ├── factory.rs     # ExchangeFactory for runtime exchange selection
+│   │   └── polymarket/    # Polymarket implementation
+│   │       ├── client.rs  # REST API client
+│   │       ├── executor.rs# Order execution
+│   │       ├── websocket.rs# WebSocket handler
+│   │       └── registry.rs# YES/NO market pair mapping
 │   │
 │   ├── strategy/          # Pluggable detection strategies
 │   │   ├── single_condition.rs    # YES + NO < $1
 │   │   ├── market_rebalancing.rs  # Sum of outcomes < $1
 │   │   └── combinatorial/         # Frank-Wolfe + ILP
 │   │
-│   └── solver/            # LP/ILP solver abstraction
-│       └── highs.rs       # HiGHS implementation
+│   ├── solver/            # LP/ILP solver abstraction
+│   │   └── highs.rs       # HiGHS implementation
+│   │
+│   └── service/           # Cross-cutting services
+│       ├── risk.rs        # RiskManager with limits & circuit breakers
+│       ├── notifier.rs    # Notifier trait + registry
+│       └── telegram.rs    # Telegram notifier (feature-gated)
 │
-├── service/               # Cross-cutting services
-│   ├── risk.rs            # RiskManager with limits & circuit breakers
-│   ├── notifier.rs        # Notifier trait + registry
-│   └── telegram.rs        # Telegram notifier (feature-gated)
-│
-├── exchange/              # Exchange abstraction layer
-│   └── traits.rs          # OrderExecutor trait
-│
-└── adapter/               # Exchange implementations
-    └── polymarket/        # Polymarket implementation
-        ├── client.rs      # REST API client
-        ├── executor.rs    # Order execution
-        ├── websocket.rs   # WebSocket handler
-        └── registry.rs    # YES/NO market pair mapping
+└── app/                   # Application orchestration
+    ├── config.rs          # Configuration loading
+    ├── orchestrator.rs    # Main application loop
+    └── state.rs           # Shared application state
 ```
 
 ## Configuration
@@ -177,6 +177,7 @@ doc/
 - [x] **Phase 3: Execution** — Order submission on Amoy testnet
 - [x] **Multi-Strategy** — Pluggable strategy system with Frank-Wolfe + ILP
 - [x] **Phase 4: Risk & Alerts** — Risk manager, circuit breakers, Telegram notifications
+- [x] **Structure Refactor** — Reorganized into `core/` and `app/` hierarchy
 - [ ] **Phase 5: Mainnet** — Production deployment with real funds
 
 ## References

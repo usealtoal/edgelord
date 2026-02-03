@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use edgelord::domain::strategy::{StrategyRegistry, SingleConditionStrategy};
+//! use edgelord::core::strategy::{StrategyRegistry, SingleConditionStrategy};
 //!
 //! let mut registry = StrategyRegistry::new();
 //! registry.register(Box::new(SingleConditionStrategy::new(Default::default())));
@@ -39,7 +39,7 @@ pub use market_rebalancing::{
 };
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 
-use crate::domain::Opportunity;
+use crate::core::domain::Opportunity;
 
 /// A detection strategy that finds arbitrage opportunities.
 ///

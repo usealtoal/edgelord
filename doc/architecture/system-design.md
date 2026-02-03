@@ -41,19 +41,29 @@ src/
 ├── main.rs                # Thin binary entry point
 ├── error.rs               # Structured error types
 │
-├── app/                   # Application layer
+├── core/                  # Reusable library components
 │   ├── mod.rs             # Module exports
-│   ├── config.rs          # Configuration loading
-│   ├── orchestrator.rs    # Main application loop
-│   └── state.rs           # Application state management
-│
-├── domain/                # Exchange-agnostic (NO exchange imports)
-│   ├── id.rs             # TokenId, MarketId (newtypes)
-│   ├── money.rs           # Price, Volume types
-│   ├── market.rs          # MarketPair
-│   ├── orderbook.rs       # OrderBook, OrderBookCache
-│   ├── opportunity.rs     # Opportunity with builder
-│   ├── position.rs        # Position tracking
+│   │
+│   ├── domain/            # Pure domain types (NO exchange imports)
+│   │   ├── mod.rs         # Module exports
+│   │   ├── id.rs          # TokenId, MarketId (newtypes)
+│   │   ├── money.rs       # Price, Volume types
+│   │   ├── market.rs      # MarketPair
+│   │   ├── orderbook.rs   # OrderBook, OrderBookCache
+│   │   ├── opportunity.rs # Opportunity with builder
+│   │   └── position.rs    # Position tracking
+│   │
+│   ├── exchange/          # Exchange traits + implementations
+│   │   ├── mod.rs         # Traits (OrderExecutor, MarketFetcher, MarketDataStream)
+│   │   ├── factory.rs     # ExchangeFactory for runtime exchange selection
+│   │   └── polymarket/    # Polymarket implementation
+│   │       ├── mod.rs     # Module exports
+│   │       ├── client.rs  # REST client (MarketFetcher impl)
+│   │       ├── executor.rs# OrderExecutor implementation
+│   │       ├── websocket.rs# MarketDataStream implementation
+│   │       ├── messages.rs# WS types + to_orderbook()
+│   │       ├── registry.rs# YES/NO pair mapping
+│   │       └── types.rs   # API types
 │   │
 │   ├── strategy/          # Pluggable detection strategies
 │   │   ├── mod.rs         # Strategy trait + StrategyRegistry
@@ -65,31 +75,21 @@ src/
 │   │       ├── bregman.rs         # Bregman divergence (KL)
 │   │       └── frank_wolfe.rs     # Frank-Wolfe algorithm
 │   │
-│   └── solver/            # LP/ILP solver abstraction
-│       ├── mod.rs         # Solver trait + types
-│       └── highs.rs       # HiGHS implementation
+│   ├── solver/            # LP/ILP solver abstraction
+│   │   ├── mod.rs         # Solver trait + types
+│   │   └── highs.rs       # HiGHS implementation
+│   │
+│   └── service/           # Cross-cutting services
+│       ├── mod.rs         # Module exports
+│       ├── risk.rs        # RiskManager with limits & circuit breakers
+│       ├── notifier.rs    # NotifierRegistry trait + registry
+│       └── telegram.rs    # Telegram notifier (feature-gated)
 │
-├── service/               # Cross-cutting services
-│   ├── mod.rs             # Module exports
-│   ├── risk.rs            # RiskManager with limits & circuit breakers
-│   ├── notifier.rs        # NotifierRegistry trait + registry
-│   └── telegram.rs        # Telegram notifier (feature-gated)
-│
-├── exchange/              # Abstraction layer
-│   ├── mod.rs             # Module exports
-│   ├── traits.rs          # OrderExecutor, MarketFetcher, MarketDataStream traits
-│   └── factory.rs         # ExchangeFactory for runtime exchange selection
-│
-└── adapter/               # Exchange implementations
+└── app/                   # Application orchestration
     ├── mod.rs             # Module exports
-    └── polymarket/        # Polymarket implementation
-        ├── mod.rs         # Module exports
-        ├── client.rs      # REST client
-        ├── executor.rs    # OrderExecutor implementation
-        ├── websocket.rs   # WS handler
-        ├── messages.rs    # WS types + to_orderbook()
-        ├── registry.rs    # YES/NO pair mapping
-        └── types.rs       # API types
+    ├── config.rs          # Configuration loading
+    ├── orchestrator.rs    # Main application loop
+    └── state.rs           # Application state management
 ```
 
 ---
@@ -411,6 +411,15 @@ tracing = "0.1"
 - [x] Exchange trait abstractions (MarketFetcher, MarketDataStream)
 - [x] Exchange factory for runtime exchange selection
 - [x] Dead code cleanup
+
+### Structure Refactor ✅ COMPLETE
+- [x] Create `core/` as container for all library code
+- [x] Move pure domain types to `core/domain/`
+- [x] Merge `exchange/` traits and `adapter/polymarket/` into `core/exchange/`
+- [x] Promote `strategy/` and `solver/` to `core/`
+- [x] Move `service/` to `core/`
+- [x] Keep `app/` at top level for application orchestration
+- [x] Update all imports throughout codebase
 
 ### Phase 5: Mainnet
 - [ ] Switch config to mainnet
