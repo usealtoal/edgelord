@@ -1,16 +1,12 @@
 //! Order execution for Polymarket CLOB.
 
-#![allow(dead_code)]
-
 use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
 use polymarket_client_sdk::auth::state::Authenticated;
-use polymarket_client_sdk::auth::Normal;
-#[allow(unused_imports)]
-use polymarket_client_sdk::auth::Signer;
+use polymarket_client_sdk::auth::{Normal, Signer};
 use polymarket_client_sdk::clob::types::response::PostOrderResponse;
 use polymarket_client_sdk::clob::types::Side;
 use polymarket_client_sdk::clob::{Client, Config as ClobConfig};
@@ -34,6 +30,7 @@ pub enum ArbitrageExecutionResult {
     /// Only one leg executed; the other failed.
     PartialFill {
         filled_leg: TokenId,
+        filled_order_id: String,
         failed_leg: TokenId,
         error: String,
     },
@@ -137,6 +134,7 @@ impl Executor {
                 );
                 Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.yes_token().clone(),
+                    filled_order_id: yes_resp.order_id,
                     failed_leg: opportunity.no_token().clone(),
                     error: no_err.to_string(),
                 })
@@ -149,6 +147,7 @@ impl Executor {
                 );
                 Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.no_token().clone(),
+                    filled_order_id: no_resp.order_id,
                     failed_leg: opportunity.yes_token().clone(),
                     error: yes_err.to_string(),
                 })
@@ -239,9 +238,25 @@ impl OrderExecutor for Executor {
         }
     }
 
-    async fn cancel(&self, _order_id: &OrderId) -> Result<()> {
-        // TODO: Implement order cancellation via CLOB client
-        Err(ExecutionError::OrderRejected("Order cancellation not yet implemented".into()).into())
+    async fn cancel(&self, order_id: &OrderId) -> Result<()> {
+        let response = self
+            .client
+            .cancel_order(order_id.as_str())
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Cancel failed: {e}")))?;
+
+        // Check if the order was actually cancelled
+        if let Some(reason) = response.not_canceled.get(order_id.as_str()) {
+            return Err(ExecutionError::OrderRejected(format!(
+                "Order {} not cancelled: {}",
+                order_id.as_str(),
+                reason
+            ))
+            .into());
+        }
+
+        info!(order_id = %order_id, "Order cancelled");
+        Ok(())
     }
 
     fn exchange_name(&self) -> &'static str {

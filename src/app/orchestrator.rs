@@ -18,8 +18,9 @@ use crate::domain::strategy::{
     StrategyRegistry,
 };
 use crate::domain::{Opportunity, OrderBookCache, TokenId};
-use crate::error::Result;
-use crate::exchange::{ExchangeFactory, MarketEvent};
+use crate::error::{Result, RiskError};
+use crate::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
+use rust_decimal::Decimal;
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
@@ -226,7 +227,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
                 }
             }
         }
@@ -239,7 +240,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
                 }
             }
         }
@@ -259,7 +260,37 @@ fn handle_opportunity(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    cache: &OrderBookCache,
 ) {
+    // Check for duplicate execution
+    if !state.try_lock_execution(opp.market_id().as_str()) {
+        debug!(market_id = %opp.market_id(), "Execution already in progress, skipping");
+        return;
+    }
+
+    // Pre-execution slippage check
+    let max_slippage = state.risk_limits().max_slippage;
+    if let Some(slippage) = get_max_slippage(&opp, cache) {
+        if slippage > max_slippage {
+            debug!(
+                market_id = %opp.market_id(),
+                slippage = %slippage,
+                max = %max_slippage,
+                "Slippage check failed, rejecting opportunity"
+            );
+            state.release_execution(opp.market_id().as_str());
+            let error = RiskError::SlippageTooHigh {
+                actual: slippage,
+                max: max_slippage,
+            };
+            notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
+                opp.market_id().as_str(),
+                &error,
+            )));
+            return;
+        }
+    }
+
     // Notify opportunity detected
     notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
 
@@ -268,15 +299,43 @@ fn handle_opportunity(
         RiskCheckResult::Approved => {
             if let Some(exec) = executor {
                 spawn_execution(exec, opp, notifiers.clone(), state.clone());
+            } else {
+                // No executor, release the lock
+                state.release_execution(opp.market_id().as_str());
             }
         }
         RiskCheckResult::Rejected(error) => {
+            // Release the lock on rejection
+            state.release_execution(opp.market_id().as_str());
             notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
                 opp.market_id().as_str(),
                 &error,
             )));
         }
     }
+}
+
+/// Get the maximum slippage across both legs.
+/// Returns None if prices cannot be determined (books not in cache or empty).
+fn get_max_slippage(opportunity: &Opportunity, cache: &OrderBookCache) -> Option<Decimal> {
+    let yes_book = cache.get(opportunity.yes_token())?;
+    let no_book = cache.get(opportunity.no_token())?;
+
+    let yes_current = yes_book.best_ask()?.price();
+    let no_current = no_book.best_ask()?.price();
+
+    let yes_expected = opportunity.yes_ask();
+    let no_expected = opportunity.no_ask();
+
+    // Avoid division by zero
+    if yes_expected == Decimal::ZERO || no_expected == Decimal::ZERO {
+        return None;
+    }
+
+    let yes_slippage = ((yes_current - yes_expected).abs()) / yes_expected;
+    let no_slippage = ((no_current - no_expected).abs()) / no_expected;
+
+    Some(yes_slippage.max(no_slippage))
 }
 
 /// Spawn async execution without blocking message processing.
@@ -289,16 +348,45 @@ fn spawn_execution(
     let market_id = opportunity.market_id().to_string();
 
     tokio::spawn(async move {
-        match executor.execute_arbitrage(&opportunity).await {
-            Ok(result) => {
-                // Record position in shared state
-                if matches!(result, ArbitrageExecutionResult::Success { .. }) {
-                    record_position(&state, &opportunity);
+        let result = executor.execute_arbitrage(&opportunity).await;
+
+        // Always release the execution lock
+        state.release_execution(&market_id);
+
+        match result {
+            Ok(exec_result) => {
+                match &exec_result {
+                    ArbitrageExecutionResult::Success { .. } => {
+                        record_position(&state, &opportunity);
+                    }
+                    ArbitrageExecutionResult::PartialFill {
+                        filled_leg,
+                        filled_order_id,
+                        failed_leg,
+                        error: err_msg,
+                    } => {
+                        warn!(
+                            filled_leg = %filled_leg,
+                            failed_leg = %failed_leg,
+                            error = %err_msg,
+                            "Partial fill detected, attempting recovery"
+                        );
+
+                        // Try to cancel the filled order
+                        let order_id = OrderId::new(filled_order_id.clone());
+                        if let Err(cancel_err) = executor.cancel(&order_id).await {
+                            warn!(error = %cancel_err, "Failed to cancel filled leg, recording partial position");
+                            record_partial_position(&state, &opportunity, filled_leg);
+                        } else {
+                            info!("Successfully cancelled filled leg, no position recorded");
+                        }
+                    }
+                    ArbitrageExecutionResult::Failed { .. } => {}
                 }
 
                 // Notify execution result
                 notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
-                    &market_id, &result,
+                    &market_id, &exec_result,
                 )));
             }
             Err(e) => {
@@ -337,6 +425,40 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
         opportunity.volume(),
         chrono::Utc::now(),
         PositionStatus::Open,
+    );
+    positions.add(position);
+}
+
+/// Record a partial fill position (only one leg filled).
+fn record_partial_position(state: &AppState, opportunity: &Opportunity, filled_leg: &TokenId) {
+    use crate::domain::{Position, PositionLeg, PositionStatus};
+
+    let (token, price, missing) = if filled_leg == opportunity.yes_token() {
+        (
+            opportunity.yes_token().clone(),
+            opportunity.yes_ask(),
+            opportunity.no_token().clone(),
+        )
+    } else {
+        (
+            opportunity.no_token().clone(),
+            opportunity.no_ask(),
+            opportunity.yes_token().clone(),
+        )
+    };
+
+    let mut positions = state.positions_mut();
+    let position = Position::new(
+        positions.next_id(),
+        opportunity.market_id().clone(),
+        vec![PositionLeg::new(token.clone(), opportunity.volume(), price)],
+        price * opportunity.volume(),
+        opportunity.volume(),
+        chrono::Utc::now(),
+        PositionStatus::PartialFill {
+            filled: vec![token],
+            missing: vec![missing],
+        },
     );
     positions.add(position);
 }

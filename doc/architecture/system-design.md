@@ -50,7 +50,7 @@ src/
 ├── domain/                # Exchange-agnostic (NO exchange imports)
 │   ├── id.rs             # TokenId, MarketId (newtypes)
 │   ├── money.rs           # Price, Volume types
-│   ├── market.rs          # MarketPair, MarketInfo
+│   ├── market.rs          # MarketPair
 │   ├── orderbook.rs       # OrderBook, OrderBookCache
 │   ├── opportunity.rs     # Opportunity with builder
 │   ├── position.rs        # Position tracking
@@ -77,7 +77,8 @@ src/
 │
 ├── exchange/              # Abstraction layer
 │   ├── mod.rs             # Module exports
-│   └── traits.rs          # OrderExecutor trait
+│   ├── traits.rs          # OrderExecutor, MarketFetcher, MarketDataStream traits
+│   └── factory.rs         # ExchangeFactory for runtime exchange selection
 │
 └── adapter/               # Exchange implementations
     ├── mod.rs             # Module exports
@@ -331,6 +332,18 @@ struct RiskLimits {
 - Stop trading if execution failure rate spikes
 - Stop trading if WebSocket disconnects
 
+### Execution Robustness
+
+**Execution Locking:** Prevents duplicate execution of the same opportunity while one is in-flight. Uses a `HashSet<MarketId>` in `AppState` with `try_lock_execution()` / `release_execution()` methods.
+
+**Pre-Execution Slippage Check:** Before submitting orders, compares current order book prices against opportunity prices. Rejects if slippage exceeds `max_slippage` threshold.
+
+**Order Cancellation:** Implemented via Polymarket SDK's `cancel_order()` API. Used for partial fill recovery.
+
+**Partial Fill Recovery:** When one leg of an arbitrage fills but the other fails:
+1. Attempt to cancel the filled order
+2. If cancellation fails, record as `PositionStatus::PartialFill` for manual review
+
 ---
 
 ## Tech Stack
@@ -389,6 +402,15 @@ tracing = "0.1"
 - [x] Telegram bot for alerts (feature-gated)
 - [x] Service layer architecture (RiskManager, NotifierRegistry)
 - [x] App module refactoring (config, orchestrator, state)
+
+### Code Review Fixes ✅ COMPLETE
+- [x] Order cancellation implementation
+- [x] Execution locking to prevent duplicate trades
+- [x] Partial fill recovery with cancel attempt
+- [x] Pre-execution slippage check
+- [x] Exchange trait abstractions (MarketFetcher, MarketDataStream)
+- [x] Exchange factory for runtime exchange selection
+- [x] Dead code cleanup
 
 ### Phase 5: Mainnet
 - [ ] Switch config to mainnet
