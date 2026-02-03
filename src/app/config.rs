@@ -77,6 +77,8 @@ pub struct Config {
     /// Set to enable status file writing (e.g., "/var/run/edgelord/status.json").
     #[serde(default)]
     pub status_file: Option<PathBuf>,
+    #[serde(default)]
+    pub reconnection: ReconnectionConfig,
 }
 
 /// Configuration for all detection strategies.
@@ -173,6 +175,58 @@ impl Default for RiskConfig {
             max_total_exposure: default_max_total_exposure(),
             min_profit_threshold: default_min_profit_threshold(),
             max_slippage: default_max_slippage(),
+        }
+    }
+}
+
+/// WebSocket reconnection configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReconnectionConfig {
+    /// Initial delay before first reconnection attempt (milliseconds).
+    #[serde(default = "default_initial_delay_ms")]
+    pub initial_delay_ms: u64,
+    /// Maximum delay between reconnection attempts (milliseconds).
+    #[serde(default = "default_max_delay_ms")]
+    pub max_delay_ms: u64,
+    /// Multiplier applied to delay after each failed attempt.
+    #[serde(default = "default_backoff_multiplier")]
+    pub backoff_multiplier: f64,
+    /// Maximum consecutive failures before circuit breaker trips.
+    #[serde(default = "default_max_consecutive_failures")]
+    pub max_consecutive_failures: u32,
+    /// Cooldown period after circuit breaker trips (milliseconds).
+    #[serde(default = "default_circuit_breaker_cooldown_ms")]
+    pub circuit_breaker_cooldown_ms: u64,
+}
+
+fn default_initial_delay_ms() -> u64 {
+    1000 // 1 second
+}
+
+fn default_max_delay_ms() -> u64 {
+    60000 // 60 seconds
+}
+
+fn default_backoff_multiplier() -> f64 {
+    2.0
+}
+
+fn default_max_consecutive_failures() -> u32 {
+    10
+}
+
+fn default_circuit_breaker_cooldown_ms() -> u64 {
+    300000 // 5 minutes
+}
+
+impl Default for ReconnectionConfig {
+    fn default() -> Self {
+        Self {
+            initial_delay_ms: default_initial_delay_ms(),
+            max_delay_ms: default_max_delay_ms(),
+            backoff_multiplier: default_backoff_multiplier(),
+            max_consecutive_failures: default_max_consecutive_failures(),
+            circuit_breaker_cooldown_ms: default_circuit_breaker_cooldown_ms(),
         }
     }
 }
@@ -309,6 +363,7 @@ impl Default for Config {
             telegram: TelegramAppConfig::default(),
             dry_run: false,
             status_file: None,
+            reconnection: ReconnectionConfig::default(),
         }
     }
 }

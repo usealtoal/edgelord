@@ -55,3 +55,10 @@ enabled = false
 notify_opportunities = false
 notify_executions = true
 notify_risk_rejections = true
+
+[reconnection]
+initial_delay_ms = 1000        # 1 second
+max_delay_ms = 60000           # 60 seconds max
+backoff_multiplier = 2.0       # Double delay each failure
+max_consecutive_failures = 10  # Trip circuit breaker after 10 failures
+circuit_breaker_cooldown_ms = 300000  # 5 minute cooldown
