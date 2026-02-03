@@ -10,19 +10,19 @@ async fn main() {
     let result = match &cli.command {
         Commands::Run(args) => edgelord::cli::run::execute(&cli, args).await,
         Commands::Status => {
-            eprintln!("Status command not yet implemented");
+            edgelord::cli::status::execute();
             Ok(())
         }
-        Commands::Logs(_args) => {
-            eprintln!("Logs command not yet implemented");
+        Commands::Logs(args) => {
+            edgelord::cli::logs::execute(args);
             Ok(())
         }
-        Commands::Install(_args) => {
-            eprintln!("Install command not yet implemented");
+        Commands::Install(args) => {
+            edgelord::cli::service::execute_install(args);
             Ok(())
         }
         Commands::Uninstall => {
-            eprintln!("Uninstall command not yet implemented");
+            edgelord::cli::service::execute_uninstall();
             Ok(())
         }
     };

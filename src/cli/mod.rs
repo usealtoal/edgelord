@@ -1,7 +1,10 @@
 //! Command-line interface definitions.
 
 pub mod banner;
+pub mod logs;
 pub mod run;
+pub mod service;
+pub mod status;
 
 use clap::{Parser, Subcommand};
 use rust_decimal::Decimal;

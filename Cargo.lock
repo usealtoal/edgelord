@@ -1715,6 +1715,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "good_lp",
+ "libc",
  "parking_lot",
  "polymarket-client-sdk",
  "reqwest 0.12.28",
