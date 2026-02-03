@@ -18,8 +18,9 @@ use crate::domain::strategy::{
     StrategyRegistry,
 };
 use crate::domain::{Opportunity, OrderBookCache, TokenId};
-use crate::error::Result;
+use crate::error::{Result, RiskError};
 use crate::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
+use rust_decimal::Decimal;
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
@@ -226,7 +227,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
                 }
             }
         }
@@ -239,7 +240,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
                 }
             }
         }
@@ -259,11 +260,35 @@ fn handle_opportunity(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    cache: &OrderBookCache,
 ) {
     // Check for duplicate execution
     if !state.try_lock_execution(opp.market_id().as_str()) {
         debug!(market_id = %opp.market_id(), "Execution already in progress, skipping");
         return;
+    }
+
+    // Pre-execution slippage check
+    let max_slippage = state.risk_limits().max_slippage;
+    if let Some(slippage) = get_max_slippage(&opp, cache) {
+        if slippage > max_slippage {
+            debug!(
+                market_id = %opp.market_id(),
+                slippage = %slippage,
+                max = %max_slippage,
+                "Slippage check failed, rejecting opportunity"
+            );
+            state.release_execution(opp.market_id().as_str());
+            let error = RiskError::SlippageTooHigh {
+                actual: slippage,
+                max: max_slippage,
+            };
+            notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
+                opp.market_id().as_str(),
+                &error,
+            )));
+            return;
+        }
     }
 
     // Notify opportunity detected
@@ -288,6 +313,29 @@ fn handle_opportunity(
             )));
         }
     }
+}
+
+/// Get the maximum slippage across both legs.
+/// Returns None if prices cannot be determined (books not in cache or empty).
+fn get_max_slippage(opportunity: &Opportunity, cache: &OrderBookCache) -> Option<Decimal> {
+    let yes_book = cache.get(opportunity.yes_token())?;
+    let no_book = cache.get(opportunity.no_token())?;
+
+    let yes_current = yes_book.best_ask()?.price();
+    let no_current = no_book.best_ask()?.price();
+
+    let yes_expected = opportunity.yes_ask();
+    let no_expected = opportunity.no_ask();
+
+    // Avoid division by zero
+    if yes_expected == Decimal::ZERO || no_expected == Decimal::ZERO {
+        return None;
+    }
+
+    let yes_slippage = ((yes_current - yes_expected).abs()) / yes_expected;
+    let no_slippage = ((no_current - no_expected).abs()) / no_expected;
+
+    Some(yes_slippage.max(no_slippage))
 }
 
 /// Spawn async execution without blocking message processing.
