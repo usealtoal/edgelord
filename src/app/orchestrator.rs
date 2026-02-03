@@ -36,7 +36,7 @@ pub struct App;
 impl App {
     /// Run the main application loop.
     pub async fn run(config: Config) -> Result<()> {
-        info!(exchange = ?config.exchange, "Starting edgelord");
+        info!(exchange = ?config.exchange, dry_run = config.dry_run, "Starting edgelord");
 
         // Initialize shared state
         let state = Arc::new(AppState::new(config.risk.clone().into()));
@@ -108,6 +108,8 @@ impl App {
 
         info!("Listening for market events...");
 
+        let dry_run = config.dry_run;
+
         // Event loop using trait-based stream
         while let Some(event) = data_stream.next_event().await {
             handle_market_event(
@@ -119,6 +121,7 @@ impl App {
                 &risk_manager,
                 &notifiers,
                 &state,
+                dry_run,
             );
         }
 
@@ -218,6 +221,7 @@ fn handle_market_event(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    dry_run: bool,
 ) {
     match event {
         MarketEvent::OrderBookSnapshot { token_id, book } => {
@@ -228,7 +232,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run);
                 }
             }
         }
@@ -241,7 +245,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run);
                 }
             }
         }
@@ -262,6 +266,7 @@ fn handle_opportunity(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
     cache: &OrderBookCache,
+    dry_run: bool,
 ) {
     // Check for duplicate execution
     if !state.try_lock_execution(opp.market_id().as_str()) {
@@ -298,7 +303,15 @@ fn handle_opportunity(
     // Check risk
     match risk_manager.check(&opp) {
         RiskCheckResult::Approved => {
-            if let Some(exec) = executor {
+            if dry_run {
+                info!(
+                    market_id = %opp.market_id(),
+                    edge = %opp.edge(),
+                    profit = %opp.expected_profit(),
+                    "Dry-run: would execute trade"
+                );
+                state.release_execution(opp.market_id().as_str());
+            } else if let Some(exec) = executor {
                 spawn_execution(exec, opp, notifiers.clone(), state.clone());
             } else {
                 // No executor, release the lock

@@ -44,8 +44,7 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
         config.telegram.enabled = true;
     }
     if cli.dry_run {
-        info!("Dry-run mode enabled - will not execute trades");
-        // TODO: Wire dry_run into executor
+        config.dry_run = true;
     }
 
     // Initialize logging

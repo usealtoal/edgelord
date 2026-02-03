@@ -51,7 +51,7 @@ pub fn execute_install(args: &InstallArgs) {
 
     // Write service file
     match fs::write(SERVICE_PATH, &service_content) {
-        Ok(()) => println!("Created {SERVICE_PATH}"),
+        Ok(()) => println!("✓ Created {SERVICE_PATH}"),
         Err(e) => {
             eprintln!("Failed to create service file: {e}");
             std::process::exit(1);
@@ -60,7 +60,7 @@ pub fn execute_install(args: &InstallArgs) {
 
     // Reload systemd
     if run_systemctl(&["daemon-reload"]) {
-        println!("Reloaded systemd daemon");
+        println!("✓ Reloaded systemd daemon");
     } else {
         eprintln!("Failed to reload systemd daemon");
         std::process::exit(1);
@@ -68,7 +68,7 @@ pub fn execute_install(args: &InstallArgs) {
 
     // Enable service
     if run_systemctl(&["enable", "edgelord"]) {
-        println!("Enabled edgelord service (starts on boot)");
+        println!("✓ Enabled edgelord service (starts on boot)");
     } else {
         eprintln!("Failed to enable service");
         std::process::exit(1);
@@ -90,18 +90,18 @@ pub fn execute_uninstall() {
 
     // Stop service if running
     if run_systemctl(&["stop", "edgelord"]) {
-        println!("Stopped edgelord service");
+        println!("✓ Stopped edgelord service");
     }
 
     // Disable service
     if run_systemctl(&["disable", "edgelord"]) {
-        println!("Disabled edgelord service");
+        println!("✓ Disabled edgelord service");
     }
 
     // Remove service file
     if std::path::Path::new(SERVICE_PATH).exists() {
         match fs::remove_file(SERVICE_PATH) {
-            Ok(()) => println!("Removed {SERVICE_PATH}"),
+            Ok(()) => println!("✓ Removed {SERVICE_PATH}"),
             Err(e) => {
                 eprintln!("Failed to remove service file: {e}");
                 std::process::exit(1);
@@ -111,7 +111,7 @@ pub fn execute_uninstall() {
 
     // Reload systemd
     if run_systemctl(&["daemon-reload"]) {
-        println!("Reloaded systemd daemon");
+        println!("✓ Reloaded systemd daemon");
     }
 
     println!();

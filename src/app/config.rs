@@ -38,6 +38,9 @@ pub struct Config {
     pub risk: RiskConfig,
     #[serde(default)]
     pub telegram: TelegramAppConfig,
+    /// Dry-run mode: detect opportunities but don't execute trades.
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 /// Configuration for all detection strategies.
@@ -213,6 +216,7 @@ impl Default for Config {
             wallet: WalletConfig::default(),
             risk: RiskConfig::default(),
             telegram: TelegramAppConfig::default(),
+            dry_run: false,
         }
     }
 }
