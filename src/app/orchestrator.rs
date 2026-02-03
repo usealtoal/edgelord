@@ -260,6 +260,12 @@ fn handle_opportunity(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
 ) {
+    // Check for duplicate execution
+    if !state.try_lock_execution(opp.market_id().as_str()) {
+        debug!(market_id = %opp.market_id(), "Execution already in progress, skipping");
+        return;
+    }
+
     // Notify opportunity detected
     notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
 
@@ -268,9 +274,14 @@ fn handle_opportunity(
         RiskCheckResult::Approved => {
             if let Some(exec) = executor {
                 spawn_execution(exec, opp, notifiers.clone(), state.clone());
+            } else {
+                // No executor, release the lock
+                state.release_execution(opp.market_id().as_str());
             }
         }
         RiskCheckResult::Rejected(error) => {
+            // Release the lock on rejection
+            state.release_execution(opp.market_id().as_str());
             notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
                 opp.market_id().as_str(),
                 &error,
@@ -289,16 +300,21 @@ fn spawn_execution(
     let market_id = opportunity.market_id().to_string();
 
     tokio::spawn(async move {
-        match executor.execute_arbitrage(&opportunity).await {
-            Ok(result) => {
+        let result = executor.execute_arbitrage(&opportunity).await;
+
+        // Always release the execution lock
+        state.release_execution(&market_id);
+
+        match result {
+            Ok(exec_result) => {
                 // Record position in shared state
-                if matches!(result, ArbitrageExecutionResult::Success { .. }) {
+                if matches!(exec_result, ArbitrageExecutionResult::Success { .. }) {
                     record_position(&state, &opportunity);
                 }
 
                 // Notify execution result
                 notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
-                    &market_id, &result,
+                    &market_id, &exec_result,
                 )));
             }
             Err(e) => {

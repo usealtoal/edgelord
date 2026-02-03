@@ -1,8 +1,9 @@
 //! Shared application state.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rust_decimal::Decimal;
 
 use crate::domain::{PositionTracker, Price};
@@ -41,17 +42,20 @@ pub struct AppState {
     circuit_breaker: AtomicBool,
     /// Reason for circuit breaker activation.
     circuit_breaker_reason: RwLock<Option<String>>,
+    /// Markets with in-flight executions (prevents duplicate trades).
+    pending_executions: Mutex<HashSet<String>>,
 }
 
 impl AppState {
     /// Create new app state with given risk limits.
-    #[must_use] 
-    pub const fn new(risk_limits: RiskLimits) -> Self {
+    #[must_use]
+    pub fn new(risk_limits: RiskLimits) -> Self {
         Self {
             positions: RwLock::new(PositionTracker::new()),
             risk_limits,
             circuit_breaker: AtomicBool::new(false),
             circuit_breaker_reason: RwLock::new(None),
+            pending_executions: Mutex::new(HashSet::new()),
         }
     }
 
@@ -96,6 +100,17 @@ impl AppState {
     pub fn total_exposure(&self) -> Price {
         self.positions.read().total_exposure()
     }
+
+    /// Try to acquire execution lock for a market.
+    /// Returns `true` if lock acquired, `false` if already locked.
+    pub fn try_lock_execution(&self, market_id: &str) -> bool {
+        self.pending_executions.lock().insert(market_id.to_string())
+    }
+
+    /// Release execution lock for a market.
+    pub fn release_execution(&self, market_id: &str) {
+        self.pending_executions.lock().remove(market_id);
+    }
 }
 
 impl Default for AppState {
@@ -133,6 +148,24 @@ mod tests {
         let limits = RiskLimits::default();
         assert_eq!(limits.max_position_per_market, Decimal::from(1000));
         assert_eq!(limits.max_total_exposure, Decimal::from(10000));
+    }
+
+    #[test]
+    fn test_execution_locking() {
+        let state = AppState::default();
+
+        // First lock should succeed
+        assert!(state.try_lock_execution("market-1"));
+
+        // Second lock on same market should fail
+        assert!(!state.try_lock_execution("market-1"));
+
+        // Different market should succeed
+        assert!(state.try_lock_execution("market-2"));
+
+        // After release, can lock again
+        state.release_execution("market-1");
+        assert!(state.try_lock_execution("market-1"));
     }
 
     #[test]
