@@ -10,8 +10,9 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, PolymarketRegistry};
+use crate::core::exchange::polymarket::Executor as PolymarketExecutor;
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
+use crate::core::domain::MarketRegistry;
 use crate::app::config::Config;
 use crate::app::state::AppState;
 use crate::app::status_file::{StatusConfig, StatusWriter};
@@ -83,18 +84,25 @@ impl App {
         // Fetch markets using exchange-agnostic trait
         let market_fetcher = ExchangeFactory::create_market_fetcher(&config);
         info!(exchange = market_fetcher.exchange_name(), "Fetching markets");
-        let markets = market_fetcher.get_markets(20).await?;
+        let market_infos = market_fetcher.get_markets(20).await?;
 
-        if markets.is_empty() {
+        if market_infos.is_empty() {
             warn!("No active markets found");
             return Ok(());
         }
 
-        // Build registry from generic MarketInfo
-        let registry = PolymarketRegistry::from_market_info(&markets);
+        // Parse market info using exchange-specific configuration
+        let exchange_config = ExchangeFactory::create_exchange_config(&config);
+        let markets = exchange_config.parse_markets(&market_infos);
+
+        // Build generic registry
+        let mut registry = MarketRegistry::new();
+        for market in markets {
+            registry.add(market);
+        }
 
         info!(
-            total_markets = markets.len(),
+            total_markets = market_infos.len(),
             yes_no_pairs = registry.len(),
             "Markets loaded"
         );
@@ -238,7 +246,7 @@ async fn init_executor(config: &Config) -> Option<Arc<PolymarketExecutor>> {
 fn handle_market_event(
     event: MarketEvent,
     cache: &OrderBookCache,
-    registry: &PolymarketRegistry,
+    registry: &MarketRegistry,
     strategies: &StrategyRegistry,
     executor: Option<Arc<PolymarketExecutor>>,
     risk_manager: &RiskManager,
@@ -251,7 +259,7 @@ fn handle_market_event(
         MarketEvent::OrderBookSnapshot { token_id, book } => {
             cache.update(book);
 
-            if let Some(market) = registry.get_market_for_token(&token_id) {
+            if let Some(market) = registry.get_by_token(&token_id) {
                 let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
@@ -264,7 +272,7 @@ fn handle_market_event(
             // For now, treat deltas as snapshots (simple approach)
             cache.update(book);
 
-            if let Some(market) = registry.get_market_for_token(&token_id) {
+            if let Some(market) = registry.get_by_token(&token_id) {
                 let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
