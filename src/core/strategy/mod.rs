@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use edgelord::domain::strategy::{StrategyRegistry, SingleConditionStrategy};
+//! use edgelord::core::strategy::{StrategyRegistry, SingleConditionStrategy};
 //!
 //! let mut registry = StrategyRegistry::new();
 //! registry.register(Box::new(SingleConditionStrategy::new(Default::default())));
