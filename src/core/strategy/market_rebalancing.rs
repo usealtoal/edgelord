@@ -89,6 +89,8 @@ impl Strategy for MarketRebalancingStrategy {
             return vec![];
         }
 
+        let payout = ctx.payout();
+
         // Use the existing detection function
         if let Some(rebal_opp) = detect_rebalancing(
             ctx.pair.market_id(),
@@ -96,6 +98,7 @@ impl Strategy for MarketRebalancingStrategy {
             token_ids,
             ctx.cache,
             &self.config,
+            payout,
         ) {
             // Convert RebalancingOpportunity to standard Opportunity
             let legs: Vec<OpportunityLeg> = rebal_opp
@@ -109,7 +112,7 @@ impl Strategy for MarketRebalancingStrategy {
                 &rebal_opp.question,
                 legs,
                 rebal_opp.volume,
-                Decimal::ONE, // Multi-outcome markets also pay out $1
+                payout,
             );
             return vec![opp];
         }
@@ -179,15 +182,17 @@ impl RebalancingOpportunity {
 /// * `token_ids` - All outcome token IDs for the market
 /// * `cache` - Order book cache with current prices
 /// * `config` - Detection thresholds
+/// * `payout` - The payout amount for the market
 ///
 /// # Returns
-/// `Some(RebalancingOpportunity)` if sum of best asks < $1.00
+/// `Some(RebalancingOpportunity)` if sum of best asks < payout
 pub fn detect_rebalancing(
     market_id: &MarketId,
     question: &str,
     token_ids: &[TokenId],
     cache: &OrderBookCache,
     config: &MarketRebalancingConfig,
+    payout: Decimal,
 ) -> Option<RebalancingOpportunity> {
     // Need at least 3 outcomes (2 is handled by single_condition)
     if token_ids.len() < 3 || token_ids.len() > config.max_outcomes {
@@ -214,11 +219,11 @@ pub fn detect_rebalancing(
     }
 
     // Check if arbitrage exists
-    if total_cost >= Decimal::ONE {
+    if total_cost >= payout {
         return None;
     }
 
-    let edge = Decimal::ONE - total_cost;
+    let edge = payout - total_cost;
 
     if edge < config.min_edge {
         return None;
@@ -300,7 +305,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config);
+        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE);
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -338,7 +343,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -369,7 +374,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -400,7 +405,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(200))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).unwrap();
+        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).unwrap();
         assert_eq!(opp.volume, dec!(50));
         assert_eq!(opp.expected_profit, dec!(5.00)); // 50 * 0.10
     }
@@ -424,6 +429,68 @@ mod tests {
         ));
 
         // Should return None for binary markets (handled by single_condition)
-        assert!(detect_rebalancing(&market_id, "Yes/No?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Yes/No?", &tokens, &cache, &config, Decimal::ONE).is_none());
+    }
+
+    #[test]
+    fn test_custom_payout_affects_edge_calculation() {
+        use crate::core::domain::MarketPair;
+
+        // With payout of $100, cost of $90 gives $10 edge (10%)
+        // This should be profitable with custom payout
+        let strategy = MarketRebalancingStrategy::new(MarketRebalancingConfig {
+            min_edge: dec!(5.00), // $5 minimum edge
+            min_profit: dec!(1.00),
+            max_outcomes: 10,
+        });
+
+        let pair = MarketPair::new(
+            MarketId::from("election"),
+            "Who wins?",
+            TokenId::from("candidate-a"),
+            TokenId::from("candidate-b"),
+        );
+
+        let tokens = vec![
+            TokenId::from("candidate-a"),
+            TokenId::from("candidate-b"),
+            TokenId::from("candidate-c"),
+        ];
+        let cache = OrderBookCache::new();
+
+        // Total cost = 30 + 30 + 30 = 90
+        // With $1 payout: edge = -$89 (no arbitrage)
+        // With $100 payout: edge = $10 (arbitrage exists!)
+        cache.update(OrderBook::with_levels(
+            tokens[0].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+        cache.update(OrderBook::with_levels(
+            tokens[1].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+        cache.update(OrderBook::with_levels(
+            tokens[2].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+
+        // With default $1 payout, no opportunity (cost $90 > payout $1)
+        let ctx_default = DetectionContext::multi_outcome(&pair, &cache, tokens.clone());
+        let opps_default = strategy.detect(&ctx_default);
+        assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
+
+        // With $100 payout, opportunity exists (cost $90 < payout $100)
+        let ctx_custom = DetectionContext::multi_outcome_with_payout(&pair, &cache, tokens, dec!(100));
+        let opps_custom = strategy.detect(&ctx_custom);
+        assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
+
+        let opp = &opps_custom[0];
+        // Edge = payout - total_cost = 100 - 90 = 10
+        assert_eq!(opp.edge(), dec!(10));
+        // Payout should be $100
+        assert_eq!(opp.payout(), dec!(100));
     }
 }
