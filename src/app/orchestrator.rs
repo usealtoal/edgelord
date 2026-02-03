@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, PolymarketRegistry, POLYMARKET_PAYOUT};
+use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, PolymarketRegistry};
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::app::config::Config;
 use crate::app::state::AppState;
@@ -104,18 +104,18 @@ impl App {
             return Ok(());
         }
 
-        for pair in registry.pairs() {
+        for market in registry.markets() {
             debug!(
-                market_id = %pair.market_id(),
-                question = %pair.question(),
+                market_id = %market.market_id(),
+                question = %market.question(),
                 "Tracking market"
             );
         }
 
         let token_ids: Vec<TokenId> = registry
-            .pairs()
+            .markets()
             .iter()
-            .flat_map(|p| vec![p.yes_token().clone(), p.no_token().clone()])
+            .flat_map(|m| m.outcomes().iter().map(|o| o.token_id().clone()))
             .collect();
 
         info!(tokens = token_ids.len(), "Subscribing to tokens");
@@ -251,8 +251,8 @@ fn handle_market_event(
         MarketEvent::OrderBookSnapshot { token_id, book } => {
             cache.update(book);
 
-            if let Some(pair) = registry.get_market_for_token(&token_id) {
-                let ctx = DetectionContext::with_payout(pair, cache, POLYMARKET_PAYOUT);
+            if let Some(market) = registry.get_market_for_token(&token_id) {
+                let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
@@ -264,8 +264,8 @@ fn handle_market_event(
             // For now, treat deltas as snapshots (simple approach)
             cache.update(book);
 
-            if let Some(pair) = registry.get_market_for_token(&token_id) {
-                let ctx = DetectionContext::with_payout(pair, cache, POLYMARKET_PAYOUT);
+            if let Some(market) = registry.get_market_for_token(&token_id) {
+                let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {

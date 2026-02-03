@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 
 use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketId, MarketPair, TokenId};
+use crate::core::domain::{Market, MarketId, TokenId};
 
 /// Context describing the market being analyzed.
 ///
@@ -74,79 +74,29 @@ impl Default for MarketContext {
 ///
 /// This is passed to strategies' `detect()` method.
 pub struct DetectionContext<'a> {
-    /// The market pair being analyzed (for binary markets).
-    pub pair: &'a MarketPair,
+    /// The market being analyzed.
+    pub market: &'a Market,
     /// Order book cache with current prices.
     pub cache: &'a OrderBookCache,
     /// Additional market context.
     market_ctx: MarketContext,
-    /// Token IDs for multi-outcome markets.
-    token_ids: Vec<TokenId>,
-    /// Payout amount for the market (defaults to ONE).
-    payout: Decimal,
 }
 
 impl<'a> DetectionContext<'a> {
-    /// Create a new detection context for a binary market pair.
+    /// Create a new detection context for a market.
     ///
-    /// Defaults payout to `Decimal::ONE`.
-    pub const fn new(pair: &'a MarketPair, cache: &'a OrderBookCache) -> Self {
+    /// Uses the market's payout and determines the market context
+    /// (binary vs multi-outcome) automatically from the market.
+    pub fn new(market: &'a Market, cache: &'a OrderBookCache) -> Self {
+        let market_ctx = if market.is_binary() {
+            MarketContext::binary()
+        } else {
+            MarketContext::multi_outcome(market.outcome_count())
+        };
         Self {
-            pair,
+            market,
             cache,
-            market_ctx: MarketContext::binary(),
-            token_ids: vec![],
-            payout: Decimal::ONE,
-        }
-    }
-
-    /// Create a new detection context with a custom payout.
-    pub const fn with_payout(
-        pair: &'a MarketPair,
-        cache: &'a OrderBookCache,
-        payout: Decimal,
-    ) -> Self {
-        Self {
-            pair,
-            cache,
-            market_ctx: MarketContext::binary(),
-            token_ids: vec![],
-            payout,
-        }
-    }
-
-    /// Create a detection context for a multi-outcome market.
-    ///
-    /// Defaults payout to `Decimal::ONE`.
-    pub const fn multi_outcome(
-        pair: &'a MarketPair,
-        cache: &'a OrderBookCache,
-        token_ids: Vec<crate::core::domain::TokenId>,
-    ) -> Self {
-        let outcome_count = token_ids.len();
-        Self {
-            pair,
-            cache,
-            market_ctx: MarketContext::multi_outcome(outcome_count),
-            token_ids,
-            payout: Decimal::ONE,
-        }
-    }
-
-    /// Create a detection context for a multi-outcome market with custom payout.
-    pub const fn multi_outcome_with_payout(
-        pair: &'a MarketPair,
-        cache: &'a OrderBookCache,
-        token_ids: Vec<crate::core::domain::TokenId>,
-        payout: Decimal,
-    ) -> Self {
-        let outcome_count = token_ids.len();
-        Self {
-            pair,
-            cache,
-            market_ctx: MarketContext::multi_outcome(outcome_count),
-            token_ids,
-            payout,
+            market_ctx,
         }
     }
 
@@ -163,16 +113,16 @@ impl<'a> DetectionContext<'a> {
         self.market_ctx.clone()
     }
 
-    /// Get the token IDs for multi-outcome markets.
+    /// Get the token IDs from the market's outcomes.
     #[must_use]
-    pub fn token_ids(&self) -> &[crate::core::domain::TokenId] {
-        &self.token_ids
+    pub fn token_ids(&self) -> Vec<&TokenId> {
+        self.market.token_ids()
     }
 
-    /// Get the payout amount for the market.
+    /// Get the payout amount from the market.
     #[must_use]
-    pub const fn payout(&self) -> Decimal {
-        self.payout
+    pub fn payout(&self) -> Decimal {
+        self.market.payout()
     }
 }
 
@@ -245,79 +195,70 @@ mod tests {
     }
 
     #[test]
-    fn test_detection_context_default_payout() {
-        use crate::core::domain::MarketPair;
+    fn test_detection_context_binary_market() {
+        use crate::core::domain::{Market, Outcome};
+        use rust_decimal_macros::dec;
 
-        let pair = MarketPair::new(
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes_token"), "Yes"),
+            Outcome::new(TokenId::from("no_token"), "No"),
+        ];
+        let market = Market::new(
             MarketId::from("market_id"),
             "Test Question",
-            TokenId::from("yes_token"),
-            TokenId::from("no_token"),
+            outcomes,
+            dec!(1),
         );
         let cache = OrderBookCache::new();
-        let ctx = DetectionContext::new(&pair, &cache);
+        let ctx = DetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), Decimal::ONE);
+        assert!(ctx.market_context().is_binary());
+        assert_eq!(ctx.token_ids().len(), 2);
     }
 
     #[test]
-    fn test_detection_context_with_payout() {
-        use crate::core::domain::MarketPair;
+    fn test_detection_context_custom_payout() {
+        use crate::core::domain::{Market, Outcome};
+        use rust_decimal_macros::dec;
 
-        let pair = MarketPair::new(
-            MarketId::from("market_id"),
-            "Test Question",
-            TokenId::from("yes_token"),
-            TokenId::from("no_token"),
-        );
-        let cache = OrderBookCache::new();
-        let payout = Decimal::new(100, 0); // 100
-        let ctx = DetectionContext::with_payout(&pair, &cache, payout);
-
-        assert_eq!(ctx.payout(), payout);
-    }
-
-    #[test]
-    fn test_detection_context_multi_outcome_default_payout() {
-        use crate::core::domain::MarketPair;
-
-        let pair = MarketPair::new(
-            MarketId::from("market_id"),
-            "Test Question",
-            TokenId::from("yes_token"),
-            TokenId::from("no_token"),
-        );
-        let cache = OrderBookCache::new();
-        let token_ids = vec![
-            TokenId::from("token_1"),
-            TokenId::from("token_2"),
-            TokenId::from("token_3"),
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes_token"), "Yes"),
+            Outcome::new(TokenId::from("no_token"), "No"),
         ];
-        let ctx = DetectionContext::multi_outcome(&pair, &cache, token_ids);
+        let market = Market::new(
+            MarketId::from("market_id"),
+            "Test Question",
+            outcomes,
+            dec!(100),
+        );
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&market, &cache);
 
-        // Multi-outcome should also default to ONE
+        assert_eq!(ctx.payout(), dec!(100));
+    }
+
+    #[test]
+    fn test_detection_context_multi_outcome() {
+        use crate::core::domain::{Market, Outcome};
+        use rust_decimal_macros::dec;
+
+        let outcomes = vec![
+            Outcome::new(TokenId::from("token_1"), "Option A"),
+            Outcome::new(TokenId::from("token_2"), "Option B"),
+            Outcome::new(TokenId::from("token_3"), "Option C"),
+        ];
+        let market = Market::new(
+            MarketId::from("market_id"),
+            "Who will win?",
+            outcomes,
+            dec!(1),
+        );
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&market, &cache);
+
         assert_eq!(ctx.payout(), Decimal::ONE);
-    }
-
-    #[test]
-    fn test_detection_context_multi_outcome_with_payout() {
-        use crate::core::domain::MarketPair;
-
-        let pair = MarketPair::new(
-            MarketId::from("market_id"),
-            "Test Question",
-            TokenId::from("yes_token"),
-            TokenId::from("no_token"),
-        );
-        let cache = OrderBookCache::new();
-        let token_ids = vec![
-            TokenId::from("token_1"),
-            TokenId::from("token_2"),
-            TokenId::from("token_3"),
-        ];
-        let payout = Decimal::new(50, 0); // 50
-        let ctx = DetectionContext::multi_outcome_with_payout(&pair, &cache, token_ids, payout);
-
-        assert_eq!(ctx.payout(), payout);
+        assert!(ctx.market_context().is_multi_outcome());
+        assert_eq!(ctx.token_ids().len(), 3);
     }
 }

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketPair, Opportunity, OpportunityLeg};
+use crate::core::domain::{Market, Opportunity, OpportunityLeg};
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -72,7 +72,7 @@ impl Strategy for SingleConditionStrategy {
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        detect_single_condition(ctx.pair, ctx.cache, &self.config, ctx.payout())
+        detect_single_condition(ctx.market, ctx.cache, &self.config)
             .into_iter()
             .collect()
     }
@@ -83,28 +83,29 @@ impl Strategy for SingleConditionStrategy {
 /// Checks if YES ask + NO ask < payout, indicating risk-free profit.
 ///
 /// # Arguments
-/// * `pair` - The YES/NO market pair
+/// * `market` - The binary YES/NO market
 /// * `cache` - Order book cache with current prices
 /// * `config` - Detection thresholds
-/// * `payout` - The payout amount for the market
 ///
 /// # Returns
 /// `Some(Opportunity)` if arbitrage exists, `None` otherwise.
 pub fn detect_single_condition(
-    pair: &MarketPair,
+    market: &Market,
     cache: &OrderBookCache,
     config: &SingleConditionConfig,
-    payout: Decimal,
 ) -> Option<Opportunity> {
-    let (yes_book, no_book) = cache.get_pair(pair.yes_token(), pair.no_token());
+    // Get YES and NO outcomes
+    let yes_outcome = market.outcome_by_name("Yes")?;
+    let no_outcome = market.outcome_by_name("No")?;
 
-    let yes_book = yes_book?;
-    let no_book = no_book?;
+    let yes_book = cache.get(yes_outcome.token_id())?;
+    let no_book = cache.get(no_outcome.token_id())?;
 
     let yes_ask = yes_book.best_ask()?;
     let no_ask = no_book.best_ask()?;
 
     let total_cost = yes_ask.price() + no_ask.price();
+    let payout = market.payout();
 
     // No arbitrage if cost >= payout
     if total_cost >= payout {
@@ -129,13 +130,13 @@ pub fn detect_single_condition(
 
     // Build opportunity
     let legs = vec![
-        OpportunityLeg::new(pair.yes_token().clone(), yes_ask.price()),
-        OpportunityLeg::new(pair.no_token().clone(), no_ask.price()),
+        OpportunityLeg::new(yes_outcome.token_id().clone(), yes_ask.price()),
+        OpportunityLeg::new(no_outcome.token_id().clone(), no_ask.price()),
     ];
 
     Some(Opportunity::new(
-        pair.market_id().clone(),
-        pair.question(),
+        market.market_id().clone(),
+        market.question(),
         legs,
         volume,
         payout,
@@ -145,15 +146,19 @@ pub fn detect_single_condition(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{MarketId, OrderBook, PriceLevel, TokenId};
+    use crate::core::domain::{MarketId, OrderBook, Outcome, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
-    fn make_pair() -> MarketPair {
-        MarketPair::new(
+    fn make_market() -> Market {
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes-token"), "Yes"),
+            Outcome::new(TokenId::from("no-token"), "No"),
+        ];
+        Market::new(
             MarketId::from("test-market"),
             "Test question?",
-            TokenId::from("yes-token"),
-            TokenId::from("no-token"),
+            outcomes,
+            dec!(1),
         )
     }
 
@@ -181,23 +186,26 @@ mod tests {
 
     #[test]
     fn test_detects_arbitrage_when_sum_below_one() {
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
         let config = make_config();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         // YES: 0.40, NO: 0.50 = 0.90 total (10% edge)
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&pair, &cache, &config, Decimal::ONE);
+        let opp = detect_single_condition(&market, &cache, &config);
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -208,85 +216,97 @@ mod tests {
 
     #[test]
     fn test_no_arbitrage_when_sum_equals_one() {
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
         let config = make_config();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_single_condition(&market, &cache, &config).is_none());
     }
 
     #[test]
     fn test_no_arbitrage_when_edge_too_small() {
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
         let config = make_config();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         // 0.48 + 0.50 = 0.98 (only 2% edge, below 5% threshold)
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.48), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_single_condition(&market, &cache, &config).is_none());
     }
 
     #[test]
     fn test_no_arbitrage_when_profit_too_small() {
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
         let config = make_config();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         // 10% edge but only 1 share = $0.10 profit (below $0.50 threshold)
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(1))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(1))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_single_condition(&market, &cache, &config).is_none());
     }
 
     #[test]
     fn test_volume_limited_by_smaller_side() {
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
         let config = make_config();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         // YES has 50, NO has 100 -> volume = 50
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(50))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&pair, &cache, &config, Decimal::ONE).unwrap();
+        let opp = detect_single_condition(&market, &cache, &config).unwrap();
         assert_eq!(opp.volume(), dec!(50));
         assert_eq!(opp.expected_profit(), dec!(5.00)); // 50 * 0.10
     }
@@ -294,21 +314,24 @@ mod tests {
     #[test]
     fn test_strategy_detect_uses_context() {
         let strategy = SingleConditionStrategy::new(make_config());
-        let pair = make_pair();
+        let market = make_market();
         let cache = OrderBookCache::new();
 
+        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market.outcome_by_name("No").unwrap().token_id();
+
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let ctx = DetectionContext::new(&pair, &cache);
+        let ctx = DetectionContext::new(&market, &cache);
         let opportunities = strategy.detect(&ctx);
 
         assert_eq!(opportunities.len(), 1);
@@ -322,30 +345,53 @@ mod tests {
             min_edge: dec!(5.00), // $5 minimum edge
             min_profit: dec!(0.50),
         });
-        let pair = make_pair();
+
+        // Create market with $1 payout first
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes-token"), "Yes"),
+            Outcome::new(TokenId::from("no-token"), "No"),
+        ];
+        let market_1 = Market::new(
+            MarketId::from("test-market"),
+            "Test question?",
+            outcomes.clone(),
+            dec!(1),
+        );
+
         let cache = OrderBookCache::new();
+
+        let yes_token = market_1.outcome_by_name("Yes").unwrap().token_id();
+        let no_token = market_1.outcome_by_name("No").unwrap().token_id();
 
         // YES: $40, NO: $50 = $90 total cost
         // With $1 payout: edge = -$89 (no arbitrage)
         // With $100 payout: edge = $10 (arbitrage exists!)
         cache.update(OrderBook::with_levels(
-            pair.yes_token().clone(),
+            yes_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            pair.no_token().clone(),
+            no_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(50), dec!(100))],
         ));
 
         // With default $1 payout, no opportunity (cost $90 > payout $1)
-        let ctx_default = DetectionContext::new(&pair, &cache);
+        let ctx_default = DetectionContext::new(&market_1, &cache);
         let opps_default = strategy.detect(&ctx_default);
         assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
 
+        // Create market with $100 payout
+        let market_100 = Market::new(
+            MarketId::from("test-market"),
+            "Test question?",
+            outcomes,
+            dec!(100),
+        );
+
         // With $100 payout, opportunity exists (cost $90 < payout $100)
-        let ctx_custom = DetectionContext::with_payout(&pair, &cache, dec!(100));
+        let ctx_custom = DetectionContext::new(&market_100, &cache);
         let opps_custom = strategy.detect(&ctx_custom);
         assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
 

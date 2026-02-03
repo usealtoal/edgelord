@@ -9,7 +9,7 @@ mod orderbook;
 mod position;
 
 pub use id::{MarketId, TokenId};
-pub use market::{Market, MarketPair, Outcome};
+pub use market::{Market, Outcome};
 pub use market_registry::MarketRegistry;
 pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityLeg};

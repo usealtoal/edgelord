@@ -82,20 +82,27 @@ impl Strategy for MarketRebalancingStrategy {
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        let token_ids = ctx.token_ids();
+        let market = ctx.market;
 
         // Need at least 3 outcomes for rebalancing (binary handled by single_condition)
-        if token_ids.len() < 3 {
+        if market.outcome_count() < 3 {
             return vec![];
         }
 
-        let payout = ctx.payout();
+        // Collect token IDs from market outcomes
+        let token_ids: Vec<TokenId> = market
+            .outcomes()
+            .iter()
+            .map(|o| o.token_id().clone())
+            .collect();
+
+        let payout = market.payout();
 
         // Use the existing detection function
         if let Some(rebal_opp) = detect_rebalancing(
-            ctx.pair.market_id(),
-            ctx.pair.question(),
-            token_ids,
+            market.market_id(),
+            market.question(),
+            &token_ids,
             ctx.cache,
             &self.config,
             payout,
@@ -434,7 +441,7 @@ mod tests {
 
     #[test]
     fn test_custom_payout_affects_edge_calculation() {
-        use crate::core::domain::MarketPair;
+        use crate::core::domain::{Market, Outcome};
 
         // With payout of $100, cost of $90 gives $10 edge (10%)
         // This should be profitable with custom payout
@@ -444,18 +451,25 @@ mod tests {
             max_outcomes: 10,
         });
 
-        let pair = MarketPair::new(
-            MarketId::from("election"),
-            "Who wins?",
-            TokenId::from("candidate-a"),
-            TokenId::from("candidate-b"),
-        );
-
         let tokens = vec![
             TokenId::from("candidate-a"),
             TokenId::from("candidate-b"),
             TokenId::from("candidate-c"),
         ];
+
+        // Create market with $1 payout
+        let outcomes_1 = vec![
+            Outcome::new(tokens[0].clone(), "Candidate A"),
+            Outcome::new(tokens[1].clone(), "Candidate B"),
+            Outcome::new(tokens[2].clone(), "Candidate C"),
+        ];
+        let market_1 = Market::new(
+            MarketId::from("election"),
+            "Who wins?",
+            outcomes_1,
+            dec!(1),
+        );
+
         let cache = OrderBookCache::new();
 
         // Total cost = 30 + 30 + 30 = 90
@@ -478,12 +492,25 @@ mod tests {
         ));
 
         // With default $1 payout, no opportunity (cost $90 > payout $1)
-        let ctx_default = DetectionContext::multi_outcome(&pair, &cache, tokens.clone());
+        let ctx_default = DetectionContext::new(&market_1, &cache);
         let opps_default = strategy.detect(&ctx_default);
         assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
 
+        // Create market with $100 payout
+        let outcomes_100 = vec![
+            Outcome::new(tokens[0].clone(), "Candidate A"),
+            Outcome::new(tokens[1].clone(), "Candidate B"),
+            Outcome::new(tokens[2].clone(), "Candidate C"),
+        ];
+        let market_100 = Market::new(
+            MarketId::from("election"),
+            "Who wins?",
+            outcomes_100,
+            dec!(100),
+        );
+
         // With $100 payout, opportunity exists (cost $90 < payout $100)
-        let ctx_custom = DetectionContext::multi_outcome_with_payout(&pair, &cache, tokens, dec!(100));
+        let ctx_custom = DetectionContext::new(&market_100, &cache);
         let opps_custom = strategy.detect(&ctx_custom);
         assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
 
