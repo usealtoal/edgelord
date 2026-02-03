@@ -49,8 +49,9 @@ fix/<name>        # Bug fix branches
 
 ### Architecture Patterns
 
-- **Domain-driven design** — Exchange-agnostic logic in `domain/`, no exchange imports allowed
-- **Trait-based abstractions** — `ExchangeClient`, `OrderExecutor` for multi-exchange support
+- **Domain-driven design** — Exchange-agnostic types in `core/domain/`, no exchange imports allowed
+- **Core library** — All reusable components in `core/` (domain, exchange, strategy, solver, service)
+- **Trait-based abstractions** — `OrderExecutor`, `MarketFetcher`, `MarketDataStream` for multi-exchange support
 - **Builder patterns** — Use builders for complex types (e.g., `Opportunity::builder()`)
 - **Proper encapsulation** — Private fields with accessor methods, not public structs
 - **Newtypes** — `TokenId`, `MarketId` instead of raw strings
@@ -68,8 +69,10 @@ fix/<name>        # Bug fix branches
 
 - One public type per file when possible
 - `mod.rs` re-exports only, no logic
-- `domain/` must not import from exchange implementations
-- Exchange implementations (e.g., `polymarket/`) implement traits from `exchange/`
+- `core/domain/` must not import from exchange implementations
+- `core/` contains all reusable library code (domain, exchange, strategy, solver, service)
+- `app/` contains application orchestration (config, orchestrator, state)
+- Exchange implementations (e.g., `polymarket/`) live in `core/exchange/` and implement exchange traits
 - Tests live in `tests/` for integration, inline `#[cfg(test)]` for unit
 
 ---
