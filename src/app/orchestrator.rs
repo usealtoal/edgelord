@@ -10,24 +10,24 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::adapter::polymarket::{ArbitrageExecutionResult, Executor as PolymarketExecutor, MarketRegistry};
+use crate::core::exchange::polymarket::{ArbitrageExecutionResult, Executor as PolymarketExecutor, MarketRegistry};
 use crate::app::config::Config;
 use crate::app::state::AppState;
-use crate::domain::strategy::{
+use crate::core::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
 };
-use crate::domain::{Opportunity, OrderBookCache, TokenId};
+use crate::core::domain::{Opportunity, OrderBookCache, TokenId};
 use crate::error::{Result, RiskError};
-use crate::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
+use crate::core::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
 use rust_decimal::Decimal;
-use crate::service::{
+use crate::core::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
 };
 
 #[cfg(feature = "telegram")]
-use crate::service::{TelegramConfig, TelegramNotifier};
+use crate::core::service::{TelegramConfig, TelegramNotifier};
 
 /// Main application struct.
 pub struct App;
@@ -403,7 +403,7 @@ fn spawn_execution(
 
 /// Record a position in shared state.
 fn record_position(state: &AppState, opportunity: &Opportunity) {
-    use crate::domain::{Position, PositionLeg, PositionStatus};
+    use crate::core::domain::{Position, PositionLeg, PositionStatus};
 
     let mut positions = state.positions_mut();
     let position = Position::new(
@@ -431,7 +431,7 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
 
 /// Record a partial fill position (only one leg filled).
 fn record_partial_position(state: &AppState, opportunity: &Opportunity, filled_leg: &TokenId) {
-    use crate::domain::{Position, PositionLeg, PositionStatus};
+    use crate::core::domain::{Position, PositionLeg, PositionStatus};
 
     let (token, price, missing) = if filled_leg == opportunity.yes_token() {
         (

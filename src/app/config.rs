@@ -9,7 +9,7 @@ use std::path::Path;
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::app::state::RiskLimits;
-use crate::domain::strategy::{
+use crate::core::strategy::{
     CombinatorialConfig, MarketRebalancingConfig, SingleConditionConfig,
 };
 use crate::error::{ConfigError, Result};
