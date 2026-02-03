@@ -1,19 +1,40 @@
 //! Exchange abstraction layer.
 //!
-//! Defines traits that exchange implementations must fulfill,
-//! enabling multi-exchange support with a common interface.
+//! ## Adding a New Exchange
+//!
+//! 1. Create a module under `exchange/<name>/`
+//! 2. Implement [`ExchangeConfig`] trait with:
+//!    - `name()` - Exchange identifier
+//!    - `default_payout()` - Payout amount per share
+//!    - `binary_outcome_names()` - Names for Yes/No outcomes
+//! 3. The default `parse_markets()` implementation handles most cases
+//! 4. Add to [`ExchangeFactory`] for runtime selection
+//!
+//! ## Example
+//!
+//! ```ignore
+//! struct MyExchangeConfig;
+//!
+//! impl ExchangeConfig for MyExchangeConfig {
+//!     fn name(&self) -> &'static str { "myexchange" }
+//!     fn default_payout(&self) -> Decimal { dec!(1.00) }
+//!     fn binary_outcome_names(&self) -> (&'static str, &'static str) { ("Yes", "No") }
+//! }
+//! ```
 
 mod factory;
 pub mod polymarket;
+mod traits;
 
 pub use factory::ExchangeFactory;
+pub use traits::ExchangeConfig;
 
 // === Trait definitions ===
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-use crate::core::domain::{OrderBook, TokenId};
+use crate::core::domain::{Opportunity, OrderBook, TokenId};
 use crate::error::Error;
 
 /// Unique identifier for an order on an exchange.
@@ -243,6 +264,91 @@ pub trait MarketDataStream: Send {
     /// This method blocks until an event is available or the connection closes.
     /// Returns `None` when the stream is closed.
     async fn next_event(&mut self) -> Option<MarketEvent>;
+
+    /// Get the exchange name for logging/debugging.
+    fn exchange_name(&self) -> &'static str;
+}
+
+/// A successfully executed leg in an arbitrage trade.
+#[derive(Debug, Clone)]
+pub struct FilledLeg {
+    /// Token ID for this leg.
+    pub token_id: TokenId,
+    /// Order ID returned by exchange.
+    pub order_id: String,
+}
+
+/// A failed leg in an arbitrage trade.
+#[derive(Debug, Clone)]
+pub struct FailedLeg {
+    /// Token ID for this leg.
+    pub token_id: TokenId,
+    /// Error message.
+    pub error: String,
+}
+
+/// Result of executing a multi-leg arbitrage opportunity.
+#[derive(Debug, Clone)]
+pub enum ArbitrageExecutionResult {
+    /// All legs executed successfully.
+    Success { filled: Vec<FilledLeg> },
+    /// Some legs executed, some failed.
+    PartialFill {
+        filled: Vec<FilledLeg>,
+        failed: Vec<FailedLeg>,
+    },
+    /// All legs failed.
+    Failed { reason: String },
+}
+
+impl ArbitrageExecutionResult {
+    /// Check if all legs were successful.
+    #[must_use]
+    pub const fn is_success(&self) -> bool {
+        matches!(self, Self::Success { .. })
+    }
+
+    /// Check if there was a partial fill.
+    #[must_use]
+    pub const fn is_partial(&self) -> bool {
+        matches!(self, Self::PartialFill { .. })
+    }
+
+    /// Check if all legs failed.
+    #[must_use]
+    pub const fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed { .. })
+    }
+
+    /// Get filled legs if any.
+    #[must_use]
+    pub fn filled(&self) -> &[FilledLeg] {
+        match self {
+            Self::Success { filled } => filled,
+            Self::PartialFill { filled, .. } => filled,
+            Self::Failed { .. } => &[],
+        }
+    }
+
+    /// Get failed legs if any.
+    #[must_use]
+    pub fn failed(&self) -> &[FailedLeg] {
+        match self {
+            Self::Success { .. } => &[],
+            Self::PartialFill { failed, .. } => failed,
+            Self::Failed { .. } => &[],
+        }
+    }
+}
+
+/// Executor for arbitrage opportunities across multiple legs.
+#[async_trait]
+pub trait ArbitrageExecutor: Send + Sync {
+    /// Execute an arbitrage opportunity by placing orders on all legs.
+    async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult, Error>;
+
+    /// Cancel a specific order by ID.
+    async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;
 
     /// Get the exchange name for logging/debugging.
     fn exchange_name(&self) -> &'static str;

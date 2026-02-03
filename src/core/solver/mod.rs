@@ -79,7 +79,7 @@ impl IlpProblem {
     }
 }
 
-/// A single constraint: sum(coeffs[i] * x[i]) {>=, <=, =} rhs.
+/// A single constraint: `sum(coeffs[i] * x[i]) {>=, <=, =} rhs`.
 #[derive(Debug, Clone)]
 pub struct Constraint {
     /// Coefficients for each variable.

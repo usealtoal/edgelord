@@ -5,41 +5,51 @@ use edgelord::core::strategy::{
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };
 use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{MarketId, MarketPair, OrderBook, PriceLevel, TokenId};
+use edgelord::core::domain::{Market, MarketId, OrderBook, Outcome, PriceLevel, TokenId};
 use rust_decimal_macros::dec;
 
-fn make_pair() -> MarketPair {
-    MarketPair::new(
+fn make_market() -> Market {
+    let outcomes = vec![
+        Outcome::new(TokenId::from("yes-token"), "Yes"),
+        Outcome::new(TokenId::from("no-token"), "No"),
+    ];
+    Market::new(
         MarketId::from("test-market"),
         "Will it happen?",
-        TokenId::from("yes-token"),
-        TokenId::from("no-token"),
+        outcomes,
+        dec!(1),
     )
 }
 
-fn setup_arbitrage_books(cache: &OrderBookCache, pair: &MarketPair) {
+fn setup_arbitrage_books(cache: &OrderBookCache, market: &Market) {
+    let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+    let no_token = market.outcome_by_name("No").unwrap().token_id();
+
     // YES: 0.40, NO: 0.50 = 0.90 total (10% edge)
     cache.update(OrderBook::with_levels(
-        pair.yes_token().clone(),
+        yes_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.40), dec!(100))],
     ));
     cache.update(OrderBook::with_levels(
-        pair.no_token().clone(),
+        no_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
     ));
 }
 
-fn setup_no_arbitrage_books(cache: &OrderBookCache, pair: &MarketPair) {
+fn setup_no_arbitrage_books(cache: &OrderBookCache, market: &Market) {
+    let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
+    let no_token = market.outcome_by_name("No").unwrap().token_id();
+
     // YES: 0.50, NO: 0.50 = 1.00 total (no edge)
     cache.update(OrderBook::with_levels(
-        pair.yes_token().clone(),
+        yes_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
     ));
     cache.update(OrderBook::with_levels(
-        pair.no_token().clone(),
+        no_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
     ));
@@ -52,11 +62,11 @@ fn test_strategy_registry_detects_with_single_condition() {
         SingleConditionConfig::default(),
     )));
 
-    let pair = make_pair();
+    let market = make_market();
     let cache = OrderBookCache::new();
-    setup_arbitrage_books(&cache, &pair);
+    setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&pair, &cache);
+    let ctx = DetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert_eq!(opportunities.len(), 1);
@@ -70,11 +80,11 @@ fn test_strategy_registry_empty_when_no_arbitrage() {
         SingleConditionConfig::default(),
     )));
 
-    let pair = make_pair();
+    let market = make_market();
     let cache = OrderBookCache::new();
-    setup_no_arbitrage_books(&cache, &pair);
+    setup_no_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&pair, &cache);
+    let ctx = DetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());
@@ -92,11 +102,11 @@ fn test_multiple_strategies_in_registry() {
 
     assert_eq!(registry.strategies().len(), 2);
 
-    let pair = make_pair();
+    let market = make_market();
     let cache = OrderBookCache::new();
-    setup_arbitrage_books(&cache, &pair);
+    setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&pair, &cache);
+    let ctx = DetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     // Only single_condition should fire (binary market)
@@ -124,11 +134,11 @@ fn test_market_rebalancing_applies_to_multi_outcome() {
 fn test_empty_registry_returns_no_opportunities() {
     let registry = StrategyRegistry::new();
 
-    let pair = make_pair();
+    let market = make_market();
     let cache = OrderBookCache::new();
-    setup_arbitrage_books(&cache, &pair);
+    setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&pair, &cache);
+    let ctx = DetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());

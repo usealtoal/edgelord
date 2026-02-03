@@ -3,7 +3,7 @@
 //! The `Notifier` trait defines the interface for notification handlers.
 //! Multiple notifiers can be registered with the `NotifierRegistry`.
 
-use crate::core::exchange::polymarket::ArbitrageExecutionResult;
+use crate::core::exchange::ArbitrageExecutionResult;
 use crate::core::domain::Opportunity;
 use crate::error::RiskError;
 
@@ -55,19 +55,26 @@ pub struct ExecutionEvent {
 }
 
 impl ExecutionEvent {
-    #[must_use] 
+    #[must_use]
     pub fn from_result(market_id: &str, result: &ArbitrageExecutionResult) -> Self {
         match result {
-            ArbitrageExecutionResult::Success { yes_order_id, no_order_id } => Self {
-                market_id: market_id.to_string(),
-                success: true,
-                details: format!("YES: {yes_order_id}, NO: {no_order_id}"),
-            },
-            ArbitrageExecutionResult::PartialFill { filled_leg, error, .. } => Self {
-                market_id: market_id.to_string(),
-                success: false,
-                details: format!("Partial fill ({filled_leg}): {error}"),
-            },
+            ArbitrageExecutionResult::Success { filled } => {
+                let order_ids: Vec<_> = filled.iter().map(|f| f.order_id.as_str()).collect();
+                Self {
+                    market_id: market_id.to_string(),
+                    success: true,
+                    details: format!("Orders: {}", order_ids.join(", ")),
+                }
+            }
+            ArbitrageExecutionResult::PartialFill { filled, failed } => {
+                let filled_ids: Vec<_> = filled.iter().map(|f| f.token_id.to_string()).collect();
+                let failed_ids: Vec<_> = failed.iter().map(|f| f.token_id.to_string()).collect();
+                Self {
+                    market_id: market_id.to_string(),
+                    success: false,
+                    details: format!("Partial fill - filled: {:?}, failed: {:?}", filled_ids, failed_ids),
+                }
+            }
             ArbitrageExecutionResult::Failed { reason } => Self {
                 market_id: market_id.to_string(),
                 success: false,

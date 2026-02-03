@@ -15,28 +15,12 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::Config;
-use crate::core::domain::{Opportunity, TokenId};
+use crate::core::domain::Opportunity;
 use crate::error::{ConfigError, ExecutionError, Result};
-use crate::core::exchange::{ExecutionResult, OrderExecutor, OrderId, OrderRequest, OrderSide};
-
-/// Result of executing an arbitrage opportunity (both legs).
-#[derive(Debug, Clone)]
-pub enum ArbitrageExecutionResult {
-    /// Both legs executed successfully.
-    Success {
-        yes_order_id: String,
-        no_order_id: String,
-    },
-    /// Only one leg executed; the other failed.
-    PartialFill {
-        filled_leg: TokenId,
-        filled_order_id: String,
-        failed_leg: TokenId,
-        error: String,
-    },
-    /// Both legs failed.
-    Failed { reason: String },
-}
+use crate::core::exchange::{
+    ArbitrageExecutionResult, ArbitrageExecutor, ExecutionResult, FailedLeg, FilledLeg,
+    OrderExecutor, OrderId, OrderRequest, OrderSide,
+};
 
 /// Type alias for the authenticated CLOB client.
 type AuthenticatedClient = Client<Authenticated<Normal>>;
@@ -93,76 +77,78 @@ impl Executor {
         })
     }
 
-    /// Execute an arbitrage opportunity by placing orders on both legs.
-    pub async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
+    /// Execute an arbitrage opportunity by placing orders on all legs in parallel.
+    async fn execute_arbitrage_impl(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
         info!(
             market = %opportunity.market_id(),
             edge = %opportunity.edge(),
             volume = %opportunity.volume(),
+            legs = opportunity.legs().len(),
             "Executing arbitrage opportunity"
         );
 
-        // Execute both legs in parallel
-        let yes_token = opportunity.yes_token().to_string();
-        let no_token = opportunity.no_token().to_string();
+        let legs = opportunity.legs();
+        if legs.len() < 2 {
+            return Ok(ArbitrageExecutionResult::Failed {
+                reason: "Opportunity must have at least 2 legs".to_string(),
+            });
+        }
+
         let volume = opportunity.volume();
-        let yes_price = opportunity.yes_ask();
-        let no_price = opportunity.no_ask();
 
-        let (yes_result, no_result) = tokio::join!(
-            self.submit_order(&yes_token, Side::Buy, volume, yes_price),
-            self.submit_order(&no_token, Side::Buy, volume, no_price),
-        );
+        // Execute all legs in parallel
+        let futures: Vec<_> = legs
+            .iter()
+            .map(|leg| {
+                let token_id = leg.token_id().clone();
+                let token_str = token_id.to_string();
+                let price = leg.ask_price();
+                async move {
+                    let result = self.submit_order(&token_str, Side::Buy, volume, price).await;
+                    (token_id, result)
+                }
+            })
+            .collect();
 
-        match (yes_result, no_result) {
-            (Ok(yes_resp), Ok(no_resp)) => {
-                info!(
-                    yes_order = %yes_resp.order_id,
-                    no_order = %no_resp.order_id,
-                    "Both legs executed successfully"
-                );
+        let results = futures_util::future::join_all(futures).await;
 
-                Ok(ArbitrageExecutionResult::Success {
-                    yes_order_id: yes_resp.order_id,
-                    no_order_id: no_resp.order_id,
-                })
+        // Separate successful and failed legs
+        let mut filled = Vec::new();
+        let mut failed = Vec::new();
+
+        for (token_id, result) in results {
+            match result {
+                Ok(resp) => {
+                    filled.push(FilledLeg {
+                        token_id,
+                        order_id: resp.order_id,
+                    });
+                }
+                Err(err) => {
+                    failed.push(FailedLeg {
+                        token_id,
+                        error: err.to_string(),
+                    });
+                }
             }
-            (Ok(yes_resp), Err(no_err)) => {
-                warn!(
-                    yes_order = %yes_resp.order_id,
-                    no_error = %no_err,
-                    "NO leg failed, YES leg succeeded"
-                );
-                Ok(ArbitrageExecutionResult::PartialFill {
-                    filled_leg: opportunity.yes_token().clone(),
-                    filled_order_id: yes_resp.order_id,
-                    failed_leg: opportunity.no_token().clone(),
-                    error: no_err.to_string(),
-                })
-            }
-            (Err(yes_err), Ok(no_resp)) => {
-                warn!(
-                    no_order = %no_resp.order_id,
-                    yes_error = %yes_err,
-                    "YES leg failed, NO leg succeeded"
-                );
-                Ok(ArbitrageExecutionResult::PartialFill {
-                    filled_leg: opportunity.no_token().clone(),
-                    filled_order_id: no_resp.order_id,
-                    failed_leg: opportunity.yes_token().clone(),
-                    error: yes_err.to_string(),
-                })
-            }
-            (Err(yes_err), Err(no_err)) => {
-                warn!(
-                    yes_error = %yes_err,
-                    no_error = %no_err,
-                    "Both legs failed"
-                );
-                Ok(ArbitrageExecutionResult::Failed {
-                    reason: format!("YES: {yes_err}, NO: {no_err}"),
-                })
-            }
+        }
+
+        if failed.is_empty() {
+            info!(filled = filled.len(), "All legs executed successfully");
+            Ok(ArbitrageExecutionResult::Success { filled })
+        } else if filled.is_empty() {
+            let errors: Vec<_> = failed.iter().map(|f| f.error.as_str()).collect();
+            warn!(errors = ?errors, "All legs failed");
+            Ok(ArbitrageExecutionResult::Failed {
+                reason: errors.join("; "),
+            })
+        } else {
+            warn!(
+                filled = filled.len(),
+                failed = failed.len(),
+                "Partial fill detected"
+            );
+            Ok(ArbitrageExecutionResult::PartialFill { filled, failed })
         }
     }
 
@@ -217,6 +203,27 @@ impl Executor {
 
         Ok(response)
     }
+
+    /// Cancel an order by ID.
+    async fn cancel_order_impl(&self, order_id: &OrderId) -> Result<()> {
+        let response = self
+            .client
+            .cancel_order(order_id.as_str())
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Cancel failed: {e}")))?;
+
+        if let Some(reason) = response.not_canceled.get(order_id.as_str()) {
+            return Err(ExecutionError::OrderRejected(format!(
+                "Order {} not cancelled: {}",
+                order_id.as_str(),
+                reason
+            ))
+            .into());
+        }
+
+        info!(order_id = %order_id, "Order cancelled");
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -240,24 +247,22 @@ impl OrderExecutor for Executor {
     }
 
     async fn cancel(&self, order_id: &OrderId) -> Result<()> {
-        let response = self
-            .client
-            .cancel_order(order_id.as_str())
-            .await
-            .map_err(|e| ExecutionError::SubmissionFailed(format!("Cancel failed: {e}")))?;
+        self.cancel_order_impl(order_id).await
+    }
 
-        // Check if the order was actually cancelled
-        if let Some(reason) = response.not_canceled.get(order_id.as_str()) {
-            return Err(ExecutionError::OrderRejected(format!(
-                "Order {} not cancelled: {}",
-                order_id.as_str(),
-                reason
-            ))
-            .into());
-        }
+    fn exchange_name(&self) -> &'static str {
+        "Polymarket"
+    }
+}
 
-        info!(order_id = %order_id, "Order cancelled");
-        Ok(())
+#[async_trait]
+impl ArbitrageExecutor for Executor {
+    async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
+        self.execute_arbitrage_impl(opportunity).await
+    }
+
+    async fn cancel(&self, order_id: &OrderId) -> Result<()> {
+        self.cancel_order_impl(order_id).await
     }
 
     fn exchange_name(&self) -> &'static str {

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketId, Opportunity, Price, TokenId, Volume};
+use crate::core::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -82,35 +82,46 @@ impl Strategy for MarketRebalancingStrategy {
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        let token_ids = ctx.token_ids();
+        let market = ctx.market;
 
         // Need at least 3 outcomes for rebalancing (binary handled by single_condition)
-        if token_ids.len() < 3 {
+        if market.outcome_count() < 3 {
             return vec![];
         }
 
+        // Collect token IDs from market outcomes
+        let token_ids: Vec<TokenId> = market
+            .outcomes()
+            .iter()
+            .map(|o| o.token_id().clone())
+            .collect();
+
+        let payout = market.payout();
+
         // Use the existing detection function
         if let Some(rebal_opp) = detect_rebalancing(
-            ctx.pair.market_id(),
-            ctx.pair.question(),
-            token_ids,
+            market.market_id(),
+            market.question(),
+            &token_ids,
             ctx.cache,
             &self.config,
+            payout,
         ) {
             // Convert RebalancingOpportunity to standard Opportunity
-            // Use first two legs as placeholder YES/NO (simplified)
-            if rebal_opp.legs.len() >= 2 {
-                if let Ok(opp) = Opportunity::builder()
-                    .market_id(rebal_opp.market_id.clone())
-                    .question(&rebal_opp.question)
-                    .yes_token(rebal_opp.legs[0].token_id.clone(), rebal_opp.legs[0].price)
-                    .no_token(rebal_opp.legs[1].token_id.clone(), rebal_opp.legs[1].price)
-                    .volume(rebal_opp.volume)
-                    .build()
-                {
-                    return vec![opp];
-                }
-            }
+            let legs: Vec<OpportunityLeg> = rebal_opp
+                .legs
+                .iter()
+                .map(|leg| OpportunityLeg::new(leg.token_id.clone(), leg.price))
+                .collect();
+
+            let opp = Opportunity::new(
+                rebal_opp.market_id.clone(),
+                &rebal_opp.question,
+                legs,
+                rebal_opp.volume,
+                payout,
+            );
+            return vec![opp];
         }
 
         vec![]
@@ -178,15 +189,17 @@ impl RebalancingOpportunity {
 /// * `token_ids` - All outcome token IDs for the market
 /// * `cache` - Order book cache with current prices
 /// * `config` - Detection thresholds
+/// * `payout` - The payout amount for the market
 ///
 /// # Returns
-/// `Some(RebalancingOpportunity)` if sum of best asks < $1.00
+/// `Some(RebalancingOpportunity)` if sum of best asks < payout
 pub fn detect_rebalancing(
     market_id: &MarketId,
     question: &str,
     token_ids: &[TokenId],
     cache: &OrderBookCache,
     config: &MarketRebalancingConfig,
+    payout: Decimal,
 ) -> Option<RebalancingOpportunity> {
     // Need at least 3 outcomes (2 is handled by single_condition)
     if token_ids.len() < 3 || token_ids.len() > config.max_outcomes {
@@ -213,11 +226,11 @@ pub fn detect_rebalancing(
     }
 
     // Check if arbitrage exists
-    if total_cost >= Decimal::ONE {
+    if total_cost >= payout {
         return None;
     }
 
-    let edge = Decimal::ONE - total_cost;
+    let edge = payout - total_cost;
 
     if edge < config.min_edge {
         return None;
@@ -299,7 +312,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config);
+        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE);
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -337,7 +350,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -368,7 +381,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -399,7 +412,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(200))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config).unwrap();
+        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).unwrap();
         assert_eq!(opp.volume, dec!(50));
         assert_eq!(opp.expected_profit, dec!(5.00)); // 50 * 0.10
     }
@@ -423,6 +436,88 @@ mod tests {
         ));
 
         // Should return None for binary markets (handled by single_condition)
-        assert!(detect_rebalancing(&market_id, "Yes/No?", &tokens, &cache, &config).is_none());
+        assert!(detect_rebalancing(&market_id, "Yes/No?", &tokens, &cache, &config, Decimal::ONE).is_none());
+    }
+
+    #[test]
+    fn test_custom_payout_affects_edge_calculation() {
+        use crate::core::domain::{Market, Outcome};
+
+        // With payout of $100, cost of $90 gives $10 edge (10%)
+        // This should be profitable with custom payout
+        let strategy = MarketRebalancingStrategy::new(MarketRebalancingConfig {
+            min_edge: dec!(5.00), // $5 minimum edge
+            min_profit: dec!(1.00),
+            max_outcomes: 10,
+        });
+
+        let tokens = vec![
+            TokenId::from("candidate-a"),
+            TokenId::from("candidate-b"),
+            TokenId::from("candidate-c"),
+        ];
+
+        // Create market with $1 payout
+        let outcomes_1 = vec![
+            Outcome::new(tokens[0].clone(), "Candidate A"),
+            Outcome::new(tokens[1].clone(), "Candidate B"),
+            Outcome::new(tokens[2].clone(), "Candidate C"),
+        ];
+        let market_1 = Market::new(
+            MarketId::from("election"),
+            "Who wins?",
+            outcomes_1,
+            dec!(1),
+        );
+
+        let cache = OrderBookCache::new();
+
+        // Total cost = 30 + 30 + 30 = 90
+        // With $1 payout: edge = -$89 (no arbitrage)
+        // With $100 payout: edge = $10 (arbitrage exists!)
+        cache.update(OrderBook::with_levels(
+            tokens[0].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+        cache.update(OrderBook::with_levels(
+            tokens[1].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+        cache.update(OrderBook::with_levels(
+            tokens[2].clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(30), dec!(100))],
+        ));
+
+        // With default $1 payout, no opportunity (cost $90 > payout $1)
+        let ctx_default = DetectionContext::new(&market_1, &cache);
+        let opps_default = strategy.detect(&ctx_default);
+        assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
+
+        // Create market with $100 payout
+        let outcomes_100 = vec![
+            Outcome::new(tokens[0].clone(), "Candidate A"),
+            Outcome::new(tokens[1].clone(), "Candidate B"),
+            Outcome::new(tokens[2].clone(), "Candidate C"),
+        ];
+        let market_100 = Market::new(
+            MarketId::from("election"),
+            "Who wins?",
+            outcomes_100,
+            dec!(100),
+        );
+
+        // With $100 payout, opportunity exists (cost $90 < payout $100)
+        let ctx_custom = DetectionContext::new(&market_100, &cache);
+        let opps_custom = strategy.detect(&ctx_custom);
+        assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
+
+        let opp = &opps_custom[0];
+        // Edge = payout - total_cost = 100 - 90 = 10
+        assert_eq!(opp.edge(), dec!(10));
+        // Payout should be $100
+        assert_eq!(opp.payout(), dec!(100));
     }
 }

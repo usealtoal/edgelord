@@ -1,229 +1,123 @@
-//! Opportunity type with builder pattern.
+//! Opportunity types for arbitrage detection.
 //!
-//! This module provides the `Opportunity` struct representing a detected
-//! arbitrage opportunity, along with `OpportunityBuilder` for safe construction.
+//! An [`Opportunity`] represents a detected arbitrage situation where buying
+//! all outcomes costs less than the guaranteed payout. Each opportunity has
+//! multiple [`OpportunityLeg`]s representing the individual purchases needed.
 
 use rust_decimal::Decimal;
-use std::fmt;
 
 use super::id::{MarketId, TokenId};
-use super::money::{Price, Volume};
+use super::money::Price;
 
-/// Error returned when building an Opportunity fails.
+/// A single leg of an opportunity representing one outcome to purchase.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OpportunityBuildError {
-    /// Market ID is required but was not provided.
-    MissingMarketId,
-    /// Question is required but was not provided.
-    MissingQuestion,
-    /// YES token is required but was not provided.
-    MissingYesToken,
-    /// NO token is required but was not provided.
-    MissingNoToken,
-    /// Volume is required but was not provided.
-    MissingVolume,
+pub struct OpportunityLeg {
+    token_id: TokenId,
+    ask_price: Price,
 }
 
-impl fmt::Display for OpportunityBuildError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingMarketId => write!(f, "market_id is required"),
-            Self::MissingQuestion => write!(f, "question is required"),
-            Self::MissingYesToken => write!(f, "yes_token and yes_ask are required"),
-            Self::MissingNoToken => write!(f, "no_token and no_ask are required"),
-            Self::MissingVolume => write!(f, "volume is required"),
-        }
+impl OpportunityLeg {
+    /// Create a new opportunity leg.
+    #[must_use]
+    pub fn new(token_id: TokenId, ask_price: Price) -> Self {
+        Self { token_id, ask_price }
+    }
+
+    /// Get the token ID for this leg.
+    #[must_use]
+    pub fn token_id(&self) -> &TokenId {
+        &self.token_id
+    }
+
+    /// Get the ask price for this leg.
+    #[must_use]
+    pub fn ask_price(&self) -> Price {
+        self.ask_price
     }
 }
 
-impl std::error::Error for OpportunityBuildError {}
-
-/// A detected arbitrage opportunity.
+/// An arbitrage opportunity supporting any number of outcomes.
 ///
-/// Use `Opportunity::builder()` to construct instances.
-/// The builder calculates derived fields (`total_cost`, edge, `expected_profit`)
-/// automatically.
+/// Uses market-provided payout instead of assuming a hardcoded value.
+///
+/// Derived fields are calculated on access:
+/// - `total_cost`: sum of all leg prices
+/// - `edge`: payout - total_cost
+/// - `expected_profit`: edge * volume
 #[derive(Debug, Clone)]
 pub struct Opportunity {
     market_id: MarketId,
     question: String,
-    yes_token: TokenId,
-    no_token: TokenId,
-    yes_ask: Price,
-    no_ask: Price,
-    total_cost: Price,
-    edge: Price,
-    volume: Volume,
-    expected_profit: Price,
+    legs: Vec<OpportunityLeg>,
+    volume: Decimal,
+    payout: Decimal,
 }
 
 impl Opportunity {
-    /// Create a new builder for constructing an Opportunity.
-    #[must_use] 
-    pub fn builder() -> OpportunityBuilder {
-        OpportunityBuilder::new()
+    /// Create a new opportunity.
+    #[must_use]
+    pub fn new(
+        market_id: MarketId,
+        question: impl Into<String>,
+        legs: Vec<OpportunityLeg>,
+        volume: Decimal,
+        payout: Decimal,
+    ) -> Self {
+        Self {
+            market_id,
+            question: question.into(),
+            legs,
+            volume,
+            payout,
+        }
     }
 
     /// Get the market ID.
-    #[must_use] 
-    pub const fn market_id(&self) -> &MarketId {
+    #[must_use]
+    pub fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the market question.
-    #[must_use] 
+    #[must_use]
     pub fn question(&self) -> &str {
         &self.question
     }
 
-    /// Get the YES token ID.
-    #[must_use] 
-    pub const fn yes_token(&self) -> &TokenId {
-        &self.yes_token
-    }
-
-    /// Get the NO token ID.
-    #[must_use] 
-    pub const fn no_token(&self) -> &TokenId {
-        &self.no_token
-    }
-
-    /// Get the YES ask price.
-    #[must_use] 
-    pub const fn yes_ask(&self) -> Price {
-        self.yes_ask
-    }
-
-    /// Get the NO ask price.
-    #[must_use] 
-    pub const fn no_ask(&self) -> Price {
-        self.no_ask
-    }
-
-    /// Get the total cost (`yes_ask` + `no_ask`).
-    #[must_use] 
-    pub const fn total_cost(&self) -> Price {
-        self.total_cost
-    }
-
-    /// Get the edge (1.0 - `total_cost`).
-    #[must_use] 
-    pub const fn edge(&self) -> Price {
-        self.edge
+    /// Get the opportunity legs.
+    #[must_use]
+    pub fn legs(&self) -> &[OpportunityLeg] {
+        &self.legs
     }
 
     /// Get the volume.
-    #[must_use] 
-    pub const fn volume(&self) -> Volume {
+    #[must_use]
+    pub fn volume(&self) -> Decimal {
         self.volume
     }
 
-    /// Get the expected profit (edge * volume).
-    #[must_use] 
-    pub const fn expected_profit(&self) -> Price {
-        self.expected_profit
-    }
-}
-
-/// Builder for constructing `Opportunity` instances.
-///
-/// # Example
-///
-/// ```ignore
-/// let opportunity = Opportunity::builder()
-///     .market_id(market_id)
-///     .question("Will X happen?")
-///     .yes_token(yes_token, yes_price)
-///     .no_token(no_token, no_price)
-///     .volume(volume)
-///     .build()?;
-/// ```
-#[derive(Debug, Default)]
-pub struct OpportunityBuilder {
-    market_id: Option<MarketId>,
-    question: Option<String>,
-    yes_token: Option<TokenId>,
-    yes_ask: Option<Price>,
-    no_token: Option<TokenId>,
-    no_ask: Option<Price>,
-    volume: Option<Volume>,
-}
-
-impl OpportunityBuilder {
-    /// Create a new empty builder.
-    #[must_use] 
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the market ID.
-    #[must_use] 
-    pub fn market_id(mut self, market_id: MarketId) -> Self {
-        self.market_id = Some(market_id);
-        self
-    }
-
-    /// Set the market question.
+    /// Get the payout amount.
     #[must_use]
-    pub fn question(mut self, question: impl Into<String>) -> Self {
-        self.question = Some(question.into());
-        self
+    pub fn payout(&self) -> Decimal {
+        self.payout
     }
 
-    /// Set the YES token and its ask price.
-    #[must_use] 
-    pub fn yes_token(mut self, token: TokenId, ask: Price) -> Self {
-        self.yes_token = Some(token);
-        self.yes_ask = Some(ask);
-        self
+    /// Calculate the total cost (sum of all leg prices).
+    #[must_use]
+    pub fn total_cost(&self) -> Decimal {
+        self.legs.iter().map(|leg| leg.ask_price).sum()
     }
 
-    /// Set the NO token and its ask price.
-    #[must_use] 
-    pub fn no_token(mut self, token: TokenId, ask: Price) -> Self {
-        self.no_token = Some(token);
-        self.no_ask = Some(ask);
-        self
+    /// Calculate the edge (payout - total_cost).
+    #[must_use]
+    pub fn edge(&self) -> Decimal {
+        self.payout - self.total_cost()
     }
 
-    /// Set the volume.
-    #[must_use] 
-    pub const fn volume(mut self, volume: Volume) -> Self {
-        self.volume = Some(volume);
-        self
-    }
-
-    /// Build the Opportunity, calculating derived fields.
-    ///
-    /// # Errors
-    ///
-    /// Returns `OpportunityBuildError` if any required field is missing.
-    pub fn build(self) -> Result<Opportunity, OpportunityBuildError> {
-        let market_id = self.market_id.ok_or(OpportunityBuildError::MissingMarketId)?;
-        let question = self.question.ok_or(OpportunityBuildError::MissingQuestion)?;
-        let yes_token = self.yes_token.ok_or(OpportunityBuildError::MissingYesToken)?;
-        let yes_ask = self.yes_ask.ok_or(OpportunityBuildError::MissingYesToken)?;
-        let no_token = self.no_token.ok_or(OpportunityBuildError::MissingNoToken)?;
-        let no_ask = self.no_ask.ok_or(OpportunityBuildError::MissingNoToken)?;
-        let volume = self.volume.ok_or(OpportunityBuildError::MissingVolume)?;
-
-        // Calculate derived fields
-        let total_cost = yes_ask + no_ask;
-        let edge = Decimal::ONE - total_cost;
-        let expected_profit = edge * volume;
-
-        Ok(Opportunity {
-            market_id,
-            question,
-            yes_token,
-            no_token,
-            yes_ask,
-            no_ask,
-            total_cost,
-            edge,
-            volume,
-            expected_profit,
-        })
+    /// Calculate the expected profit (edge * volume).
+    #[must_use]
+    pub fn expected_profit(&self) -> Decimal {
+        self.edge() * self.volume
     }
 }
 
@@ -236,133 +130,110 @@ mod tests {
         MarketId::from("test-market")
     }
 
-    fn make_yes_token() -> TokenId {
-        TokenId::from("yes-token")
-    }
-
-    fn make_no_token() -> TokenId {
-        TokenId::from("no-token")
+    fn make_token_id(name: &str) -> TokenId {
+        TokenId::from(name)
     }
 
     #[test]
-    fn builder_creates_opportunity_with_calculated_fields() {
-        let opp = Opportunity::builder()
-            .market_id(make_market_id())
-            .question("Will it rain?")
-            .yes_token(make_yes_token(), dec!(0.40))
-            .no_token(make_no_token(), dec!(0.50))
-            .volume(dec!(100))
-            .build()
-            .unwrap();
+    fn leg_stores_token_and_price() {
+        let leg = OpportunityLeg::new(make_token_id("outcome-a"), dec!(0.45));
 
-        assert_eq!(opp.market_id().as_str(), "test-market");
-        assert_eq!(opp.question(), "Will it rain?");
-        assert_eq!(opp.yes_ask(), dec!(0.40));
-        assert_eq!(opp.no_ask(), dec!(0.50));
+        assert_eq!(leg.token_id().as_str(), "outcome-a");
+        assert_eq!(leg.ask_price(), dec!(0.45));
+    }
+
+    #[test]
+    fn two_legs_calculates_total_cost() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+
         assert_eq!(opp.total_cost(), dec!(0.90));
+    }
+
+    #[test]
+    fn edge_uses_payout_not_hardcoded_one() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+
         assert_eq!(opp.edge(), dec!(0.10));
-        assert_eq!(opp.volume(), dec!(100));
+    }
+
+    #[test]
+    fn expected_profit_is_edge_times_volume() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+
         assert_eq!(opp.expected_profit(), dec!(10.00));
     }
 
     #[test]
-    fn builder_fails_without_market_id() {
-        let result = Opportunity::builder()
-            .question("Will it rain?")
-            .yes_token(make_yes_token(), dec!(0.40))
-            .no_token(make_no_token(), dec!(0.50))
-            .volume(dec!(100))
-            .build();
+    fn custom_payout_affects_edge() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.80)),
+            OpportunityLeg::new(make_token_id("no"), dec!(1.00)),
+        ];
 
-        assert_eq!(result.unwrap_err(), OpportunityBuildError::MissingMarketId);
+        let opp = Opportunity::new(make_market_id(), "Special market", legs, dec!(50), dec!(2.0));
+
+        assert_eq!(opp.total_cost(), dec!(1.80));
+        assert_eq!(opp.edge(), dec!(0.20));
+        assert_eq!(opp.expected_profit(), dec!(10.00));
     }
 
     #[test]
-    fn builder_fails_without_question() {
-        let result = Opportunity::builder()
-            .market_id(make_market_id())
-            .yes_token(make_yes_token(), dec!(0.40))
-            .no_token(make_no_token(), dec!(0.50))
-            .volume(dec!(100))
-            .build();
+    fn three_outcome_market() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("candidate-a"), dec!(0.30)),
+            OpportunityLeg::new(make_token_id("candidate-b"), dec!(0.35)),
+            OpportunityLeg::new(make_token_id("candidate-c"), dec!(0.25)),
+        ];
 
-        assert_eq!(result.unwrap_err(), OpportunityBuildError::MissingQuestion);
+        let opp = Opportunity::new(make_market_id(), "Who will win?", legs, dec!(100), dec!(1.0));
+
+        assert_eq!(opp.total_cost(), dec!(0.90));
+        assert_eq!(opp.edge(), dec!(0.10));
+        assert_eq!(opp.expected_profit(), dec!(10.00));
     }
 
     #[test]
-    fn builder_fails_without_yes_token() {
-        let result = Opportunity::builder()
-            .market_id(make_market_id())
-            .question("Will it rain?")
-            .no_token(make_no_token(), dec!(0.50))
-            .volume(dec!(100))
-            .build();
+    fn negative_edge_when_overpriced() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.60)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
 
-        assert_eq!(result.unwrap_err(), OpportunityBuildError::MissingYesToken);
-    }
-
-    #[test]
-    fn builder_fails_without_no_token() {
-        let result = Opportunity::builder()
-            .market_id(make_market_id())
-            .question("Will it rain?")
-            .yes_token(make_yes_token(), dec!(0.40))
-            .volume(dec!(100))
-            .build();
-
-        assert_eq!(result.unwrap_err(), OpportunityBuildError::MissingNoToken);
-    }
-
-    #[test]
-    fn builder_fails_without_volume() {
-        let result = Opportunity::builder()
-            .market_id(make_market_id())
-            .question("Will it rain?")
-            .yes_token(make_yes_token(), dec!(0.40))
-            .no_token(make_no_token(), dec!(0.50))
-            .build();
-
-        assert_eq!(result.unwrap_err(), OpportunityBuildError::MissingVolume);
-    }
-
-    #[test]
-    fn error_display_messages() {
-        assert_eq!(
-            OpportunityBuildError::MissingMarketId.to_string(),
-            "market_id is required"
-        );
-        assert_eq!(
-            OpportunityBuildError::MissingQuestion.to_string(),
-            "question is required"
-        );
-        assert_eq!(
-            OpportunityBuildError::MissingYesToken.to_string(),
-            "yes_token and yes_ask are required"
-        );
-        assert_eq!(
-            OpportunityBuildError::MissingNoToken.to_string(),
-            "no_token and no_ask are required"
-        );
-        assert_eq!(
-            OpportunityBuildError::MissingVolume.to_string(),
-            "volume is required"
-        );
-    }
-
-    #[test]
-    fn builder_calculates_negative_edge() {
-        // When total_cost > 1, edge is negative
-        let opp = Opportunity::builder()
-            .market_id(make_market_id())
-            .question("Will it rain?")
-            .yes_token(make_yes_token(), dec!(0.60))
-            .no_token(make_no_token(), dec!(0.50))
-            .volume(dec!(100))
-            .build()
-            .unwrap();
+        let opp = Opportunity::new(make_market_id(), "Overpriced", legs, dec!(100), dec!(1.0));
 
         assert_eq!(opp.total_cost(), dec!(1.10));
         assert_eq!(opp.edge(), dec!(-0.10));
         assert_eq!(opp.expected_profit(), dec!(-10.00));
+    }
+
+    #[test]
+    fn accessors_return_correct_values() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+
+        assert_eq!(opp.market_id().as_str(), "test-market");
+        assert_eq!(opp.question(), "Will it rain?");
+        assert_eq!(opp.legs().len(), 2);
+        assert_eq!(opp.volume(), dec!(100));
+        assert_eq!(opp.payout(), dec!(1.0));
     }
 }

@@ -5,7 +5,7 @@
 use crate::app::{Config, Exchange};
 use crate::error::Result;
 
-use super::{MarketDataStream, MarketFetcher, OrderExecutor};
+use super::{ExchangeConfig, MarketDataStream, MarketFetcher, OrderExecutor};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -45,6 +45,18 @@ impl ExchangeFactory {
             Exchange::Polymarket => {
                 let executor = super::polymarket::Executor::new(config).await?;
                 Ok(Some(Box::new(executor)))
+            }
+        }
+    }
+
+    /// Create an exchange configuration for the configured exchange.
+    ///
+    /// Returns a boxed trait object that provides exchange-specific settings
+    /// like payout amounts and outcome naming conventions.
+    pub fn create_exchange_config(config: &Config) -> Box<dyn ExchangeConfig> {
+        match config.exchange {
+            Exchange::Polymarket => {
+                Box::new(super::polymarket::PolymarketExchangeConfig)
             }
         }
     }
