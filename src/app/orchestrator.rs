@@ -19,7 +19,7 @@ use crate::domain::strategy::{
 };
 use crate::domain::{Opportunity, OrderBookCache, TokenId};
 use crate::error::Result;
-use crate::exchange::{ExchangeFactory, MarketEvent};
+use crate::exchange::{ExchangeFactory, MarketEvent, OrderExecutor, OrderId};
 use crate::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
@@ -307,9 +307,33 @@ fn spawn_execution(
 
         match result {
             Ok(exec_result) => {
-                // Record position in shared state
-                if matches!(exec_result, ArbitrageExecutionResult::Success { .. }) {
-                    record_position(&state, &opportunity);
+                match &exec_result {
+                    ArbitrageExecutionResult::Success { .. } => {
+                        record_position(&state, &opportunity);
+                    }
+                    ArbitrageExecutionResult::PartialFill {
+                        filled_leg,
+                        filled_order_id,
+                        failed_leg,
+                        error: err_msg,
+                    } => {
+                        warn!(
+                            filled_leg = %filled_leg,
+                            failed_leg = %failed_leg,
+                            error = %err_msg,
+                            "Partial fill detected, attempting recovery"
+                        );
+
+                        // Try to cancel the filled order
+                        let order_id = OrderId::new(filled_order_id.clone());
+                        if let Err(cancel_err) = executor.cancel(&order_id).await {
+                            warn!(error = %cancel_err, "Failed to cancel filled leg, recording partial position");
+                            record_partial_position(&state, &opportunity, filled_leg);
+                        } else {
+                            info!("Successfully cancelled filled leg, no position recorded");
+                        }
+                    }
+                    ArbitrageExecutionResult::Failed { .. } => {}
                 }
 
                 // Notify execution result
@@ -353,6 +377,40 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
         opportunity.volume(),
         chrono::Utc::now(),
         PositionStatus::Open,
+    );
+    positions.add(position);
+}
+
+/// Record a partial fill position (only one leg filled).
+fn record_partial_position(state: &AppState, opportunity: &Opportunity, filled_leg: &TokenId) {
+    use crate::domain::{Position, PositionLeg, PositionStatus};
+
+    let (token, price, missing) = if filled_leg == opportunity.yes_token() {
+        (
+            opportunity.yes_token().clone(),
+            opportunity.yes_ask(),
+            opportunity.no_token().clone(),
+        )
+    } else {
+        (
+            opportunity.no_token().clone(),
+            opportunity.no_ask(),
+            opportunity.yes_token().clone(),
+        )
+    };
+
+    let mut positions = state.positions_mut();
+    let position = Position::new(
+        positions.next_id(),
+        opportunity.market_id().clone(),
+        vec![PositionLeg::new(token.clone(), opportunity.volume(), price)],
+        price * opportunity.volume(),
+        opportunity.volume(),
+        chrono::Utc::now(),
+        PositionStatus::PartialFill {
+            filled: vec![token],
+            missing: vec![missing],
+        },
     );
     positions.add(position);
 }

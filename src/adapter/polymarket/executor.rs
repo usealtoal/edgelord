@@ -34,6 +34,7 @@ pub enum ArbitrageExecutionResult {
     /// Only one leg executed; the other failed.
     PartialFill {
         filled_leg: TokenId,
+        filled_order_id: String,
         failed_leg: TokenId,
         error: String,
     },
@@ -137,6 +138,7 @@ impl Executor {
                 );
                 Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.yes_token().clone(),
+                    filled_order_id: yes_resp.order_id,
                     failed_leg: opportunity.no_token().clone(),
                     error: no_err.to_string(),
                 })
@@ -149,6 +151,7 @@ impl Executor {
                 );
                 Ok(ArbitrageExecutionResult::PartialFill {
                     filled_leg: opportunity.no_token().clone(),
+                    filled_order_id: no_resp.order_id,
                     failed_leg: opportunity.yes_token().clone(),
                     error: yes_err.to_string(),
                 })
