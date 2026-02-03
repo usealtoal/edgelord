@@ -144,7 +144,7 @@ fn solve_with_good_lp(problem: &LpProblem, integer_vars: &[usize]) -> Result<LpS
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::{Constraint, VariableBounds};
+    use crate::core::solver::{Constraint, VariableBounds};
     use rust_decimal_macros::dec;
 
     #[test]
