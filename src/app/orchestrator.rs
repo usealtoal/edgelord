@@ -53,8 +53,9 @@ impl App {
         let status_writer = config.status_file.as_ref().map(|path| {
             let network = config.network();
             let status_config = StatusConfig {
-                chain_id: network.chain_id,
-                network: network.environment.to_string(),
+                exchange: format!("{:?}", config.exchange).to_lowercase(),
+                environment: network.environment.to_string(),
+                chain_id: if network.chain_id > 0 { Some(network.chain_id) } else { None },
                 strategies: config.strategies.enabled.clone(),
                 dry_run: config.dry_run,
             };

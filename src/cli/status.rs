@@ -87,16 +87,21 @@ fn display_rich_status(status: &StatusFile, version: &str) {
     let uptime = format_uptime(status.started_at);
     let strategies = status.config.strategies.join(", ");
 
-    // Format network name nicely
-    let network = &status.config.network;
-    let chain_id = status.config.chain_id;
+    // Format exchange/environment info
+    let exchange = &status.config.exchange;
+    let environment = &status.config.environment;
+    let chain_info = status
+        .config
+        .chain_id
+        .map(|id| format!(" (chain {id})"))
+        .unwrap_or_default();
 
     println!();
     println!("edgelord v{version}");
     println!("\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}");
     println!("Status:      \u{25cf} running (pid {})", status.pid);
     println!("Uptime:      {uptime}");
-    println!("Network:     {network} (chain {chain_id})");
+    println!("Exchange:    {exchange} ({environment}){chain_info}");
     println!("Strategies:  {strategies}");
     println!();
     println!(

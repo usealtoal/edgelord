@@ -39,10 +39,13 @@ pub struct StatusFile {
 /// Static configuration snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusConfig {
-    /// Blockchain chain ID.
-    pub chain_id: u64,
-    /// Network name (e.g., "polygon", "amoy").
-    pub network: String,
+    /// Active exchange name.
+    pub exchange: String,
+    /// Environment (testnet/mainnet).
+    pub environment: String,
+    /// Blockchain chain ID (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<u64>,
     /// Enabled strategy names.
     pub strategies: Vec<String>,
     /// Whether running in dry-run mode.
@@ -177,8 +180,9 @@ mod tests {
 
     fn test_config() -> StatusConfig {
         StatusConfig {
-            chain_id: 137,
-            network: "polygon".to_string(),
+            exchange: "polymarket".to_string(),
+            environment: "mainnet".to_string(),
+            chain_id: Some(137),
             strategies: vec!["single_condition".to_string()],
             dry_run: false,
         }
@@ -199,8 +203,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&status).unwrap();
         assert!(json.contains("\"version\": \"1\""));
         assert!(json.contains("\"pid\": 12345"));
-        assert!(json.contains("\"chain_id\": 137"));
-        assert!(json.contains("\"network\": \"polygon\""));
+        assert!(json.contains("\"exchange\": \"polymarket\""));
+        assert!(json.contains("\"environment\": \"mainnet\""));
         assert!(json.contains("\"dry_run\": false"));
     }
 
@@ -209,8 +213,8 @@ mod tests {
         let config = test_config();
         let json = serde_json::to_string(&config).unwrap();
 
-        assert!(json.contains("\"chain_id\":137"));
-        assert!(json.contains("\"network\":\"polygon\""));
+        assert!(json.contains("\"exchange\":\"polymarket\""));
+        assert!(json.contains("\"environment\":\"mainnet\""));
         assert!(json.contains("\"strategies\":[\"single_condition\"]"));
         assert!(json.contains("\"dry_run\":false"));
     }
@@ -238,7 +242,7 @@ mod tests {
 
         let status = writer.status.lock();
         assert_eq!(status.version, "1");
-        assert_eq!(status.config.chain_id, 137);
+        assert_eq!(status.config.chain_id, Some(137));
         assert_eq!(status.pid, std::process::id());
     }
 
@@ -332,8 +336,9 @@ mod tests {
             "started_at": "2024-01-15T10:30:00Z",
             "pid": 12345,
             "config": {
+                "exchange": "polymarket",
+                "environment": "mainnet",
                 "chain_id": 137,
-                "network": "polygon",
                 "strategies": ["single_condition", "combinatorial"],
                 "dry_run": false
             },
@@ -353,8 +358,9 @@ mod tests {
         let status: StatusFile = serde_json::from_str(json).unwrap();
         assert_eq!(status.version, "1");
         assert_eq!(status.pid, 12345);
-        assert_eq!(status.config.chain_id, 137);
-        assert_eq!(status.config.network, "polygon");
+        assert_eq!(status.config.exchange, "polymarket");
+        assert_eq!(status.config.environment, "mainnet");
+        assert_eq!(status.config.chain_id, Some(137));
         assert_eq!(status.config.strategies.len(), 2);
         assert!(!status.config.dry_run);
         assert_eq!(status.runtime.positions_open, 3);
