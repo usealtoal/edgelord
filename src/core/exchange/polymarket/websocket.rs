@@ -28,7 +28,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
-use super::messages::{SubscribeMessage, WsMessage};
+use super::messages::{PolymarketSubscribeMessage, PolymarketWsMessage};
 use crate::core::domain::TokenId;
 use crate::error::Result;
 use crate::core::exchange::{MarketDataStream, MarketEvent};
@@ -97,7 +97,7 @@ impl PolymarketWebSocketHandler {
         ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
         asset_ids: Vec<String>,
     ) -> Result<()> {
-        let msg = SubscribeMessage::new(asset_ids.clone());
+        let msg = PolymarketSubscribeMessage::new(asset_ids.clone());
         let json = serde_json::to_string(&msg)?;
 
         info!(assets = ?asset_ids, "Subscribing to assets");
@@ -119,7 +119,7 @@ impl PolymarketWebSocketHandler {
     /// The message loop continuously reads from the WebSocket and handles
     /// different message types:
     ///
-    /// - **Text messages**: Parsed as `WsMessage` and passed to the callback.
+    /// - **Text messages**: Parsed as `PolymarketWsMessage` and passed to the callback.
     ///   Parse failures are logged but don't terminate the loop.
     /// - **Ping messages**: Automatically responded to with Pong (keepalive).
     /// - **Close messages**: Gracefully terminates the loop.
@@ -154,7 +154,7 @@ impl PolymarketWebSocketHandler {
     /// Returns an error if connection, subscription, or pong sending fails.
     pub async fn run<F>(&self, asset_ids: Vec<String>, mut on_message: F) -> Result<()>
     where
-        F: FnMut(WsMessage),
+        F: FnMut(PolymarketWsMessage),
     {
         // Phase 1: Establish connection
         let mut ws = self.connect().await?;
@@ -175,7 +175,7 @@ impl PolymarketWebSocketHandler {
                 Ok(Message::Text(text)) => {
                     debug!(raw = %text, "Received message");
 
-                    match serde_json::from_str::<WsMessage>(&text) {
+                    match serde_json::from_str::<PolymarketWsMessage>(&text) {
                         Ok(ws_msg) => on_message(ws_msg),
                         Err(e) => {
                             // Log parse failures but continue processing
@@ -247,7 +247,7 @@ impl MarketDataStream for PolymarketDataStream {
         })?;
 
         let asset_ids: Vec<String> = token_ids.iter().map(|t| t.as_str().to_string()).collect();
-        let msg = SubscribeMessage::new(asset_ids.clone());
+        let msg = PolymarketSubscribeMessage::new(asset_ids.clone());
         let json = serde_json::to_string(&msg)?;
 
         info!(assets = ?asset_ids, "Subscribing to assets");
@@ -262,8 +262,8 @@ impl MarketDataStream for PolymarketDataStream {
             match ws.next().await? {
                 Ok(Message::Text(text)) => {
                     debug!(raw = %text, "Received message");
-                    match serde_json::from_str::<WsMessage>(&text) {
-                        Ok(WsMessage::Book(book)) => {
+                    match serde_json::from_str::<PolymarketWsMessage>(&text) {
+                        Ok(PolymarketWsMessage::Book(book)) => {
                             let order_book = book.to_orderbook();
                             let token_id = TokenId::from(book.asset_id);
                             return Some(MarketEvent::OrderBookSnapshot {
@@ -271,7 +271,7 @@ impl MarketDataStream for PolymarketDataStream {
                                 book: order_book,
                             });
                         }
-                        Ok(WsMessage::PriceChange(_)) => {
+                        Ok(PolymarketWsMessage::PriceChange(_)) => {
                             // Price changes are incremental; skip for now
                             continue;
                         }

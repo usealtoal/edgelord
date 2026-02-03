@@ -6,13 +6,13 @@ use crate::core::domain::{OrderBook, PriceLevel, TokenId};
 
 /// Subscription request sent to Polymarket WebSocket
 #[derive(Debug, Serialize)]
-pub struct SubscribeMessage {
+pub struct PolymarketSubscribeMessage {
     pub assets_ids: Vec<String>,
     #[serde(rename = "type")]
     pub msg_type: String,
 }
 
-impl SubscribeMessage {
+impl PolymarketSubscribeMessage {
     pub fn new(asset_ids: Vec<String>) -> Self {
         Self {
             assets_ids: asset_ids,
@@ -24,12 +24,12 @@ impl SubscribeMessage {
 /// Messages received from Polymarket WebSocket
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event_type")]
-pub enum WsMessage {
+pub enum PolymarketWsMessage {
     #[serde(rename = "book")]
-    Book(BookMessage),
+    Book(PolymarketBookMessage),
 
     #[serde(rename = "price_change")]
-    PriceChange(PriceChangeMessage),
+    PriceChange(PolymarketPriceChangeMessage),
 
     #[serde(rename = "tick_size_change")]
     TickSizeChange(serde_json::Value),
@@ -39,16 +39,16 @@ pub enum WsMessage {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct BookMessage {
+pub struct PolymarketBookMessage {
     pub asset_id: String,
     pub market: Option<String>,
-    pub bids: Vec<WsPriceLevel>,
-    pub asks: Vec<WsPriceLevel>,
+    pub bids: Vec<PolymarketWsPriceLevel>,
+    pub asks: Vec<PolymarketWsPriceLevel>,
     pub timestamp: Option<String>,
     pub hash: Option<String>,
 }
 
-impl BookMessage {
+impl PolymarketBookMessage {
     /// Convert this WebSocket message to a domain `OrderBook`
     #[must_use] 
     pub fn to_orderbook(&self) -> OrderBook {
@@ -58,7 +58,7 @@ impl BookMessage {
         OrderBook::with_levels(token_id, bids, asks)
     }
 
-    fn parse_levels(levels: &[WsPriceLevel]) -> Vec<PriceLevel> {
+    fn parse_levels(levels: &[PolymarketWsPriceLevel]) -> Vec<PriceLevel> {
         levels
             .iter()
             .filter_map(|pl| {
@@ -72,16 +72,16 @@ impl BookMessage {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PriceChangeMessage {
+pub struct PolymarketPriceChangeMessage {
     pub asset_id: String,
     pub market: Option<String>,
     pub price: Option<String>,
-    pub changes: Option<Vec<WsPriceLevel>>,
+    pub changes: Option<Vec<PolymarketWsPriceLevel>>,
 }
 
 /// Price level as received from WebSocket (strings, not decimals)
 #[derive(Debug, Clone, Deserialize)]
-pub struct WsPriceLevel {
+pub struct PolymarketWsPriceLevel {
     pub price: String,
     pub size: String,
 }

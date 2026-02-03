@@ -3,7 +3,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-pub struct MarketsResponse {
+pub struct PolymarketMarketsResponse {
     pub data: Option<Vec<PolymarketMarket>>,
     /// Cursor for pagination (reserved for future use).
     #[allow(dead_code)]

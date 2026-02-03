@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use tracing::{debug, info};
 
-use super::types::{MarketsResponse, PolymarketMarket};
+use super::types::{PolymarketMarketsResponse, PolymarketMarket};
 use crate::error::Result;
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 
@@ -51,7 +51,7 @@ impl PolymarketClient {
 
         info!(url = %url, "Fetching active markets");
 
-        let response: MarketsResponse = self.http.get(&url).send().await?.json().await?;
+        let response: PolymarketMarketsResponse = self.http.get(&url).send().await?.json().await?;
 
         let markets = response.data.unwrap_or_default();
         debug!(count = markets.len(), "Fetched markets");

@@ -10,6 +10,6 @@ mod websocket;
 pub use client::PolymarketClient;
 pub use config::{PolymarketExchangeConfig, POLYMARKET_PAYOUT};
 pub use executor::PolymarketExecutor;
-pub use messages::{BookMessage, WsMessage, WsPriceLevel};
+pub use messages::{PolymarketBookMessage, PolymarketWsMessage, PolymarketWsPriceLevel};
 pub use types::{PolymarketMarket, PolymarketToken};
 pub use websocket::{PolymarketDataStream, PolymarketWebSocketHandler};
