@@ -12,7 +12,7 @@ pub mod strategy;
 
 // Core domain types
 pub use id::{MarketId, TokenId};
-pub use market::{DomainMarket, MarketPair, TokenInfo};
+pub use market::MarketPair;
 pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityBuildError, OpportunityBuilder};
 pub use position::{Position, PositionId, PositionLeg, PositionStatus, PositionTracker};

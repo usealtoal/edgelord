@@ -2,72 +2,6 @@
 
 use super::id::{MarketId, TokenId};
 
-/// Information about a token in a market.
-#[derive(Debug, Clone)]
-pub struct TokenInfo {
-    id: TokenId,
-    outcome: String,
-}
-
-impl TokenInfo {
-    /// Create a new `TokenInfo`.
-    pub fn new(id: TokenId, outcome: impl Into<String>) -> Self {
-        Self {
-            id,
-            outcome: outcome.into(),
-        }
-    }
-
-    /// Get the token ID.
-    #[must_use] 
-    pub const fn id(&self) -> &TokenId {
-        &self.id
-    }
-
-    /// Get the outcome description.
-    #[must_use] 
-    pub fn outcome(&self) -> &str {
-        &self.outcome
-    }
-}
-
-/// Information about a market.
-#[derive(Debug, Clone)]
-pub struct DomainMarket {
-    id: MarketId,
-    question: String,
-    tokens: Vec<TokenInfo>,
-}
-
-impl DomainMarket {
-    /// Create a new `DomainMarket`.
-    pub fn new(id: MarketId, question: impl Into<String>, tokens: Vec<TokenInfo>) -> Self {
-        Self {
-            id,
-            question: question.into(),
-            tokens,
-        }
-    }
-
-    /// Get the market ID.
-    #[must_use] 
-    pub const fn id(&self) -> &MarketId {
-        &self.id
-    }
-
-    /// Get the market question.
-    #[must_use] 
-    pub fn question(&self) -> &str {
-        &self.question
-    }
-
-    /// Get the tokens in this market.
-    #[must_use] 
-    pub fn tokens(&self) -> &[TokenInfo] {
-        &self.tokens
-    }
-}
-
 /// A YES/NO market pair with proper encapsulation.
 #[derive(Debug, Clone)]
 pub struct MarketPair {
@@ -94,25 +28,25 @@ impl MarketPair {
     }
 
     /// Get the market ID.
-    #[must_use] 
+    #[must_use]
     pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the market question.
-    #[must_use] 
+    #[must_use]
     pub fn question(&self) -> &str {
         &self.question
     }
 
     /// Get the YES token ID.
-    #[must_use] 
+    #[must_use]
     pub const fn yes_token(&self) -> &TokenId {
         &self.yes_token
     }
 
     /// Get the NO token ID.
-    #[must_use] 
+    #[must_use]
     pub const fn no_token(&self) -> &TokenId {
         &self.no_token
     }
@@ -121,26 +55,6 @@ impl MarketPair {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn token_info_accessors() {
-        let info = TokenInfo::new(TokenId::from("token-1"), "Yes");
-        assert_eq!(info.id().as_str(), "token-1");
-        assert_eq!(info.outcome(), "Yes");
-    }
-
-    #[test]
-    fn market_info_accessors() {
-        let tokens = vec![
-            TokenInfo::new(TokenId::from("yes"), "Yes"),
-            TokenInfo::new(TokenId::from("no"), "No"),
-        ];
-        let info = DomainMarket::new(MarketId::from("market-1"), "Will it rain?", tokens);
-
-        assert_eq!(info.id().as_str(), "market-1");
-        assert_eq!(info.question(), "Will it rain?");
-        assert_eq!(info.tokens().len(), 2);
-    }
 
     #[test]
     fn market_pair_accessors() {
