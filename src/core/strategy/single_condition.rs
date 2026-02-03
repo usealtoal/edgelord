@@ -72,7 +72,7 @@ impl Strategy for SingleConditionStrategy {
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        detect_single_condition(ctx.pair, ctx.cache, &self.config)
+        detect_single_condition(ctx.pair, ctx.cache, &self.config, ctx.payout())
             .into_iter()
             .collect()
     }
@@ -80,12 +80,13 @@ impl Strategy for SingleConditionStrategy {
 
 /// Core detection logic for single-condition arbitrage.
 ///
-/// Checks if YES ask + NO ask < $1.00, indicating risk-free profit.
+/// Checks if YES ask + NO ask < payout, indicating risk-free profit.
 ///
 /// # Arguments
 /// * `pair` - The YES/NO market pair
 /// * `cache` - Order book cache with current prices
 /// * `config` - Detection thresholds
+/// * `payout` - The payout amount for the market
 ///
 /// # Returns
 /// `Some(Opportunity)` if arbitrage exists, `None` otherwise.
@@ -93,6 +94,7 @@ pub fn detect_single_condition(
     pair: &MarketPair,
     cache: &OrderBookCache,
     config: &SingleConditionConfig,
+    payout: Decimal,
 ) -> Option<Opportunity> {
     let (yes_book, no_book) = cache.get_pair(pair.yes_token(), pair.no_token());
 
@@ -104,12 +106,12 @@ pub fn detect_single_condition(
 
     let total_cost = yes_ask.price() + no_ask.price();
 
-    // No arbitrage if cost >= $1
-    if total_cost >= Decimal::ONE {
+    // No arbitrage if cost >= payout
+    if total_cost >= payout {
         return None;
     }
 
-    let edge = Decimal::ONE - total_cost;
+    let edge = payout - total_cost;
 
     // Skip if edge too small
     if edge < config.min_edge {
@@ -136,7 +138,7 @@ pub fn detect_single_condition(
         pair.question(),
         legs,
         volume,
-        Decimal::ONE, // Binary markets pay out $1
+        payout,
     ))
 }
 
@@ -195,7 +197,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&pair, &cache, &config);
+        let opp = detect_single_condition(&pair, &cache, &config, Decimal::ONE);
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -221,7 +223,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config).is_none());
+        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -242,7 +244,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config).is_none());
+        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -263,7 +265,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(1))],
         ));
 
-        assert!(detect_single_condition(&pair, &cache, &config).is_none());
+        assert!(detect_single_condition(&pair, &cache, &config, Decimal::ONE).is_none());
     }
 
     #[test]
@@ -284,7 +286,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&pair, &cache, &config).unwrap();
+        let opp = detect_single_condition(&pair, &cache, &config, Decimal::ONE).unwrap();
         assert_eq!(opp.volume(), dec!(50));
         assert_eq!(opp.expected_profit(), dec!(5.00)); // 50 * 0.10
     }
@@ -310,5 +312,47 @@ mod tests {
         let opportunities = strategy.detect(&ctx);
 
         assert_eq!(opportunities.len(), 1);
+    }
+
+    #[test]
+    fn test_custom_payout_affects_edge_calculation() {
+        // With payout of $100, cost of $90 gives $10 edge (10%)
+        // This should be profitable with custom payout
+        let strategy = SingleConditionStrategy::new(SingleConditionConfig {
+            min_edge: dec!(5.00), // $5 minimum edge
+            min_profit: dec!(0.50),
+        });
+        let pair = make_pair();
+        let cache = OrderBookCache::new();
+
+        // YES: $40, NO: $50 = $90 total cost
+        // With $1 payout: edge = -$89 (no arbitrage)
+        // With $100 payout: edge = $10 (arbitrage exists!)
+        cache.update(OrderBook::with_levels(
+            pair.yes_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(40), dec!(100))],
+        ));
+        cache.update(OrderBook::with_levels(
+            pair.no_token().clone(),
+            vec![],
+            vec![PriceLevel::new(dec!(50), dec!(100))],
+        ));
+
+        // With default $1 payout, no opportunity (cost $90 > payout $1)
+        let ctx_default = DetectionContext::new(&pair, &cache);
+        let opps_default = strategy.detect(&ctx_default);
+        assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
+
+        // With $100 payout, opportunity exists (cost $90 < payout $100)
+        let ctx_custom = DetectionContext::with_payout(&pair, &cache, dec!(100));
+        let opps_custom = strategy.detect(&ctx_custom);
+        assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
+
+        let opp = &opps_custom[0];
+        // Edge = payout - total_cost = 100 - 90 = 10
+        assert_eq!(opp.edge(), dec!(10));
+        // Payout should be $100
+        assert_eq!(opp.payout(), dec!(100));
     }
 }
