@@ -21,3 +21,4 @@
 pub mod core;
 pub mod error;
 pub mod app;
+pub mod cli;

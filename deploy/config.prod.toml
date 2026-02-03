@@ -1,0 +1,41 @@
+# Production configuration for edgelord
+# Copy to /opt/edgelord/config.toml on deployment
+
+[network]
+ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+api_url = "https://clob.polymarket.com"
+chain_id = 137  # Polygon mainnet
+
+[logging]
+level = "info"
+format = "json"
+
+[strategies]
+enabled = ["single_condition", "market_rebalancing"]
+
+[strategies.single_condition]
+min_edge = 0.05
+min_profit = 0.50
+
+[strategies.market_rebalancing]
+min_edge = 0.03
+min_profit = 1.00
+max_outcomes = 10
+
+[strategies.combinatorial]
+enabled = false
+
+[wallet]
+# Private key loaded from WALLET_PRIVATE_KEY env var
+
+[risk]
+max_position_per_market = 500
+max_total_exposure = 5000
+min_profit_threshold = 0.10
+max_slippage = 0.02
+
+[telegram]
+enabled = true
+notify_opportunities = false
+notify_executions = true
+notify_risk_rejections = true

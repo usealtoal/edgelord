@@ -137,6 +137,42 @@ notify_executions = true         # Alert on trade executions
 notify_risk_rejections = true    # Alert when risk manager rejects
 ```
 
+## CLI Usage
+
+```bash
+# Run interactively (with banner, colored logs)
+edgelord run
+
+# Run for production (no banner, JSON logs)
+edgelord run --no-banner --json-logs
+
+# Override settings
+edgelord run --chain-id 137 --max-exposure 5000 --telegram-enabled
+
+# Check service status
+edgelord status
+
+# View logs
+edgelord logs -f
+edgelord logs --lines 100
+edgelord logs --since "1 hour ago"
+
+# Install as systemd service (requires root)
+sudo edgelord install --config /opt/edgelord/config.toml
+
+# Uninstall service
+sudo edgelord uninstall
+```
+
+### Configuration Priority
+
+Settings are applied in this order (later overrides earlier):
+
+1. Built-in defaults
+2. Config file (`config.toml`)
+3. CLI flags (`--chain-id`, `--max-exposure`, etc.)
+4. Environment variables (secrets only)
+
 ## Environment Variables
 
 ```bash

@@ -49,6 +49,9 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 thiserror = "1"
 anyhow = "1"
 
+# CLI
+clap = { version = "4", features = ["derive"] }
+
 # Synchronization
 parking_lot = "0.12"
 
@@ -60,6 +63,9 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # URL parsing
 url = "2"
+
+# Unix system calls
+libc = "0.2"
 
 # Linear programming solver (HiGHS)
 good_lp = { version = "1.8", default-features = false, features = ["highs"] }
