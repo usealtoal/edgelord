@@ -1,4 +1,20 @@
-//! Pure domain types.
+//! Core domain types for edgelord.
+//!
+//! ## Market Types
+//!
+//! - [`Market`] - Generic market supporting N outcomes with configurable payout
+//! - [`Outcome`] - A single outcome within a market
+//! - [`MarketRegistry`] - Registry mapping token IDs to markets
+//!
+//! ## Opportunity Types
+//!
+//! - [`Opportunity`] - Detected arbitrage opportunity with N legs
+//! - [`OpportunityLeg`] - A single leg (token purchase) in an opportunity
+//!
+//! ## Identifier Types
+//!
+//! - [`MarketId`] - Unique market identifier
+//! - [`TokenId`] - Unique token/outcome identifier
 
 mod id;
 mod market;
