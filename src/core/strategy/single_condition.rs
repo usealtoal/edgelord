@@ -83,7 +83,7 @@ impl Strategy for SingleConditionStrategy {
 /// Checks if YES ask + NO ask < payout, indicating risk-free profit.
 ///
 /// # Arguments
-/// * `market` - The binary YES/NO market
+/// * `market` - A binary market with exactly 2 outcomes
 /// * `cache` - Order book cache with current prices
 /// * `config` - Detection thresholds
 ///
@@ -94,17 +94,22 @@ pub fn detect_single_condition(
     cache: &OrderBookCache,
     config: &SingleConditionConfig,
 ) -> Option<Opportunity> {
-    // Get YES and NO outcomes
-    let yes_outcome = market.outcome_by_name("Yes")?;
-    let no_outcome = market.outcome_by_name("No")?;
+    // Get outcomes by index (binary markets have exactly 2 outcomes)
+    // Index 0 = positive outcome, Index 1 = negative outcome
+    let outcomes = market.outcomes();
+    if outcomes.len() != 2 {
+        return None;
+    }
+    let positive_outcome = &outcomes[0];
+    let negative_outcome = &outcomes[1];
 
-    let yes_book = cache.get(yes_outcome.token_id())?;
-    let no_book = cache.get(no_outcome.token_id())?;
+    let positive_book = cache.get(positive_outcome.token_id())?;
+    let negative_book = cache.get(negative_outcome.token_id())?;
 
-    let yes_ask = yes_book.best_ask()?;
-    let no_ask = no_book.best_ask()?;
+    let positive_ask = positive_book.best_ask()?;
+    let negative_ask = negative_book.best_ask()?;
 
-    let total_cost = yes_ask.price() + no_ask.price();
+    let total_cost = positive_ask.price() + negative_ask.price();
     let payout = market.payout();
 
     // No arbitrage if cost >= payout
@@ -120,7 +125,7 @@ pub fn detect_single_condition(
     }
 
     // Volume limited by smaller side
-    let volume = yes_ask.size().min(no_ask.size());
+    let volume = positive_ask.size().min(negative_ask.size());
     let expected_profit = edge * volume;
 
     // Skip if profit too small
@@ -130,8 +135,8 @@ pub fn detect_single_condition(
 
     // Build opportunity
     let legs = vec![
-        OpportunityLeg::new(yes_outcome.token_id().clone(), yes_ask.price()),
-        OpportunityLeg::new(no_outcome.token_id().clone(), no_ask.price()),
+        OpportunityLeg::new(positive_outcome.token_id().clone(), positive_ask.price()),
+        OpportunityLeg::new(negative_outcome.token_id().clone(), negative_ask.price()),
     ];
 
     Some(Opportunity::new(
@@ -190,17 +195,18 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
-        // YES: 0.40, NO: 0.50 = 0.90 total (10% edge)
+        // Positive: 0.40, Negative: 0.50 = 0.90 total (10% edge)
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
@@ -220,16 +226,17 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
@@ -243,17 +250,18 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
         // 0.48 + 0.50 = 0.98 (only 2% edge, below 5% threshold)
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.48), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
@@ -267,17 +275,18 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
         // 10% edge but only 1 share = $0.10 profit (below $0.50 threshold)
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(1))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(1))],
         ));
@@ -291,17 +300,18 @@ mod tests {
         let cache = OrderBookCache::new();
         let config = make_config();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
-        // YES has 50, NO has 100 -> volume = 50
+        // Positive has 50, Negative has 100 -> volume = 50
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(50))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
@@ -317,16 +327,17 @@ mod tests {
         let market = make_market();
         let cache = OrderBookCache::new();
 
-        let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
@@ -347,32 +358,33 @@ mod tests {
         });
 
         // Create market with $1 payout first
-        let outcomes = vec![
+        let market_outcomes = vec![
             Outcome::new(TokenId::from("yes-token"), "Yes"),
             Outcome::new(TokenId::from("no-token"), "No"),
         ];
         let market_1 = Market::new(
             MarketId::from("test-market"),
             "Test question?",
-            outcomes.clone(),
+            market_outcomes.clone(),
             dec!(1),
         );
 
         let cache = OrderBookCache::new();
 
-        let yes_token = market_1.outcome_by_name("Yes").unwrap().token_id();
-        let no_token = market_1.outcome_by_name("No").unwrap().token_id();
+        let outcomes = market_1.outcomes();
+        let positive_token = outcomes[0].token_id();
+        let negative_token = outcomes[1].token_id();
 
-        // YES: $40, NO: $50 = $90 total cost
+        // Positive: $40, Negative: $50 = $90 total cost
         // With $1 payout: edge = -$89 (no arbitrage)
         // With $100 payout: edge = $10 (arbitrage exists!)
         cache.update(OrderBook::with_levels(
-            yes_token.clone(),
+            positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(40), dec!(100))],
         ));
         cache.update(OrderBook::with_levels(
-            no_token.clone(),
+            negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(50), dec!(100))],
         ));
@@ -386,7 +398,7 @@ mod tests {
         let market_100 = Market::new(
             MarketId::from("test-market"),
             "Test question?",
-            outcomes,
+            market_outcomes,
             dec!(100),
         );
 
