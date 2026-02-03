@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, MarketRegistry};
+use crate::core::exchange::polymarket::{Executor as PolymarketExecutor, MarketRegistry, POLYMARKET_PAYOUT};
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::app::config::Config;
 use crate::app::state::AppState;
@@ -252,7 +252,7 @@ fn handle_market_event(
             cache.update(book);
 
             if let Some(pair) = registry.get_market_for_token(&token_id) {
-                let ctx = DetectionContext::new(pair, cache);
+                let ctx = DetectionContext::with_payout(pair, cache, POLYMARKET_PAYOUT);
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
@@ -265,7 +265,7 @@ fn handle_market_event(
             cache.update(book);
 
             if let Some(pair) = registry.get_market_for_token(&token_id) {
-                let ctx = DetectionContext::new(pair, cache);
+                let ctx = DetectionContext::with_payout(pair, cache, POLYMARKET_PAYOUT);
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
