@@ -1,16 +1,12 @@
 //! Order execution for Polymarket CLOB.
 
-#![allow(dead_code)]
-
 use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
 use polymarket_client_sdk::auth::state::Authenticated;
-use polymarket_client_sdk::auth::Normal;
-#[allow(unused_imports)]
-use polymarket_client_sdk::auth::Signer;
+use polymarket_client_sdk::auth::{Normal, Signer};
 use polymarket_client_sdk::clob::types::response::PostOrderResponse;
 use polymarket_client_sdk::clob::types::Side;
 use polymarket_client_sdk::clob::{Client, Config as ClobConfig};
