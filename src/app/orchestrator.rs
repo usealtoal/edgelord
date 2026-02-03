@@ -13,6 +13,7 @@ use tracing::{debug, error, info, warn};
 use crate::core::exchange::polymarket::{ArbitrageExecutionResult, Executor as PolymarketExecutor, MarketRegistry};
 use crate::app::config::Config;
 use crate::app::state::AppState;
+use crate::app::status_file::{StatusConfig, StatusWriter};
 use crate::core::strategy::{
     CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
     StrategyRegistry,
@@ -47,6 +48,28 @@ impl App {
         // Initialize notifiers
         let notifiers = Arc::new(build_notifier_registry(&config));
         info!(notifiers = notifiers.len(), "Notifiers initialized");
+
+        // Initialize status writer if configured
+        let status_writer = config.status_file.as_ref().map(|path| {
+            let status_config = StatusConfig {
+                chain_id: config.network.chain_id,
+                network: if config.network.chain_id == 137 {
+                    "mainnet".to_string()
+                } else {
+                    "testnet".to_string()
+                },
+                strategies: config.strategies.enabled.clone(),
+                dry_run: config.dry_run,
+            };
+            Arc::new(StatusWriter::new(path.clone(), status_config))
+        });
+        if let Some(ref writer) = status_writer {
+            // Write initial status file at startup
+            if let Err(e) = writer.write() {
+                warn!(error = %e, "Failed to write initial status file");
+            }
+            info!(path = ?config.status_file, "Status file writer initialized");
+        }
 
         // Initialize executor (optional) - still Polymarket-specific for now
         let executor = init_executor(&config).await;
@@ -122,6 +145,7 @@ impl App {
                 &notifiers,
                 &state,
                 dry_run,
+                status_writer.clone(),
             );
         }
 
@@ -222,6 +246,7 @@ fn handle_market_event(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
     dry_run: bool,
+    status_writer: Option<Arc<StatusWriter>>,
 ) {
     match event {
         MarketEvent::OrderBookSnapshot { token_id, book } => {
@@ -232,7 +257,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run, status_writer.clone());
                 }
             }
         }
@@ -245,7 +270,7 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run);
+                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run, status_writer.clone());
                 }
             }
         }
@@ -267,6 +292,7 @@ fn handle_opportunity(
     state: &Arc<AppState>,
     cache: &OrderBookCache,
     dry_run: bool,
+    status_writer: Option<Arc<StatusWriter>>,
 ) {
     // Check for duplicate execution
     if !state.try_lock_execution(opp.market_id().as_str()) {
@@ -297,6 +323,14 @@ fn handle_opportunity(
         }
     }
 
+    // Record opportunity in status file
+    if let Some(ref writer) = status_writer {
+        writer.record_opportunity();
+        if let Err(e) = writer.write() {
+            warn!(error = %e, "Failed to write status file");
+        }
+    }
+
     // Notify opportunity detected
     notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
 
@@ -312,7 +346,7 @@ fn handle_opportunity(
                 );
                 state.release_execution(opp.market_id().as_str());
             } else if let Some(exec) = executor {
-                spawn_execution(exec, opp, notifiers.clone(), state.clone());
+                spawn_execution(exec, opp, notifiers.clone(), state.clone(), status_writer);
             } else {
                 // No executor, release the lock
                 state.release_execution(opp.market_id().as_str());
@@ -358,8 +392,10 @@ fn spawn_execution(
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
     state: Arc<AppState>,
+    status_writer: Option<Arc<StatusWriter>>,
 ) {
     let market_id = opportunity.market_id().to_string();
+    let expected_profit = opportunity.expected_profit();
 
     tokio::spawn(async move {
         let result = executor.execute_arbitrage(&opportunity).await;
@@ -372,6 +408,19 @@ fn spawn_execution(
                 match &exec_result {
                     ArbitrageExecutionResult::Success { .. } => {
                         record_position(&state, &opportunity);
+                        // Record execution with profit in status file
+                        if let Some(ref writer) = status_writer {
+                            writer.record_execution(expected_profit);
+                            // Update runtime stats
+                            let positions = state.positions();
+                            let open_count = positions.open_positions().count();
+                            let exposure = positions.total_exposure();
+                            let max_exposure = state.risk_limits().max_total_exposure;
+                            writer.update_runtime(open_count, exposure, max_exposure);
+                            if let Err(e) = writer.write() {
+                                warn!(error = %e, "Failed to write status file");
+                            }
+                        }
                     }
                     ArbitrageExecutionResult::PartialFill {
                         filled_leg,
@@ -391,6 +440,17 @@ fn spawn_execution(
                         if let Err(cancel_err) = executor.cancel(&order_id).await {
                             warn!(error = %cancel_err, "Failed to cancel filled leg, recording partial position");
                             record_partial_position(&state, &opportunity, filled_leg);
+                            // Update runtime stats for partial position
+                            if let Some(ref writer) = status_writer {
+                                let positions = state.positions();
+                                let open_count = positions.open_positions().count();
+                                let exposure = positions.total_exposure();
+                                let max_exposure = state.risk_limits().max_total_exposure;
+                                writer.update_runtime(open_count, exposure, max_exposure);
+                                if let Err(e) = writer.write() {
+                                    warn!(error = %e, "Failed to write status file");
+                                }
+                            }
                         } else {
                             info!("Successfully cancelled filled leg, no position recorded");
                         }

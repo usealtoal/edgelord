@@ -74,6 +74,21 @@ pub fn execute_install(args: &InstallArgs) {
         std::process::exit(1);
     }
 
+    // Create status directory with correct ownership
+    let status_dir = "/var/run/edgelord";
+    if !std::path::Path::new(status_dir).exists() {
+        if let Err(e) = fs::create_dir_all(status_dir) {
+            eprintln!("Warning: Failed to create {status_dir}: {e}");
+        } else {
+            // chown to service user
+            let user = &args.user;
+            let _ = std::process::Command::new("chown")
+                .args(["-R", user, status_dir])
+                .status();
+            println!("✓ Created {status_dir}");
+        }
+    }
+
     println!();
     println!("Start with: sudo systemctl start edgelord");
     println!("View logs:  edgelord logs -f");

@@ -3,6 +3,7 @@
 mod config;
 mod orchestrator;
 mod state;
+pub mod status_file;
 
 pub use config::{
     Config, Exchange, LoggingConfig, NetworkConfig, RiskConfig, StrategiesConfig,

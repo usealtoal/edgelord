@@ -5,7 +5,7 @@
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::app::state::RiskLimits;
@@ -41,6 +41,13 @@ pub struct Config {
     /// Dry-run mode: detect opportunities but don't execute trades.
     #[serde(default)]
     pub dry_run: bool,
+    /// Path to the status file for external monitoring.
+    #[serde(default = "default_status_file")]
+    pub status_file: Option<PathBuf>,
+}
+
+fn default_status_file() -> Option<PathBuf> {
+    Some(PathBuf::from("/var/run/edgelord/status.json"))
 }
 
 /// Configuration for all detection strategies.
@@ -217,6 +224,7 @@ impl Default for Config {
             risk: RiskConfig::default(),
             telegram: TelegramAppConfig::default(),
             dry_run: false,
+            status_file: default_status_file(),
         }
     }
 }
