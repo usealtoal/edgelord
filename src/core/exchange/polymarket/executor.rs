@@ -26,14 +26,14 @@ use crate::core::exchange::{
 type AuthenticatedClient = Client<Authenticated<Normal>>;
 
 /// Executes trades on Polymarket CLOB.
-pub struct Executor {
+pub struct PolymarketExecutor {
     /// The authenticated CLOB client.
     client: Arc<AuthenticatedClient>,
     /// The signer for signing orders.
     signer: Arc<PrivateKeySigner>,
 }
 
-impl Executor {
+impl PolymarketExecutor {
     /// Create new executor by authenticating with Polymarket CLOB.
     pub async fn new(config: &Config) -> Result<Self> {
         let private_key = config
@@ -227,7 +227,7 @@ impl Executor {
 }
 
 #[async_trait]
-impl OrderExecutor for Executor {
+impl OrderExecutor for PolymarketExecutor {
     async fn execute(&self, order: &OrderRequest) -> Result<ExecutionResult> {
         let side = match order.side {
             OrderSide::Buy => Side::Buy,
@@ -256,7 +256,7 @@ impl OrderExecutor for Executor {
 }
 
 #[async_trait]
-impl ArbitrageExecutor for Executor {
+impl ArbitrageExecutor for PolymarketExecutor {
     async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
         self.execute_arbitrage_impl(opportunity).await
     }

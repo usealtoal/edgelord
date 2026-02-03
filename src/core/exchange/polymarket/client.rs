@@ -15,12 +15,12 @@ use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 ///
 /// Handles fetching market data from the Polymarket CLOB (Central Limit Order Book)
 /// API endpoints.
-pub struct Client {
+pub struct PolymarketClient {
     http: HttpClient,
     base_url: String,
 }
 
-impl Client {
+impl PolymarketClient {
     /// Create a new Polymarket client with the given base URL.
     ///
     /// # Arguments
@@ -61,7 +61,7 @@ impl Client {
 }
 
 #[async_trait]
-impl MarketFetcher for Client {
+impl MarketFetcher for PolymarketClient {
     async fn get_markets(&self, limit: usize) -> Result<Vec<MarketInfo>> {
         let markets = self.get_active_markets(limit).await?;
         Ok(markets.into_iter().map(MarketInfo::from).collect())

@@ -7,7 +7,7 @@
 //!
 //! # Connection Lifecycle
 //!
-//! 1. **Initialization**: Create a `WebSocketHandler` with the target URL
+//! 1. **Initialization**: Create a `PolymarketWebSocketHandler` with the target URL
 //! 2. **Connection**: Establish a WebSocket connection via `connect()`
 //! 3. **Subscription**: Subscribe to specific asset IDs via `subscribe()`
 //! 4. **Message Loop**: Process incoming messages until close or error
@@ -16,7 +16,7 @@
 //! # Usage
 //!
 //! ```ignore
-//! let handler = WebSocketHandler::new(url);
+//! let handler = PolymarketWebSocketHandler::new(url);
 //! handler.run(asset_ids, |msg| {
 //!     // Process each incoming message
 //! }).await?;
@@ -38,12 +38,12 @@ use crate::core::exchange::{MarketDataStream, MarketEvent};
 /// Manages the WebSocket connection lifecycle and message processing.
 /// The handler is stateless after construction - connection state is
 /// managed within the `run()` method.
-pub struct WebSocketHandler {
+pub struct PolymarketWebSocketHandler {
     /// The WebSocket URL to connect to (e.g., <wss://ws-subscriptions-clob.polymarket.com/ws/market>)
     url: String,
 }
 
-impl WebSocketHandler {
+impl PolymarketWebSocketHandler {
     /// Creates a new WebSocket handler for the given URL.
     ///
     /// # Arguments
@@ -218,12 +218,12 @@ impl WebSocketHandler {
 /// Polymarket market data stream implementing the `MarketDataStream` trait.
 ///
 /// Provides an async iterator-style interface for receiving market events.
-pub struct DataStream {
+pub struct PolymarketDataStream {
     url: String,
     ws: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 }
 
-impl DataStream {
+impl PolymarketDataStream {
     /// Create a new data stream for the given WebSocket URL.
     #[must_use]
     pub fn new(url: String) -> Self {
@@ -232,7 +232,7 @@ impl DataStream {
 }
 
 #[async_trait]
-impl MarketDataStream for DataStream {
+impl MarketDataStream for PolymarketDataStream {
     async fn connect(&mut self) -> Result<()> {
         info!(url = %self.url, "Connecting to WebSocket");
         let (ws_stream, response) = connect_async(&self.url).await?;

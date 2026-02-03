@@ -2,10 +2,12 @@
 //!
 //! Creates exchange-specific implementations based on configuration.
 
+use std::sync::Arc;
+
 use crate::app::{Config, Exchange};
 use crate::error::Result;
 
-use super::{ExchangeConfig, MarketDataStream, MarketFetcher, OrderExecutor};
+use super::{ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, OrderExecutor};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -15,7 +17,7 @@ impl ExchangeFactory {
     pub fn create_market_fetcher(config: &Config) -> Box<dyn MarketFetcher> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(super::polymarket::Client::new(
+                Box::new(super::polymarket::PolymarketClient::new(
                     config.network().api_url.clone(),
                 ))
             }
@@ -26,7 +28,7 @@ impl ExchangeFactory {
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(super::polymarket::DataStream::new(
+                Box::new(super::polymarket::PolymarketDataStream::new(
                     config.network().ws_url.clone(),
                 ))
             }
@@ -43,8 +45,24 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = super::polymarket::Executor::new(config).await?;
+                let executor = super::polymarket::PolymarketExecutor::new(config).await?;
                 Ok(Some(Box::new(executor)))
+            }
+        }
+    }
+
+    /// Create an arbitrage executor for the configured exchange.
+    ///
+    /// Returns `None` if no wallet is configured.
+    pub async fn create_arbitrage_executor(config: &Config) -> Result<Option<Arc<dyn ArbitrageExecutor + Send + Sync>>> {
+        if config.wallet.private_key.is_none() {
+            return Ok(None);
+        }
+
+        match config.exchange {
+            Exchange::Polymarket => {
+                let executor = super::polymarket::PolymarketExecutor::new(config).await?;
+                Ok(Some(Arc::new(executor)))
             }
         }
     }

@@ -22,6 +22,19 @@ pub enum Exchange {
     Polymarket,
 }
 
+/// Exchange-specific configuration.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ExchangeSpecificConfig {
+    Polymarket(PolymarketConfig),
+}
+
+impl Default for ExchangeSpecificConfig {
+    fn default() -> Self {
+        Self::Polymarket(PolymarketConfig::default())
+    }
+}
+
 /// Exchange environment (testnet vs mainnet).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,9 +58,9 @@ pub struct Config {
     /// Which exchange to connect to.
     #[serde(default)]
     pub exchange: Exchange,
-    /// Polymarket-specific configuration.
-    #[serde(default)]
-    pub polymarket: PolymarketConfig,
+    /// Exchange-specific configuration.
+    #[serde(default, alias = "polymarket")]
+    pub exchange_config: ExchangeSpecificConfig,
     pub logging: LoggingConfig,
     #[serde(default)]
     pub strategies: StrategiesConfig,
@@ -265,13 +278,21 @@ impl Config {
     /// Get the network configuration for the active exchange.
     #[must_use]
     pub fn network(&self) -> NetworkConfig {
-        match self.exchange {
-            Exchange::Polymarket => NetworkConfig {
-                environment: self.polymarket.environment,
-                ws_url: self.polymarket.ws_url.clone(),
-                api_url: self.polymarket.api_url.clone(),
-                chain_id: self.polymarket.chain_id,
+        match &self.exchange_config {
+            ExchangeSpecificConfig::Polymarket(poly) => NetworkConfig {
+                environment: poly.environment,
+                ws_url: poly.ws_url.clone(),
+                api_url: poly.api_url.clone(),
+                chain_id: poly.chain_id,
             },
+        }
+    }
+
+    /// Get Polymarket-specific config if this is a Polymarket exchange.
+    #[must_use]
+    pub fn polymarket_config(&self) -> Option<&PolymarketConfig> {
+        match &self.exchange_config {
+            ExchangeSpecificConfig::Polymarket(config) => Some(config),
         }
     }
 }
@@ -280,7 +301,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             exchange: Exchange::default(),
-            polymarket: PolymarketConfig::default(),
+            exchange_config: ExchangeSpecificConfig::default(),
             logging: LoggingConfig {
                 level: "info".into(),
                 format: "pretty".into(),

@@ -10,7 +10,6 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::polymarket::Executor as PolymarketExecutor;
 use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor};
 use crate::core::domain::MarketRegistry;
 use crate::app::config::Config;
@@ -71,7 +70,7 @@ impl App {
             info!(path = ?config.status_file, "Status file writer initialized");
         }
 
-        // Initialize executor (optional) - still Polymarket-specific for now
+        // Initialize executor (optional)
         let executor = init_executor(&config).await;
 
         // Build strategy registry
@@ -224,21 +223,20 @@ fn build_strategy_registry(config: &Config) -> StrategyRegistry {
 }
 
 /// Initialize the executor if wallet is configured.
-async fn init_executor(config: &Config) -> Option<Arc<PolymarketExecutor>> {
-    if config.wallet.private_key.is_some() {
-        match PolymarketExecutor::new(config).await {
-            Ok(exec) => {
-                info!("Executor initialized - trading ENABLED");
-                Some(Arc::new(exec))
-            }
-            Err(e) => {
-                warn!(error = %e, "Failed to initialize executor - detection only");
-                None
-            }
+async fn init_executor(config: &Config) -> Option<Arc<dyn ArbitrageExecutor + Send + Sync>> {
+    match ExchangeFactory::create_arbitrage_executor(config).await {
+        Ok(Some(exec)) => {
+            info!("Executor initialized - trading ENABLED");
+            Some(exec)
         }
-    } else {
-        info!("No wallet configured - detection only mode");
-        None
+        Ok(None) => {
+            info!("No wallet configured - detection only mode");
+            None
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to initialize executor - detection only");
+            None
+        }
     }
 }
 
@@ -248,7 +246,7 @@ fn handle_market_event(
     cache: &OrderBookCache,
     registry: &MarketRegistry,
     strategies: &StrategyRegistry,
-    executor: Option<Arc<PolymarketExecutor>>,
+    executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
@@ -293,7 +291,7 @@ fn handle_market_event(
 /// Handle a detected opportunity.
 fn handle_opportunity(
     opp: Opportunity,
-    executor: Option<Arc<PolymarketExecutor>>,
+    executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
@@ -393,7 +391,7 @@ fn get_max_slippage(opportunity: &Opportunity, cache: &OrderBookCache) -> Option
 
 /// Spawn async execution without blocking message processing.
 fn spawn_execution(
-    executor: Arc<PolymarketExecutor>,
+    executor: Arc<dyn ArbitrageExecutor + Send + Sync>,
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
     state: Arc<AppState>,
