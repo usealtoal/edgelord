@@ -109,6 +109,7 @@ impl StatusWriter {
     /// Write the current status to the file atomically.
     ///
     /// Uses write-to-temp-then-rename pattern for atomicity.
+    /// Creates parent directory if it doesn't exist.
     #[allow(clippy::result_large_err)]
     pub fn write(&self) -> Result<()> {
         // Clone status while holding lock, release before I/O
@@ -117,6 +118,11 @@ impl StatusWriter {
             status.updated_at = Utc::now();
             serde_json::to_string_pretty(&*status)?
         };
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
 
         // Write to temp file first for atomicity
         let temp_path = self.path.with_extension("tmp");
@@ -296,5 +302,26 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_status_writer_creates_parent_directory() {
+        let temp_dir = std::env::temp_dir();
+        let nested_path = temp_dir.join("edgelord_test_nested/subdir/status.json");
+
+        // Ensure directory doesn't exist
+        let parent = nested_path.parent().unwrap();
+        let _ = fs::remove_dir_all(parent);
+
+        let writer = StatusWriter::new(nested_path.clone(), test_config());
+        writer.write().unwrap();
+
+        // Verify file was written
+        assert!(nested_path.exists());
+        let content = fs::read_to_string(&nested_path).unwrap();
+        assert!(content.contains("\"version\": \"1\""));
+
+        // Cleanup
+        let _ = fs::remove_dir_all(temp_dir.join("edgelord_test_nested"));
     }
 }

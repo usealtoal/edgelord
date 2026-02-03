@@ -63,7 +63,11 @@ impl App {
             };
             Arc::new(StatusWriter::new(path.clone(), status_config))
         });
-        if status_writer.is_some() {
+        if let Some(ref writer) = status_writer {
+            // Write initial status file at startup
+            if let Err(e) = writer.write() {
+                warn!(error = %e, "Failed to write initial status file");
+            }
             info!(path = ?config.status_file, "Status file writer initialized");
         }
 
@@ -322,6 +326,9 @@ fn handle_opportunity(
     // Record opportunity in status file
     if let Some(ref writer) = status_writer {
         writer.record_opportunity();
+        if let Err(e) = writer.write() {
+            warn!(error = %e, "Failed to write status file");
+        }
     }
 
     // Notify opportunity detected
@@ -410,6 +417,9 @@ fn spawn_execution(
                             let exposure = positions.total_exposure();
                             let max_exposure = state.risk_limits().max_total_exposure;
                             writer.update_runtime(open_count, exposure, max_exposure);
+                            if let Err(e) = writer.write() {
+                                warn!(error = %e, "Failed to write status file");
+                            }
                         }
                     }
                     ArbitrageExecutionResult::PartialFill {
@@ -437,6 +447,9 @@ fn spawn_execution(
                                 let exposure = positions.total_exposure();
                                 let max_exposure = state.risk_limits().max_total_exposure;
                                 writer.update_runtime(open_count, exposure, max_exposure);
+                                if let Err(e) = writer.write() {
+                                    warn!(error = %e, "Failed to write status file");
+                                }
                             }
                         } else {
                             info!("Successfully cancelled filled leg, no position recorded");
