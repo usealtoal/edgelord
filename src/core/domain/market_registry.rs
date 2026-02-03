@@ -1,7 +1,8 @@
 //! Generic market registry supporting any outcome structure.
 //!
-//! Unlike the Polymarket-specific registry that only handles YES/NO markets,
-//! this generic registry works with any number of outcomes per market.
+//! The [`MarketRegistry`] maps token IDs to their containing markets, enabling
+//! efficient lookup from order book events. Works with markets of any size
+//! (binary, multi-outcome, etc.).
 
 use std::collections::HashMap;
 

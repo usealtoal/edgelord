@@ -1,10 +1,22 @@
 //! Market-related domain types with proper encapsulation.
+//!
+//! This module provides exchange-agnostic market representations:
+//!
+//! - [`Market`] - A prediction market with N outcomes and configurable payout
+//! - [`Outcome`] - A single tradeable outcome within a market
+//!
+//! These types work across any prediction market exchange, with exchange-specific
+//! details (like payout amounts) configured at market creation time.
 
 use rust_decimal::Decimal;
 
 use super::id::{MarketId, TokenId};
 
 /// A single outcome within a market.
+///
+/// Each outcome has a unique token ID (used for trading) and a human-readable name.
+/// For binary markets, typical names are "Yes"/"No". For multi-outcome markets,
+/// names might be candidate names, team names, etc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
     token_id: TokenId,
@@ -33,7 +45,31 @@ impl Outcome {
     }
 }
 
-/// A generic market supporting N outcomes with configurable payout.
+/// A prediction market supporting N outcomes with configurable payout.
+///
+/// This is the core market representation used throughout the system. It supports:
+/// - **Binary markets** (2 outcomes, e.g., Yes/No)
+/// - **Multi-outcome markets** (3+ outcomes, e.g., election candidates)
+///
+/// The `payout` field specifies how much one share pays out on resolution.
+/// For Polymarket, this is $1.00. Other exchanges may use different values.
+///
+/// # Example
+///
+/// ```ignore
+/// use edgelord::core::domain::{Market, Outcome, MarketId, TokenId};
+/// use rust_decimal_macros::dec;
+///
+/// let market = Market::new(
+///     MarketId::from("market-123"),
+///     "Will it rain tomorrow?",
+///     vec![
+///         Outcome::new(TokenId::from("yes-token"), "Yes"),
+///         Outcome::new(TokenId::from("no-token"), "No"),
+///     ],
+///     dec!(1.00), // $1 payout per share
+/// );
+/// ```
 #[derive(Debug, Clone)]
 pub struct Market {
     market_id: MarketId,

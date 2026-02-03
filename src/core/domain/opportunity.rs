@@ -1,4 +1,8 @@
 //! Opportunity types for arbitrage detection.
+//!
+//! An [`Opportunity`] represents a detected arbitrage situation where buying
+//! all outcomes costs less than the guaranteed payout. Each opportunity has
+//! multiple [`OpportunityLeg`]s representing the individual purchases needed.
 
 use rust_decimal::Decimal;
 
