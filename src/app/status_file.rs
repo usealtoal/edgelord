@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
@@ -18,7 +18,7 @@ use crate::error::Result;
 const STATUS_VERSION: &str = "1";
 
 /// Top-level status file structure.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusFile {
     /// Schema version for forward compatibility.
     pub version: String,
@@ -37,7 +37,7 @@ pub struct StatusFile {
 }
 
 /// Static configuration snapshot.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusConfig {
     /// Blockchain chain ID.
     pub chain_id: u64,
@@ -50,7 +50,7 @@ pub struct StatusConfig {
 }
 
 /// Runtime state information.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StatusRuntime {
     /// Number of currently open positions.
     pub positions_open: usize,
@@ -61,7 +61,7 @@ pub struct StatusRuntime {
 }
 
 /// Today's activity counters (reset daily).
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StatusToday {
     /// Arbitrage opportunities detected.
     pub opportunities_detected: u64,
@@ -323,5 +323,75 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_dir_all(temp_dir.join("edgelord_test_nested"));
+    }
+
+    #[test]
+    fn test_status_file_deserialization() {
+        let json = r#"{
+            "version": "1",
+            "started_at": "2024-01-15T10:30:00Z",
+            "pid": 12345,
+            "config": {
+                "chain_id": 137,
+                "network": "polygon",
+                "strategies": ["single_condition", "combinatorial"],
+                "dry_run": false
+            },
+            "runtime": {
+                "positions_open": 3,
+                "exposure_current": "1500.50",
+                "exposure_max": "10000"
+            },
+            "today": {
+                "opportunities_detected": 42,
+                "trades_executed": 5,
+                "profit_realized": "25.75"
+            },
+            "updated_at": "2024-01-15T11:00:00Z"
+        }"#;
+
+        let status: StatusFile = serde_json::from_str(json).unwrap();
+        assert_eq!(status.version, "1");
+        assert_eq!(status.pid, 12345);
+        assert_eq!(status.config.chain_id, 137);
+        assert_eq!(status.config.network, "polygon");
+        assert_eq!(status.config.strategies.len(), 2);
+        assert!(!status.config.dry_run);
+        assert_eq!(status.runtime.positions_open, 3);
+        assert_eq!(status.runtime.exposure_current, dec!(1500.50));
+        assert_eq!(status.runtime.exposure_max, dec!(10000));
+        assert_eq!(status.today.opportunities_detected, 42);
+        assert_eq!(status.today.trades_executed, 5);
+        assert_eq!(status.today.profit_realized, dec!(25.75));
+    }
+
+    #[test]
+    fn test_status_file_roundtrip() {
+        let original = StatusFile {
+            version: "1".to_string(),
+            started_at: Utc::now(),
+            pid: 54321,
+            config: test_config(),
+            runtime: StatusRuntime {
+                positions_open: 7,
+                exposure_current: dec!(2500),
+                exposure_max: dec!(5000),
+            },
+            today: StatusToday {
+                opportunities_detected: 100,
+                trades_executed: 10,
+                profit_realized: dec!(50.25),
+            },
+            updated_at: Utc::now(),
+        };
+
+        let json = serde_json::to_string_pretty(&original).unwrap();
+        let parsed: StatusFile = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.version, original.version);
+        assert_eq!(parsed.pid, original.pid);
+        assert_eq!(parsed.config.chain_id, original.config.chain_id);
+        assert_eq!(parsed.runtime.positions_open, original.runtime.positions_open);
+        assert_eq!(parsed.today.trades_executed, original.today.trades_executed);
     }
 }
