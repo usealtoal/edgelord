@@ -1,18 +1,18 @@
-# Dependency Discovery Service Design
+# Relation Inference Service Design
 
 > **Date:** 2026-02-04
 > **Status:** Draft
-> **Author:** Subagent (dependency-discovery-design)
+> **Author:** Subagent (constraint-inference-design)
 > **Tracking:** Branch `chud/dependency-discovery`
 
 ## Executive Summary
 
-This document designs the LLM-powered Dependency Discovery Service for edgelord's combinatorial arbitrage strategy. The service discovers logical relationships between prediction markets (e.g., "Trump wins PA" implies contribution to "Trump wins nationally") and provides pre-computed constraints to the Frank-Wolfe solver.
+This document designs the LLM-powered Relation Inference Service for edgelord's combinatorial arbitrage strategy. The service infers logical relationships between prediction markets (e.g., "Trump wins PA" implies contribution to "Trump wins nationally") and provides pre-computed constraints to the Frank-Wolfe solver.
 
 **Key Design Principles:**
 1. **Event-driven** — Analyze on market creation and significant price changes
-2. **Two-tier architecture** — LLM discovers (slow path), solver executes (hot path)
-3. **Trait-based & pluggable** — Multiple discovery backends (LLM, rules, hybrid)
+2. **Two-tier architecture** — LLM infers (slow path), solver executes (hot path)
+3. **Trait-based & pluggable** — Multiple inference backends (LLM, rules, hybrid)
 4. **Fail-safe** — Bad LLM output cannot cause incorrect trades
 
 ---
@@ -23,9 +23,9 @@ The combinatorial arbitrage infrastructure (Frank-Wolfe + HiGHS) is implemented 
 
 1. No way to identify which markets are logically related
 2. No way to encode those relationships as ILP constraints
-3. `MarketContext.has_dependencies` is always `false`
+3. `MarketContext.has_relations` is always `false`
 
-**Goal:** Build a service that automatically discovers market dependencies, caches them, and feeds constraint matrices to the solver.
+**Goal:** Build a service that automatically infers market constraints, caches them, and feeds constraint matrices to the solver.
 
 ---
 
@@ -42,23 +42,23 @@ The combinatorial arbitrage infrastructure (Frank-Wolfe + HiGHS) is implemented 
           │                 │                     │
           v                 v                     v
 ┌─────────────────────────────────────────────────────────────────┐
-│                  DependencyDiscoveryService                      │
+│                  InferenceService                      │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Event Queue (bounded, deduplicated)                     │    │
 │  └─────────────────────────────┬───────────────────────────┘    │
 │                                │                                 │
 │  ┌─────────────────────────────v───────────────────────────┐    │
-│  │ Discovery Coordinator                                    │    │
+│  │ Inference Coordinator                                    │    │
 │  │  - Batches markets for analysis                          │    │
-│  │  - Manages discovery rate limits                         │    │
-│  │  - Routes to appropriate discoverer                      │    │
+│  │  - Manages inference rate limits                         │    │
+│  │  - Routes to appropriate inferrer                      │    │
 │  └─────────────────────────────┬───────────────────────────┘    │
 │                                │                                 │
 │  ┌─────────────────────────────v───────────────────────────┐    │
-│  │ DependencyDiscoverer (trait)                             │    │
-│  │  ├── LlmDiscoverer (Claude, GPT-4, etc.)                 │    │
-│  │  ├── RuleBasedDiscoverer (heuristics)                    │    │
-│  │  └── HybridDiscoverer (rules + LLM validation)           │    │
+│  │ Inferrer (trait)                             │    │
+│  │  ├── LlmInferrer (Claude, GPT-4, etc.)                 │    │
+│  │  ├── RuleInferrer (heuristics)                    │    │
+│  │  └── HybridInferrer (rules + LLM validation)           │    │
 │  └─────────────────────────────┬───────────────────────────┘    │
 │                                │                                 │
 │  ┌─────────────────────────────v───────────────────────────┐    │
@@ -69,8 +69,8 @@ The combinatorial arbitrage infrastructure (Frank-Wolfe + HiGHS) is implemented 
 │  └─────────────────────────────┬───────────────────────────┘    │
 │                                │                                 │
 │  ┌─────────────────────────────v───────────────────────────┐    │
-│  │ DependencyCache                                          │    │
-│  │  - Stores validated dependencies with TTL                │    │
+│  │ ClusterCache                                          │    │
+│  │  - Stores validated constraints with TTL                │    │
 │  │  - Indexed by market cluster                             │    │
 │  │  - Pre-computed ILP constraint matrices                  │    │
 │  └─────────────────────────────────────────────────────────┘    │
@@ -93,57 +93,62 @@ The combinatorial arbitrage infrastructure (Frank-Wolfe + HiGHS) is implemented 
 
 ## Core Domain Types
 
-### Dependencies
+### Relations
 
 ```rust
-// Location: src/core/domain/dependency.rs
+// Location: src/core/domain/relation.rs
 
-/// A logical dependency between prediction markets.
+/// A logical relation between prediction markets.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Dependency {
-    /// Unique identifier for this dependency.
-    pub id: DependencyId,
-    /// The type and semantics of the dependency.
-    pub kind: DependencyKind,
-    /// Confidence score (0.0 - 1.0) from discoverer.
+pub struct Relation {
+    /// Unique identifier for this relation.
+    pub id: RelationId,
+    /// The type and semantics of the relation.
+    pub kind: RelationKind,
+    /// Confidence score (0.0 - 1.0) from inferrer.
     pub confidence: f64,
     /// Human-readable reasoning (for debugging/audit).
     pub reasoning: String,
-    /// When this dependency was discovered.
-    pub discovered_at: chrono::DateTime<chrono::Utc>,
-    /// When this dependency expires (needs re-validation).
+    /// When this relation was inferred.
+    pub inferred_at: chrono::DateTime<chrono::Utc>,
+    /// When this relation expires (needs re-validation).
     pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// The type of logical relationship between markets.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DependencyKind {
+pub enum RelationKind {
     /// If market A resolves YES, market B must resolve YES.
-    /// Constraint: P(A) ≤ P(B), encoded as μ_A - μ_B ≤ 0
+    /// Relation: P(A) ≤ P(B), encoded as μ_A - μ_B ≤ 0
     Implies {
         if_yes: MarketId,
         then_yes: MarketId,
     },
 
     /// At most one of these markets can resolve YES.
-    /// Constraint: Σ μ_i ≤ 1
+    /// Relation: Σ μ_i ≤ 1
     MutuallyExclusive(Vec<MarketId>),
 
     /// Exactly one of these markets must resolve YES.
-    /// Constraint: Σ μ_i = 1
+    /// Relation: Σ μ_i = 1
     ExactlyOne(Vec<MarketId>),
 
     /// Custom linear constraint: Σ (coeff_i × μ_i) {≤, =, ≥} rhs
-    LinearConstraint {
+    Linear {
         terms: Vec<(MarketId, Decimal)>,
         sense: ConstraintSense,
         rhs: Decimal,
     },
 }
 
-impl DependencyKind {
+impl RelationKind {
     /// Convert to ILP constraint(s) for the solver.
-    pub fn to_constraints(&self, market_indices: &HashMap<MarketId, usize>) -> Vec<Constraint> {
+    pub fn to_solver_constraints(
+        &self,
+        market_indices: &HashMap<MarketId, usize>,
+    ) -> Vec<solver::Constraint> {
+        use crate::core::solver::Constraint;
+        
         match self {
             Self::Implies { if_yes, then_yes } => {
                 // μ_A - μ_B ≤ 0  =>  μ_A ≤ μ_B
@@ -166,7 +171,7 @@ impl DependencyKind {
                 }
                 vec![Constraint::eq(coeffs, Decimal::ONE)]
             }
-            Self::LinearConstraint { terms, sense, rhs } => {
+            Self::Linear { terms, sense, rhs } => {
                 let mut coeffs = vec![Decimal::ZERO; market_indices.len()];
                 for (market_id, coeff) in terms {
                     coeffs[market_indices[market_id]] = *coeff;
@@ -180,32 +185,32 @@ impl DependencyKind {
         }
     }
 
-    /// Get all markets referenced by this dependency.
+    /// Get all markets referenced by this relation.
     pub fn markets(&self) -> Vec<&MarketId> {
         match self {
             Self::Implies { if_yes, then_yes } => vec![if_yes, then_yes],
             Self::MutuallyExclusive(ms) | Self::ExactlyOne(ms) => ms.iter().collect(),
-            Self::LinearConstraint { terms, .. } => terms.iter().map(|(m, _)| m).collect(),
+            Self::Linear { terms, .. } => terms.iter().map(|(m, _)| m).collect(),
         }
     }
 }
 
-/// A cluster of related markets with pre-computed constraints.
+/// A cluster of related markets with pre-computed solver constraints.
 #[derive(Debug, Clone)]
-pub struct MarketCluster {
+pub struct Cluster {
     /// Unique identifier for this cluster.
     pub id: ClusterId,
     /// Markets in this cluster (ordered for ILP variable mapping).
     pub markets: Vec<MarketId>,
-    /// Dependencies within this cluster.
-    pub dependencies: Vec<Dependency>,
-    /// Pre-computed ILP constraint matrix.
-    pub constraints: Vec<Constraint>,
+    /// Source relations within this cluster.
+    pub relations: Vec<Relation>,
+    /// Pre-computed ILP constraints for the solver (hot path).
+    pub constraints: Vec<solver::Constraint>,
     /// Last update timestamp.
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl MarketCluster {
+impl Cluster {
     /// Build ILP problem for this cluster given current prices.
     pub fn build_ilp(&self, prices: &HashMap<MarketId, Decimal>) -> IlpProblem {
         let num_vars = self.markets.len();
@@ -227,11 +232,11 @@ impl MarketCluster {
 ```rust
 // Location: src/core/domain/id.rs (extend existing)
 
-/// Unique identifier for a dependency.
+/// Unique identifier for a relation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DependencyId(String);
+pub struct RelationId(String);
 
-impl DependencyId {
+impl RelationId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
@@ -246,55 +251,55 @@ pub struct ClusterId(String);
 
 ## Service Layer
 
-### DependencyDiscoverer Trait
+### Inferrer Trait
 
 ```rust
-// Location: src/core/service/discovery/mod.rs
+// Location: src/core/service/inference/mod.rs
 
 use async_trait::async_trait;
-use crate::core::domain::{Dependency, MarketId};
+use crate::core::domain::{Relation, MarketId};
 use crate::core::exchange::MarketInfo;
 use crate::error::Result;
 
-/// Discovers logical dependencies between markets.
+/// Infers logical relations between markets.
 ///
 /// Implementations may use LLMs, heuristic rules, or hybrid approaches.
-/// All discoverers must be idempotent and safe to call repeatedly.
+/// All inferrers must be idempotent and safe to call repeatedly.
 #[async_trait]
-pub trait DependencyDiscoverer: Send + Sync {
-    /// Discoverer name for logging and config.
+pub trait Inferrer: Send + Sync {
+    /// Inferrer name for logging and config.
     fn name(&self) -> &'static str;
 
-    /// Discover dependencies among a set of markets.
+    /// Infer relations among a set of markets.
     ///
     /// # Arguments
     /// * `markets` - Market metadata to analyze
-    /// * `existing` - Already-known dependencies (for incremental discovery)
+    /// * `existing` - Already-known relations (for incremental inference)
     ///
     /// # Returns
-    /// New dependencies discovered. May overlap with `existing` (caller dedupes).
-    async fn discover(
+    /// New relations inferred. May overlap with `existing` (caller dedupes).
+    async fn infer(
         &self,
         markets: &[MarketInfo],
-        existing: &[Dependency],
-    ) -> Result<Vec<Dependency>>;
+        existing: &[Relation],
+    ) -> Result<Vec<Relation>>;
 
-    /// Check if this discoverer can handle the given market count.
+    /// Check if this inferrer can handle the given market count.
     ///
-    /// LLM discoverers may have context window limits.
+    /// LLM inferrers may have context window limits.
     fn max_markets(&self) -> usize {
         100 // Conservative default
     }
 }
 
-/// Configuration for the discovery service.
+/// Configuration for the inference service.
 #[derive(Debug, Clone, Deserialize)]
-pub struct DiscoveryConfig {
-    /// Minimum confidence to accept a dependency.
+pub struct InferenceConfig {
+    /// Minimum confidence to accept a relation.
     #[serde(default = "default_min_confidence")]
     pub min_confidence: f64,
 
-    /// How long discovered dependencies are valid (seconds).
+    /// How long inferred relations are valid (seconds).
     #[serde(default = "default_ttl_seconds")]
     pub ttl_seconds: u64,
 
@@ -302,7 +307,7 @@ pub struct DiscoveryConfig {
     #[serde(default = "default_price_threshold")]
     pub price_change_threshold: f64,
 
-    /// Maximum pending discovery requests in queue.
+    /// Maximum pending inference requests in queue.
     #[serde(default = "default_queue_size")]
     pub max_queue_size: usize,
 
@@ -310,7 +315,7 @@ pub struct DiscoveryConfig {
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
 
-    /// Rate limit: max discoveries per minute.
+    /// Rate limit: max inferences per minute.
     #[serde(default = "default_rate_limit")]
     pub rate_limit_per_minute: u32,
 }
@@ -323,25 +328,37 @@ fn default_batch_size() -> usize { 20 }
 fn default_rate_limit() -> u32 { 30 }
 ```
 
-### LLM Discoverer
+### Llm Trait
 
 ```rust
-// Location: src/core/service/discovery/llm.rs
+// Location: src/core/llm/mod.rs
 
-/// LLM-powered dependency discoverer.
-pub struct LlmDiscoverer {
-    client: LlmClient,
-    config: LlmDiscoveryConfig,
+/// LLM completion interface.
+///
+/// Implementations provide access to language models for inference tasks.
+#[async_trait]
+pub trait Llm: Send + Sync {
+    /// Provider name for logging and config.
+    fn name(&self) -> &'static str;
+
+    /// Complete a prompt and return the response text.
+    async fn complete(&self, prompt: &str) -> Result<String>;
+}
+```
+
+### LLM Inferrer
+
+```rust
+// Location: src/core/service/inference/llm.rs
+
+/// LLM-powered relation inferrer.
+pub struct LlmInferrer {
+    llm: Arc<dyn Llm>,
+    config: LlmInferrerConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct LlmDiscoveryConfig {
-    /// LLM provider (claude, openai, local).
-    pub provider: String,
-    /// Model name (claude-3-sonnet, gpt-4-turbo, etc.).
-    pub model: String,
-    /// API endpoint (optional, for local models).
-    pub endpoint: Option<String>,
+pub struct LlmInferrerConfig {
     /// Temperature for generation.
     #[serde(default = "default_temperature")]
     pub temperature: f64,
@@ -354,18 +371,18 @@ fn default_temperature() -> f64 { 0.3 } // Low for consistency
 fn default_max_tokens() -> usize { 4096 }
 
 #[async_trait]
-impl DependencyDiscoverer for LlmDiscoverer {
+impl Inferrer for LlmInferrer {
     fn name(&self) -> &'static str {
         "llm"
     }
 
-    async fn discover(
+    async fn infer(
         &self,
         markets: &[MarketInfo],
-        _existing: &[Dependency],
-    ) -> Result<Vec<Dependency>> {
+        _existing: &[Relation],
+    ) -> Result<Vec<Relation>> {
         let prompt = self.build_prompt(markets);
-        let response = self.client.complete(&prompt).await?;
+        let response = self.llm.complete(&prompt).await?;
         self.parse_response(&response, markets)
     }
 
@@ -375,7 +392,7 @@ impl DependencyDiscoverer for LlmDiscoverer {
     }
 }
 
-impl LlmDiscoverer {
+impl LlmInferrer {
     fn build_prompt(&self, markets: &[MarketInfo]) -> String {
         let market_list = markets
             .iter()
@@ -384,7 +401,7 @@ impl LlmDiscoverer {
             .collect::<Vec<_>>()
             .join("\n");
 
-        format!(r#"Analyze these prediction markets for logical dependencies.
+        format!(r#"Analyze these prediction markets for logical constraints.
 
 ## Markets
 {market_list}
@@ -392,7 +409,7 @@ impl LlmDiscoverer {
 ## Task
 Identify logical relationships where the outcome of one market constrains another.
 
-## Dependency Types
+## Relation Types
 1. **implies**: If market A resolves YES, market B must resolve YES.
    Example: "Biden wins Wisconsin" implies "Biden wins at least one swing state"
 
@@ -408,7 +425,7 @@ Identify logical relationships where the outcome of one market constrains anothe
 ## Output Format (JSON)
 ```json
 {{
-  "dependencies": [
+  "constraints": [
     {{
       "type": "implies",
       "if_yes": "market_id_1",
@@ -427,10 +444,10 @@ Identify logical relationships where the outcome of one market constrains anothe
 ```
 
 ## Rules
-- Only output high-confidence dependencies (>0.7)
+- Only output high-confidence constraints (>0.7)
 - Use market IDs exactly as provided
 - Provide brief, clear reasoning
-- If no dependencies exist, return {{"dependencies": []}}
+- If no constraints exist, return {{"constraints": []}}
 - Do NOT invent markets or IDs
 "#)
     }
@@ -439,51 +456,51 @@ Identify logical relationships where the outcome of one market constrains anothe
         &self,
         response: &str,
         markets: &[MarketInfo],
-    ) -> Result<Vec<Dependency>> {
+    ) -> Result<Vec<Relation>> {
         // Extract JSON from response (handle markdown code blocks)
         let json_str = self.extract_json(response)?;
         let parsed: LlmResponse = serde_json::from_str(&json_str)?;
         
-        // Validate and convert
+        // Validate and convert LLM output to domain Relations
         let market_ids: HashSet<_> = markets.iter().map(|m| &m.id).collect();
-        let mut dependencies = Vec::new();
+        let mut relations = Vec::new();
         
-        for dep in parsed.dependencies {
+        for item in parsed.constraints {
             // Validate all referenced markets exist
-            if !self.validate_market_refs(&dep, &market_ids) {
-                tracing::warn!(dep = ?dep, "LLM referenced unknown market, skipping");
+            if !self.validate_market_refs(&item, &market_ids) {
+                tracing::warn!(item = ?item, "LLM referenced unknown market, skipping");
                 continue;
             }
             
-            if let Some(valid_dep) = self.convert_dependency(dep) {
-                dependencies.push(valid_dep);
+            if let Some(relation) = self.convert_to_relation(item) {
+                relations.push(relation);
             }
         }
         
-        Ok(dependencies)
+        Ok(relations)
     }
 }
 ```
 
-### Dependency Cache
+### Cluster Cache
 
 ```rust
-// Location: src/core/cache/dependency.rs
+// Location: src/core/cache/cluster.rs
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 use chrono::{DateTime, Utc};
 
-use crate::core::domain::{ClusterId, Dependency, MarketCluster, MarketId};
+use crate::core::domain::{ClusterId, Relation, Cluster, MarketId};
 
-/// Cache for discovered dependencies and market clusters.
+/// Cache for inferred relations and market clusters.
 ///
 /// Thread-safe, supports TTL-based expiration.
-pub struct DependencyCache {
-    /// Dependencies indexed by involved market.
-    by_market: RwLock<HashMap<MarketId, Vec<Dependency>>>,
+pub struct ClusterCache {
+    /// Relations indexed by involved market.
+    by_market: RwLock<HashMap<MarketId, Vec<Relation>>>,
     /// Pre-computed clusters.
-    clusters: RwLock<HashMap<ClusterId, MarketCluster>>,
+    clusters: RwLock<HashMap<ClusterId, Cluster>>,
     /// Market → Cluster mapping.
     market_to_cluster: RwLock<HashMap<MarketId, ClusterId>>,
     /// Configuration.
@@ -493,11 +510,11 @@ pub struct DependencyCache {
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     pub default_ttl: chrono::Duration,
-    pub max_dependencies: usize,
+    pub max_relations: usize,
     pub max_clusters: usize,
 }
 
-impl DependencyCache {
+impl ClusterCache {
     pub fn new(config: CacheConfig) -> Self {
         Self {
             by_market: RwLock::new(HashMap::new()),
@@ -507,12 +524,12 @@ impl DependencyCache {
         }
     }
 
-    /// Get cluster for a market (if any dependencies exist).
-    pub fn get_cluster(&self, market_id: &MarketId) -> Option<MarketCluster> {
-        let mapping = self.market_to_cluster.read().ok()?;
+    /// Get cluster for a market (if any relations exist).
+    pub fn get_cluster(&self, market_id: &MarketId) -> Option<Cluster> {
+        let mapping = self.market_to_cluster.read();
         let cluster_id = mapping.get(market_id)?;
         
-        let clusters = self.clusters.read().ok()?;
+        let clusters = self.clusters.read();
         let cluster = clusters.get(cluster_id)?;
         
         // Check expiration
@@ -523,26 +540,26 @@ impl DependencyCache {
         Some(cluster.clone())
     }
 
-    /// Add new dependencies and rebuild affected clusters.
-    pub fn add_dependencies(&self, dependencies: Vec<Dependency>) {
-        if dependencies.is_empty() {
+    /// Add new relations and rebuild affected clusters.
+    pub fn add_relations(&self, relations: Vec<Relation>) {
+        if relations.is_empty() {
             return;
         }
 
         // Group by cluster (using union-find for connected components)
-        let clusters = self.build_clusters(&dependencies);
+        let clusters = self.build_clusters(&relations);
         
         // Update cache atomically
-        let mut by_market = self.by_market.write().unwrap();
-        let mut cluster_cache = self.clusters.write().unwrap();
-        let mut mapping = self.market_to_cluster.write().unwrap();
+        let mut by_market = self.by_market.write();
+        let mut cluster_cache = self.clusters.write();
+        let mut mapping = self.market_to_cluster.write();
         
-        for dep in &dependencies {
-            for market_id in dep.kind.markets() {
+        for rel in &relations {
+            for market_id in rel.kind.markets() {
                 by_market
                     .entry(market_id.clone())
                     .or_default()
-                    .push(dep.clone());
+                    .push(rel.clone());
             }
         }
         
@@ -554,50 +571,50 @@ impl DependencyCache {
         }
     }
 
-    /// Invalidate dependencies involving a market.
+    /// Invalidate relations involving a market.
     pub fn invalidate(&self, market_id: &MarketId) {
-        let mut by_market = self.by_market.write().unwrap();
+        let mut by_market = self.by_market.write();
         by_market.remove(market_id);
         
         // Also invalidate cluster
-        let mut mapping = self.market_to_cluster.write().unwrap();
+        let mut mapping = self.market_to_cluster.write();
         if let Some(cluster_id) = mapping.remove(market_id) {
-            let mut clusters = self.clusters.write().unwrap();
+            let mut clusters = self.clusters.write();
             clusters.remove(&cluster_id);
         }
     }
 
-    /// Build clusters from dependencies using union-find.
-    fn build_clusters(&self, dependencies: &[Dependency]) -> Vec<MarketCluster> {
+    /// Build clusters from relations using union-find.
+    fn build_clusters(&self, relations: &[Relation]) -> Vec<Cluster> {
         // Union-find to group connected markets
         let mut uf = UnionFind::new();
         
-        for dep in dependencies {
-            let markets: Vec<_> = dep.kind.markets().into_iter().cloned().collect();
+        for rel in relations {
+            let markets: Vec<_> = rel.kind.markets().into_iter().cloned().collect();
             for window in markets.windows(2) {
                 uf.union(&window[0], &window[1]);
             }
         }
         
-        // Group dependencies by cluster root
-        let mut cluster_deps: HashMap<MarketId, Vec<Dependency>> = HashMap::new();
-        for dep in dependencies {
-            let root = uf.find(dep.kind.markets()[0]);
-            cluster_deps.entry(root.clone()).or_default().push(dep.clone());
+        // Group relations by cluster root
+        let mut cluster_rels: HashMap<MarketId, Vec<Relation>> = HashMap::new();
+        for rel in relations {
+            let root = uf.find(rel.kind.markets()[0]);
+            cluster_rels.entry(root.clone()).or_default().push(rel.clone());
         }
         
-        // Build MarketCluster for each group
-        cluster_deps
+        // Build Cluster for each group
+        cluster_rels
             .into_iter()
-            .map(|(_, deps)| self.build_single_cluster(deps))
+            .map(|(_, rels)| self.build_single_cluster(rels))
             .collect()
     }
 
-    fn build_single_cluster(&self, dependencies: Vec<Dependency>) -> MarketCluster {
+    fn build_single_cluster(&self, relations: Vec<Relation>) -> Cluster {
         // Collect all unique markets
-        let mut markets: Vec<MarketId> = dependencies
+        let mut markets: Vec<MarketId> = relations
             .iter()
-            .flat_map(|d| d.kind.markets().into_iter().cloned())
+            .flat_map(|r| r.kind.markets().into_iter().cloned())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();
@@ -610,16 +627,16 @@ impl DependencyCache {
             .map(|(i, m)| (m.clone(), i))
             .collect();
         
-        // Convert dependencies to constraints
-        let constraints: Vec<_> = dependencies
+        // Convert relations to solver constraints
+        let constraints: Vec<_> = relations
             .iter()
-            .flat_map(|d| d.kind.to_constraints(&market_indices))
+            .flat_map(|r| r.kind.to_solver_constraints(&market_indices))
             .collect();
         
-        MarketCluster {
+        Cluster {
             id: ClusterId::new(),
             markets,
-            dependencies,
+            relations,
             constraints,
             updated_at: Utc::now(),
         }
@@ -627,17 +644,17 @@ impl DependencyCache {
 }
 ```
 
-### Discovery Service
+### Inference Service
 
 ```rust
-// Location: src/core/service/discovery/service.rs
+// Location: src/core/service/inference/service.rs
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// Event that triggers dependency discovery.
+/// Event that triggers relation inference.
 #[derive(Debug, Clone)]
-pub enum DiscoveryEvent {
+pub enum InferenceEvent {
     /// New market detected.
     NewMarket(MarketInfo),
     /// Significant price change on existing market.
@@ -650,31 +667,31 @@ pub enum DiscoveryEvent {
     FullScan,
 }
 
-/// The main dependency discovery service.
-pub struct DependencyDiscoveryService {
-    /// The discoverer implementation.
-    discoverer: Arc<dyn DependencyDiscoverer>,
+/// The main relation inference service.
+pub struct InferenceService {
+    /// The inferrer implementation.
+    inferrer: Arc<dyn Inferrer>,
     /// Cache for results.
-    cache: Arc<DependencyCache>,
+    cache: Arc<ClusterCache>,
     /// Configuration.
-    config: DiscoveryConfig,
+    config: InferenceConfig,
     /// Event receiver.
-    event_rx: mpsc::Receiver<DiscoveryEvent>,
+    event_rx: mpsc::Receiver<InferenceEvent>,
     /// Event sender (cloned to event sources).
-    event_tx: mpsc::Sender<DiscoveryEvent>,
+    event_tx: mpsc::Sender<InferenceEvent>,
     /// All known markets for batch analysis.
     known_markets: RwLock<Vec<MarketInfo>>,
 }
 
-impl DependencyDiscoveryService {
+impl InferenceService {
     pub fn new(
-        discoverer: Arc<dyn DependencyDiscoverer>,
-        cache: Arc<DependencyCache>,
-        config: DiscoveryConfig,
+        inferrer: Arc<dyn Inferrer>,
+        cache: Arc<ClusterCache>,
+        config: InferenceConfig,
     ) -> Self {
         let (event_tx, event_rx) = mpsc::channel(config.max_queue_size);
         Self {
-            discoverer,
+            inferrer,
             cache,
             config,
             event_rx,
@@ -683,12 +700,12 @@ impl DependencyDiscoveryService {
         }
     }
 
-    /// Get a sender for discovery events.
-    pub fn event_sender(&self) -> mpsc::Sender<DiscoveryEvent> {
+    /// Get a sender for inference events.
+    pub fn event_sender(&self) -> mpsc::Sender<InferenceEvent> {
         self.event_tx.clone()
     }
 
-    /// Run the discovery service (call from orchestrator).
+    /// Run the inference service (call from orchestrator).
     pub async fn run(&mut self) {
         let mut rate_limiter = RateLimiter::new(self.config.rate_limit_per_minute);
         let mut batch: Vec<MarketInfo> = Vec::new();
@@ -698,19 +715,19 @@ impl DependencyDiscoveryService {
             tokio::select! {
                 Some(event) = self.event_rx.recv() => {
                     match event {
-                        DiscoveryEvent::NewMarket(info) => {
-                            self.known_markets.write().unwrap().push(info.clone());
+                        InferenceEvent::NewMarket(info) => {
+                            self.known_markets.write().push(info.clone());
                             batch.push(info);
                         }
-                        DiscoveryEvent::PriceChange { market_id, .. } => {
-                            // Invalidate and re-queue for discovery
+                        InferenceEvent::PriceChange { market_id, .. } => {
+                            // Invalidate and re-queue for inference
                             self.cache.invalidate(&MarketId::from(market_id.as_str()));
                             if let Some(info) = self.get_market_info(&market_id) {
                                 batch.push(info);
                             }
                         }
-                        DiscoveryEvent::FullScan => {
-                            batch = self.known_markets.read().unwrap().clone();
+                        InferenceEvent::FullScan => {
+                            batch = self.known_markets.read().clone();
                         }
                     }
                 }
@@ -734,26 +751,26 @@ impl DependencyDiscoveryService {
         }
 
         let markets: Vec<_> = batch.drain(..).collect();
-        let existing = self.get_existing_dependencies(&markets);
+        let existing = self.get_existing_relations(&markets);
 
-        match self.discoverer.discover(&markets, &existing).await {
-            Ok(dependencies) => {
+        match self.inferrer.infer(&markets, &existing).await {
+            Ok(relations) => {
                 // Filter by confidence
-                let valid: Vec<_> = dependencies
+                let valid: Vec<_> = relations
                     .into_iter()
-                    .filter(|d| d.confidence >= self.config.min_confidence)
+                    .filter(|r| r.confidence >= self.config.min_confidence)
                     .collect();
 
                 if !valid.is_empty() {
                     tracing::info!(
                         count = valid.len(),
-                        "Discovered new dependencies"
+                        "Inferred new relations"
                     );
-                    self.cache.add_dependencies(valid);
+                    self.cache.add_relations(valid);
                 }
             }
             Err(e) => {
-                tracing::warn!(error = %e, "Discovery failed, will retry");
+                tracing::warn!(error = %e, "Inference failed, will retry");
                 // Re-queue for retry (with backoff handled by rate limiter)
             }
         }
@@ -777,14 +794,14 @@ impl Strategy for CombinatorialStrategy {
 
     fn applies_to(&self, ctx: &MarketContext) -> bool {
         // Strategy now checks cache dynamically
-        self.config.enabled && ctx.has_dependencies
+        self.config.enabled && ctx.has_relations
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
         // Get cluster from cache
-        let cluster = match self.dependency_cache.get_cluster(ctx.market.market_id()) {
+        let cluster = match self.cluster_cache.get_cluster(ctx.market.market_id()) {
             Some(c) => c,
-            None => return vec![], // No known dependencies
+            None => return vec![], // No known constraints
         };
 
         // Gather prices for all markets in cluster
@@ -824,15 +841,15 @@ impl Strategy for CombinatorialStrategy {
 // Location: src/core/strategy/context.rs (modifications)
 
 impl<'a> DetectionContext<'a> {
-    /// Create context with dependency cache lookup.
-    pub fn new_with_dependencies(
+    /// Create context with cluster cache lookup.
+    pub fn new_with_constraints(
         market: &'a Market,
         cache: &'a OrderBookCache,
-        dep_cache: &'a DependencyCache,
+        cluster_cache: &'a ClusterCache,
     ) -> Self {
-        let has_deps = dep_cache.get_cluster(market.market_id()).is_some();
+        let has_deps = cluster_cache.get_cluster(market.market_id()).is_some();
         let correlated = if has_deps {
-            dep_cache
+            cluster_cache
                 .get_cluster(market.market_id())
                 .map(|c| c.markets.clone())
                 .unwrap_or_default()
@@ -842,7 +859,7 @@ impl<'a> DetectionContext<'a> {
 
         let market_ctx = MarketContext {
             outcome_count: market.outcome_count(),
-            has_dependencies: has_deps,
+            has_relations: has_deps,
             correlated_markets: correlated,
         };
 
@@ -870,7 +887,7 @@ The orchestrator's event handler monitors for significant price changes:
 struct PriceTracker {
     last_prices: HashMap<TokenId, Decimal>,
     threshold: Decimal,
-    discovery_tx: mpsc::Sender<DiscoveryEvent>,
+    inference_tx: mpsc::Sender<InferenceEvent>,
 }
 
 impl PriceTracker {
@@ -878,8 +895,8 @@ impl PriceTracker {
         if let Some(old_price) = self.last_prices.get(token_id) {
             let change = ((new_price - old_price) / old_price).abs();
             if change > self.threshold {
-                // Trigger discovery
-                let _ = self.discovery_tx.try_send(DiscoveryEvent::PriceChange {
+                // Trigger inference
+                let _ = self.inference_tx.try_send(InferenceEvent::PriceChange {
                     market_id: token_id.clone().into(), // Need market mapping
                     old_price: *old_price,
                     new_price,
@@ -900,33 +917,33 @@ impl Orchestrator {
     pub async fn run(config: Config) -> Result<()> {
         // ... existing initialization ...
 
-        // Initialize dependency discovery
-        let dep_cache = Arc::new(DependencyCache::new(CacheConfig {
-            default_ttl: chrono::Duration::seconds(config.discovery.ttl_seconds as i64),
-            max_dependencies: 10_000,
+        // Initialize relation inference
+        let cluster_cache = Arc::new(ClusterCache::new(CacheConfig {
+            default_ttl: chrono::Duration::seconds(config.inference.ttl_seconds as i64),
+            max_constraints: 10_000,
             max_clusters: 1_000,
         }));
 
-        let discoverer: Arc<dyn DependencyDiscoverer> = match &config.discovery.provider {
-            "llm" => Arc::new(LlmDiscoverer::new(config.discovery.llm.clone())),
-            "rules" => Arc::new(RuleBasedDiscoverer::new()),
-            _ => Arc::new(NullDiscoverer),
+        let inferrer: Arc<dyn Inferrer> = match &config.inference.provider {
+            "llm" => Arc::new(LlmInferrer::new(config.inference.llm.clone())),
+            "rules" => Arc::new(RuleInferrer::new()),
+            _ => Arc::new(NullInferrer),
         };
 
-        let mut discovery_service = DependencyDiscoveryService::new(
-            discoverer,
-            dep_cache.clone(),
-            config.discovery.clone(),
+        let mut inference_service = InferenceService::new(
+            inferrer,
+            cluster_cache.clone(),
+            config.inference.clone(),
         );
 
-        // Spawn discovery service
-        let discovery_tx = discovery_service.event_sender();
+        // Spawn inference service
+        let inference_tx = inference_service.event_sender();
         tokio::spawn(async move {
-            discovery_service.run().await;
+            inference_service.run().await;
         });
 
         // Queue initial full scan
-        discovery_tx.send(DiscoveryEvent::FullScan).await?;
+        inference_tx.send(InferenceEvent::FullScan).await?;
 
         // ... rest of initialization ...
     }
@@ -942,14 +959,14 @@ impl Orchestrator {
 ```toml
 # config.toml
 
-[discovery]
-# Discoverer backend: "llm", "rules", "hybrid", "null"
+[inference]
+# Inferrer backend: "llm", "rules", "hybrid", "null"
 provider = "llm"
 
 # Minimum confidence to accept (0.0 - 1.0)
 min_confidence = 0.7
 
-# Dependency TTL in seconds (3600 = 1 hour)
+# Relation TTL in seconds (3600 = 1 hour)
 ttl_seconds = 3600
 
 # Price change threshold to trigger re-analysis (5%)
@@ -961,10 +978,10 @@ max_queue_size = 1000
 # Batch size for LLM calls
 batch_size = 20
 
-# Rate limit: max discoveries per minute
+# Rate limit: max inferences per minute
 rate_limit_per_minute = 30
 
-[discovery.llm]
+[inference.llm]
 # LLM provider
 provider = "anthropic"
 
@@ -990,7 +1007,7 @@ max_tokens = 4096
 | Failure | Detection | Response |
 |---------|-----------|----------|
 | Invalid JSON | Parse error | Log, retry with backoff |
-| Unknown market ID | Validation | Skip that dependency |
+| Unknown market ID | Validation | Skip that relation |
 | Low confidence | Threshold check | Filter out |
 | Timeout | Request timeout | Retry with backoff |
 | Rate limit | HTTP 429 | Exponential backoff |
@@ -999,8 +1016,8 @@ max_tokens = 4096
 ### Safety Guarantees
 
 1. **No direct trade decisions from LLM** — LLM only suggests constraints, solver validates
-2. **Confidence filtering** — Only high-confidence (>0.7) dependencies used
-3. **Cache TTL** — Stale dependencies expire, forcing re-validation
+2. **Confidence filtering** — Only high-confidence (>0.7) constraints used
+3. **Cache TTL** — Stale constraints expire, forcing re-validation
 4. **Solver verification** — Frank-Wolfe won't produce invalid trades from bad constraints
 
 ---
@@ -1013,7 +1030,7 @@ src/
 │   ├── db/                     # NEW: Database layer (Diesel)
 │   │   ├── mod.rs              # Connection pool, re-exports
 │   │   ├── schema.rs           # diesel::table! macros (auto-generated)
-│   │   └── models.rs           # Insertable/Queryable structs
+│   │   └── model.rs            # Insertable/Queryable structs
 │   │
 │   ├── store/                  # NEW: Persistence abstraction
 │   │   ├── mod.rs              # Store<T> trait
@@ -1021,17 +1038,17 @@ src/
 │   │   └── memory.rs           # MemoryStore (for tests)
 │   │
 │   ├── domain/
-│   │   ├── mod.rs              # Add constraint exports
-│   │   └── constraint.rs       # NEW: Constraint, ConstraintKind, ConstraintCluster
+│   │   ├── mod.rs              # Add relation exports
+│   │   └── relation.rs         # NEW: Relation, RelationKind, Cluster
 │   │
 │   ├── cache/
-│   │   ├── mod.rs              # Add ConstraintCache export
-│   │   └── constraint.rs       # NEW: ConstraintCache (uses Store)
+│   │   ├── mod.rs              # Add ClusterCache export
+│   │   └── cluster.rs          # NEW: ClusterCache (uses Store)
 │   │
 │   ├── llm/                    # NEW: LLM abstraction
-│   │   ├── mod.rs              # LlmClient trait
-│   │   ├── anthropic.rs        # AnthropicClient
-│   │   └── openai.rs           # OpenAiClient
+│   │   ├── mod.rs              # Llm trait
+│   │   ├── anthropic.rs        # AnthropicLlm
+│   │   └── openai.rs           # OpenAiLlm
 │   │
 │   ├── service/
 │   │   ├── mod.rs              # Add inference exports
@@ -1057,7 +1074,7 @@ src/
 │
 └── migrations/                 # Diesel migrations (repo root)
     ├── 00000000000000_diesel_setup/
-    └── 2026020401_create_constraints/
+    └── 2026020401_create_relations/
 ```
 
 ---
@@ -1065,8 +1082,8 @@ src/
 ## Implementation Plan
 
 ### Phase 1: Domain Types + DB Layer (Day 1)
-- [ ] Add `Constraint`, `ConstraintKind`, `ConstraintCluster` to domain
-- [ ] Add `ConstraintId`, `ClusterId` to id.rs
+- [ ] Add `Relation`, `RelationKind`, `Cluster` to domain
+- [ ] Add `RelationId`, `ClusterId` to id.rs
 - [ ] Set up Diesel: `diesel setup`, initial migration
 - [ ] Create `core/db/` with schema.rs, models.rs
 - [ ] Write unit tests for constraint types
@@ -1078,14 +1095,14 @@ src/
 - [ ] Write tests for store operations
 
 ### Phase 3: Cache Layer (Day 2)
-- [ ] Implement `ConstraintCache` with TTL support (uses Store)
+- [ ] Implement `ClusterCache` with TTL support (uses Store)
 - [ ] Implement union-find for cluster building
 - [ ] Write tests for cache operations
 
 ### Phase 4: LLM Module (Day 2-3)
-- [ ] Define `LlmClient` trait in `core/llm/mod.rs`
-- [ ] Implement `AnthropicClient`
-- [ ] Implement `OpenAiClient`
+- [ ] Define `Llm` trait in `core/llm/mod.rs`
+- [ ] Implement `AnthropicLlm`
+- [ ] Implement `OpenAiLlm`
 - [ ] Add config in `app/config/llm.rs`
 
 ### Phase 5: Inference Service (Day 3-4)
@@ -1120,15 +1137,15 @@ src/
    - Claude 3.5 Sonnet recommended for consistency and JSON output quality
 
 2. **Confidence Calibration:** How to tune 0.7 threshold?
-   - Start conservative, lower if missing real dependencies
+   - Start conservative, lower if missing real constraints
 
 3. **Full Scan Frequency:** How often to re-analyze all markets?
    - Suggest: hourly, or on significant market events (>10 new markets)
 
-4. **Multi-Exchange Dependencies:** Cross-exchange correlations?
+4. **Multi-Exchange Relations:** Cross-exchange correlations?
    - Out of scope for v1, but architecture supports it
 
-5. **Persistence:** Should dependencies survive restarts?
+5. **Persistence:** Should constraints survive restarts?
    - Suggest: Yes, add simple file-based persistence
 
 ---
