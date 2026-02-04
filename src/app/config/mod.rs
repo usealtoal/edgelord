@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 use crate::error::{ConfigError, Result};
 
 // Submodules
+mod inference;
+mod llm;
 mod logging;
 mod polymarket;
 mod profile;
@@ -16,6 +18,8 @@ mod service;
 mod strategy;
 
 // Re-export all public types from submodules
+pub use inference::InferenceConfig;
+pub use llm::{AnthropicConfig, LlmConfig, LlmProvider, OpenAiConfig};
 pub use logging::LoggingConfig;
 pub use polymarket::{
     DedupStrategyConfig, Environment, OutcomeBonusConfig, PolymarketConfig,
@@ -98,6 +102,12 @@ pub struct Config {
     /// Connection pool configuration for WebSocket shard management.
     #[serde(default)]
     pub connection_pool: ConnectionPoolConfig,
+    /// LLM provider configuration.
+    #[serde(default)]
+    pub llm: LlmConfig,
+    /// Relation inference configuration.
+    #[serde(default)]
+    pub inference: InferenceConfig,
 }
 
 impl Config {
