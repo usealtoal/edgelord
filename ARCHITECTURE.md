@@ -28,7 +28,8 @@
 
 ## File Size Limits
 
-- **Hard limit: 400 lines** (including tests)
+- **Hard limit: 400 lines of implementation code**
+- Tests colocated with implementation are encouraged and **do not count** toward the limit
 - Approaching limit? Split into submodule
 - Prefer many small files over few large ones
 - Exception: Generated code, test fixtures
