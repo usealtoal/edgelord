@@ -22,6 +22,7 @@
 //! }
 //! ```
 
+mod dedup;
 mod factory;
 mod filter;
 pub mod polymarket;
@@ -29,6 +30,7 @@ mod reconnecting;
 mod scorer;
 mod traits;
 
+pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
 pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
