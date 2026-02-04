@@ -22,13 +22,19 @@
 //! }
 //! ```
 
+mod dedup;
 mod factory;
+mod filter;
 pub mod polymarket;
 mod reconnecting;
+mod scorer;
 mod traits;
 
+pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
 pub use factory::ExchangeFactory;
+pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
+pub use scorer::MarketScorer;
 pub use traits::ExchangeConfig;
 
 // === Trait definitions ===
@@ -79,9 +85,7 @@ pub enum ExecutionResult {
         average_price: rust_decimal::Decimal,
     },
     /// Order failed to execute.
-    Failed {
-        reason: String,
-    },
+    Failed { reason: String },
 }
 
 impl ExecutionResult {
@@ -206,21 +210,13 @@ pub trait MarketFetcher: Send + Sync {
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
     /// Full order book snapshot for a token.
-    OrderBookSnapshot {
-        token_id: TokenId,
-        book: OrderBook,
-    },
+    OrderBookSnapshot { token_id: TokenId, book: OrderBook },
     /// Incremental order book update (deltas).
-    OrderBookDelta {
-        token_id: TokenId,
-        book: OrderBook,
-    },
+    OrderBookDelta { token_id: TokenId, book: OrderBook },
     /// Connection established.
     Connected,
     /// Connection lost (may reconnect).
-    Disconnected {
-        reason: String,
-    },
+    Disconnected { reason: String },
 }
 
 impl MarketEvent {
@@ -367,7 +363,10 @@ impl ArbitrageExecutionResult {
 #[async_trait]
 pub trait ArbitrageExecutor: Send + Sync {
     /// Execute an arbitrage opportunity by placing orders on all legs.
-    async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult, Error>;
+    async fn execute_arbitrage(
+        &self,
+        opportunity: &Opportunity,
+    ) -> Result<ArbitrageExecutionResult, Error>;
 
     /// Cancel a specific order by ID.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;
