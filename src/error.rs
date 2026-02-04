@@ -100,6 +100,12 @@ pub enum Error {
     #[error("connection error: {0}")]
     Connection(String),
 
+    #[error("database error: {0}")]
+    Database(String),
+
+    #[error("parse error: {0}")]
+    Parse(String),
+
     #[cfg(feature = "polymarket")]
     #[error("Polymarket SDK error: {0}")]
     Polymarket(#[from] polymarket_client_sdk::error::Error),

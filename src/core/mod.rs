@@ -6,4 +6,5 @@ pub mod domain;
 pub mod exchange;
 pub mod service;
 pub mod solver;
+pub mod store;
 pub mod strategy;
