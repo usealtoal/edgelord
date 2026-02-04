@@ -3,13 +3,30 @@
 mod config;
 mod orchestrator;
 mod state;
-pub mod status_file;
+pub mod status;
 
 pub use config::{
-    Config, Environment, Exchange, ExchangeSpecificConfig, LoggingConfig, NetworkConfig,
-    OutcomeBonusConfig, PolymarketConfig, PolymarketDedupConfig, PolymarketFilterConfig,
-    PolymarketScoringConfig, ReconnectionConfig, RiskConfig, ScoringWeightsConfig,
-    StrategiesConfig, TelegramAppConfig, WalletConfig,
+    Config, ConnectionPoolConfig, DedupStrategyConfig, Environment, Exchange,
+    ExchangeSpecificConfig, GovernorAppConfig, LatencyTargetsConfig, LoggingConfig, NetworkConfig,
+    OutcomeBonusConfig, PolymarketConfig, PolymarketConnectionConfig, PolymarketDedupConfig,
+    PolymarketFilterConfig, PolymarketScoringConfig, Profile, ReconnectionConfig, ResourceConfig,
+    RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
+    WalletConfig,
 };
-pub use orchestrator::App;
 pub use state::{AppState, RiskLimits};
+
+use crate::error::Result;
+use orchestrator::Orchestrator;
+
+/// Main application entry point.
+///
+/// Provides a clean public API for the CLI layer while delegating
+/// to internal orchestration components.
+pub struct App;
+
+impl App {
+    /// Run the main application with the given configuration.
+    pub async fn run(config: Config) -> Result<()> {
+        Orchestrator::run(config).await
+    }
+}

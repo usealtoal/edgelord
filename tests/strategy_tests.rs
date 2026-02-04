@@ -1,11 +1,11 @@
 //! Integration tests for strategy system.
 
+use edgelord::core::cache::OrderBookCache;
+use edgelord::core::domain::{Market, MarketId, OrderBook, Outcome, PriceLevel, TokenId};
 use edgelord::core::strategy::{
     DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{Market, MarketId, OrderBook, Outcome, PriceLevel, TokenId};
 use rust_decimal_macros::dec;
 
 fn make_market() -> Market {

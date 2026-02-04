@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use tracing::{debug, info};
 
-use super::types::{PolymarketMarketsResponse, PolymarketMarket};
-use crate::error::Result;
+use super::types::{PolymarketMarket, PolymarketMarketsResponse};
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
+use crate::error::Result;
 
 /// HTTP client for the Polymarket REST API.
 ///
@@ -27,7 +27,7 @@ impl PolymarketClient {
     ///
     /// * `base_url` - The base URL for the Polymarket CLOB API
     ///   (e.g., `https://clob.polymarket.com`)
-    #[must_use] 
+    #[must_use]
     pub fn new(base_url: String) -> Self {
         Self {
             http: HttpClient::new(),

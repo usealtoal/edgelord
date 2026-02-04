@@ -26,7 +26,7 @@ pub struct TelegramConfig {
 
 impl TelegramConfig {
     /// Create config from environment variables.
-    #[must_use] 
+    #[must_use]
     pub fn from_env() -> Option<Self> {
         let bot_token = std::env::var("TELEGRAM_BOT_TOKEN").ok()?;
         let chat_id = std::env::var("TELEGRAM_CHAT_ID")
@@ -52,7 +52,7 @@ pub struct TelegramNotifier {
 
 impl TelegramNotifier {
     /// Create a new Telegram notifier and spawn the background task.
-    #[must_use] 
+    #[must_use]
     pub fn new(config: TelegramConfig) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
 
@@ -80,21 +80,19 @@ async fn telegram_worker(config: TelegramConfig, mut receiver: mpsc::UnboundedRe
 
     while let Some(event) = receiver.recv().await {
         let message = match &event {
-            Event::OpportunityDetected(e) if config.notify_opportunities => {
-                Some(format!(
-                    "🎯 *Opportunity Detected*\n\n\
+            Event::OpportunityDetected(e) if config.notify_opportunities => Some(format!(
+                "🎯 *Opportunity Detected*\n\n\
                      Market: `{}`\n\
                      Question: {}\n\
                      Edge: {:.2}%\n\
                      Volume: ${:.2}\n\
                      Expected Profit: ${:.2}",
-                    e.market_id,
-                    escape_markdown(&e.question),
-                    e.edge * rust_decimal::Decimal::from(100),
-                    e.volume,
-                    e.expected_profit
-                ))
-            }
+                e.market_id,
+                escape_markdown(&e.question),
+                e.edge * rust_decimal::Decimal::from(100),
+                e.volume,
+                e.expected_profit
+            )),
             Event::ExecutionCompleted(e) if config.notify_executions => {
                 let emoji = if e.success { "✅" } else { "❌" };
                 Some(format!(
@@ -107,42 +105,36 @@ async fn telegram_worker(config: TelegramConfig, mut receiver: mpsc::UnboundedRe
                     escape_markdown(&e.details)
                 ))
             }
-            Event::RiskRejected(e) if config.notify_risk_rejections => {
-                Some(format!(
-                    "⚠️ *Risk Rejected*\n\n\
+            Event::RiskRejected(e) if config.notify_risk_rejections => Some(format!(
+                "⚠️ *Risk Rejected*\n\n\
                      Market: `{}`\n\
                      Reason: {}",
-                    e.market_id,
-                    escape_markdown(&e.reason)
-                ))
-            }
-            Event::CircuitBreakerActivated { reason } => {
-                Some(format!(
-                    "🚨 *CIRCUIT BREAKER ACTIVATED*\n\n\
+                e.market_id,
+                escape_markdown(&e.reason)
+            )),
+            Event::CircuitBreakerActivated { reason } => Some(format!(
+                "🚨 *CIRCUIT BREAKER ACTIVATED*\n\n\
                      Reason: {}\n\n\
                      All trading has been halted.",
-                    escape_markdown(reason)
-                ))
-            }
+                escape_markdown(reason)
+            )),
             Event::CircuitBreakerReset => {
                 Some("✅ *Circuit Breaker Reset*\n\nTrading has resumed.".to_string())
             }
-            Event::DailySummary(e) => {
-                Some(format!(
-                    "📊 *Daily Summary - {}*\n\n\
+            Event::DailySummary(e) => Some(format!(
+                "📊 *Daily Summary - {}*\n\n\
                      Opportunities: {}\n\
                      Trades Executed: {}\n\
                      Successful: {}\n\
                      Total Profit: ${:.2}\n\
                      Current Exposure: ${:.2}",
-                    e.date,
-                    e.opportunities_detected,
-                    e.trades_executed,
-                    e.trades_successful,
-                    e.total_profit,
-                    e.current_exposure
-                ))
-            }
+                e.date,
+                e.opportunities_detected,
+                e.trades_executed,
+                e.trades_successful,
+                e.total_profit,
+                e.current_exposure
+            )),
             _ => None,
         };
 
@@ -162,7 +154,9 @@ async fn telegram_worker(config: TelegramConfig, mut receiver: mpsc::UnboundedRe
 
 /// Escape special characters for Telegram `MarkdownV2`.
 fn escape_markdown(text: &str) -> String {
-    let special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+    let special_chars = [
+        '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!',
+    ];
     let mut result = String::with_capacity(text.len() * 2);
 
     for c in text.chars() {
@@ -252,7 +246,10 @@ mod tests {
     fn test_escape_markdown_all_special_chars() {
         let special = "_*[]()~`>#+-=|{}.!";
         let escaped = escape_markdown(special);
-        assert_eq!(escaped, "\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!");
+        assert_eq!(
+            escaped,
+            "\\_\\*\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
+        );
     }
 
     #[test]

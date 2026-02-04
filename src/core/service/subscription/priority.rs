@@ -10,7 +10,7 @@ use std::sync::RwLock;
 use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
-use super::subscription::{ConnectionEvent, SubscriptionManager};
+use super::{ConnectionEvent, SubscriptionManager};
 use crate::core::domain::{MarketId, MarketScore, TokenId};
 use crate::error::Result;
 

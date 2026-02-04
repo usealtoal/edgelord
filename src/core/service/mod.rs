@@ -1,26 +1,19 @@
 //! Cross-cutting services - risk management, notifications, etc.
 
 mod governor;
-mod latency_governor;
-mod notifier;
-mod priority_subscription;
+mod notification;
 mod risk;
 mod subscription;
 
-#[cfg(feature = "telegram")]
-mod telegram;
-
 pub use governor::{
-    AdaptiveGovernor, GovernorConfig, LatencyMetrics, LatencyTargets, ScalingConfig,
+    AdaptiveGovernor, GovernorConfig, LatencyGovernor, LatencyMetrics, LatencyTargets, ScalingConfig,
 };
-pub use latency_governor::LatencyGovernor;
-pub use notifier::{
+pub use notification::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
     RiskEvent, SummaryEvent,
 };
-pub use priority_subscription::PrioritySubscriptionManager;
 pub use risk::{RiskCheckResult, RiskManager};
-pub use subscription::{ConnectionEvent, SubscriptionManager};
+pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 
 #[cfg(feature = "telegram")]
-pub use telegram::{TelegramConfig, TelegramNotifier};
+pub use notification::{TelegramConfig, TelegramNotifier};

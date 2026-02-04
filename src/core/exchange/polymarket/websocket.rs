@@ -30,8 +30,8 @@ use tracing::{debug, error, info, warn};
 
 use super::messages::{PolymarketSubscribeMessage, PolymarketWsMessage};
 use crate::core::domain::TokenId;
-use crate::error::Result;
 use crate::core::exchange::{MarketDataStream, MarketEvent};
+use crate::error::Result;
 
 /// WebSocket handler for Polymarket real-time data feed.
 ///
@@ -49,7 +49,7 @@ impl PolymarketWebSocketHandler {
     /// # Arguments
     ///
     /// * `url` - The WebSocket URL to connect to
-    #[must_use] 
+    #[must_use]
     pub const fn new(url: String) -> Self {
         Self { url }
     }
@@ -249,9 +249,10 @@ impl MarketDataStream for PolymarketDataStream {
     }
 
     async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<()> {
-        let ws = self.ws.as_mut().ok_or_else(|| {
-            crate::error::Error::Connection("Not connected".into())
-        })?;
+        let ws = self
+            .ws
+            .as_mut()
+            .ok_or_else(|| crate::error::Error::Connection("Not connected".into()))?;
 
         let asset_ids: Vec<String> = token_ids.iter().map(|t| t.as_str().to_string()).collect();
         let msg = PolymarketSubscribeMessage::new(asset_ids.clone());

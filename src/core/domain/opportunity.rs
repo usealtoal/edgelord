@@ -20,7 +20,10 @@ impl OpportunityLeg {
     /// Create a new opportunity leg.
     #[must_use]
     pub fn new(token_id: TokenId, ask_price: Price) -> Self {
-        Self { token_id, ask_price }
+        Self {
+            token_id,
+            ask_price,
+        }
     }
 
     /// Get the token ID for this leg.
@@ -149,7 +152,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Will it rain?",
+            legs,
+            dec!(100),
+            dec!(1.0),
+        );
 
         assert_eq!(opp.total_cost(), dec!(0.90));
     }
@@ -161,7 +170,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Will it rain?",
+            legs,
+            dec!(100),
+            dec!(1.0),
+        );
 
         assert_eq!(opp.edge(), dec!(0.10));
     }
@@ -173,7 +188,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Will it rain?",
+            legs,
+            dec!(100),
+            dec!(1.0),
+        );
 
         assert_eq!(opp.expected_profit(), dec!(10.00));
     }
@@ -185,7 +206,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("no"), dec!(1.00)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Special market", legs, dec!(50), dec!(2.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Special market",
+            legs,
+            dec!(50),
+            dec!(2.0),
+        );
 
         assert_eq!(opp.total_cost(), dec!(1.80));
         assert_eq!(opp.edge(), dec!(0.20));
@@ -200,7 +227,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("candidate-c"), dec!(0.25)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Who will win?", legs, dec!(100), dec!(1.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Who will win?",
+            legs,
+            dec!(100),
+            dec!(1.0),
+        );
 
         assert_eq!(opp.total_cost(), dec!(0.90));
         assert_eq!(opp.edge(), dec!(0.10));
@@ -228,7 +261,13 @@ mod tests {
             OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
         ];
 
-        let opp = Opportunity::new(make_market_id(), "Will it rain?", legs, dec!(100), dec!(1.0));
+        let opp = Opportunity::new(
+            make_market_id(),
+            "Will it rain?",
+            legs,
+            dec!(100),
+            dec!(1.0),
+        );
 
         assert_eq!(opp.market_id().as_str(), "test-market");
         assert_eq!(opp.question(), "Will it rain?");

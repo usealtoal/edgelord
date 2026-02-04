@@ -137,7 +137,10 @@ mod tests {
 
         state.activate_circuit_breaker("test reason");
         assert!(state.is_circuit_breaker_active());
-        assert_eq!(state.circuit_breaker_reason(), Some("test reason".to_string()));
+        assert_eq!(
+            state.circuit_breaker_reason(),
+            Some("test reason".to_string())
+        );
 
         state.reset_circuit_breaker();
         assert!(!state.is_circuit_breaker_active());

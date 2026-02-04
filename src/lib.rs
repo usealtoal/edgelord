@@ -18,7 +18,7 @@
 //! - `polymarket` - Enable Polymarket exchange support (default)
 //! - `telegram` - Enable Telegram notifications
 
-pub mod core;
-pub mod error;
 pub mod app;
 pub mod cli;
+pub mod core;
+pub mod error;

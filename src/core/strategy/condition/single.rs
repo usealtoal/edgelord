@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext, Strategy};
+use super::super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{Market, Opportunity, OpportunityLeg};
 
@@ -49,13 +49,13 @@ pub struct SingleConditionStrategy {
 
 impl SingleConditionStrategy {
     /// Create a new strategy with the given configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn new(config: SingleConditionConfig) -> Self {
         Self { config }
     }
 
     /// Get the strategy configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn config(&self) -> &SingleConditionConfig {
         &self.config
     }
@@ -392,7 +392,10 @@ mod tests {
         // With default $1 payout, no opportunity (cost $90 > payout $1)
         let ctx_default = DetectionContext::new(&market_1, &cache);
         let opps_default = strategy.detect(&ctx_default);
-        assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
+        assert!(
+            opps_default.is_empty(),
+            "Should have no opportunity with $1 payout"
+        );
 
         // Create market with $100 payout
         let market_100 = Market::new(
@@ -405,7 +408,11 @@ mod tests {
         // With $100 payout, opportunity exists (cost $90 < payout $100)
         let ctx_custom = DetectionContext::new(&market_100, &cache);
         let opps_custom = strategy.detect(&ctx_custom);
-        assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
+        assert_eq!(
+            opps_custom.len(),
+            1,
+            "Should have opportunity with $100 payout"
+        );
 
         let opp = &opps_custom[0];
         // Edge = payout - total_cost = 100 - 90 = 10

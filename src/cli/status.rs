@@ -6,7 +6,7 @@ use std::process::Command;
 
 use chrono::{DateTime, Duration, Utc};
 
-use crate::app::status_file::StatusFile;
+use crate::app::status::StatusFile;
 
 /// Default path for the status file.
 const DEFAULT_STATUS_PATH: &str = "/var/run/edgelord/status.json";
@@ -104,10 +104,7 @@ fn display_rich_status(status: &StatusFile, version: &str) {
     println!("Exchange:    {exchange} ({environment}){chain_info}");
     println!("Strategies:  {strategies}");
     println!();
-    println!(
-        "Positions:   {} open",
-        status.runtime.positions_open
-    );
+    println!("Positions:   {} open", status.runtime.positions_open);
     println!(
         "Exposure:    ${} / ${} max",
         status.runtime.exposure_current, status.runtime.exposure_max
@@ -163,7 +160,12 @@ fn display_basic_status(version: &str) {
     // Get uptime if running
     if pid.is_some() {
         if let Ok(output) = Command::new("systemctl")
-            .args(["show", "edgelord", "--property=ActiveEnterTimestamp", "--value"])
+            .args([
+                "show",
+                "edgelord",
+                "--property=ActiveEnterTimestamp",
+                "--value",
+            ])
             .output()
         {
             let timestamp = String::from_utf8_lossy(&output.stdout).trim().to_string();

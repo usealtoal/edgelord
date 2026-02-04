@@ -13,6 +13,9 @@
 //! The manager responds to connection events (disconnects, shard health changes)
 //! and supports dynamic scaling based on system resource availability.
 
+mod priority;
+pub use priority::PrioritySubscriptionManager;
+
 use async_trait::async_trait;
 
 use crate::core::domain::{MarketId, MarketScore, TokenId};

@@ -7,8 +7,8 @@
 //!
 //! The divergence D(μ*||θ) equals the maximum arbitrage profit.
 
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 
 /// Compute Bregman divergence D(μ||θ) for LMSR.
 ///
@@ -18,7 +18,7 @@ use rust_decimal::prelude::ToPrimitive;
 /// # Arguments
 /// * `mu` - Target probability vector (must be valid distribution)
 /// * `theta` - Current market prices
-#[must_use] 
+#[must_use]
 pub fn bregman_divergence(mu: &[Decimal], theta: &[Decimal]) -> Decimal {
     if mu.len() != theta.len() || mu.is_empty() {
         return Decimal::ZERO;
@@ -50,7 +50,7 @@ pub fn bregman_divergence(mu: &[Decimal], theta: &[Decimal]) -> Decimal {
 /// # Arguments
 /// * `mu` - Current iterate
 /// * `theta` - Target (fixed)
-#[must_use] 
+#[must_use]
 pub fn bregman_gradient(mu: &[Decimal], theta: &[Decimal]) -> Vec<Decimal> {
     let epsilon = Decimal::new(1, 10);
 
@@ -77,7 +77,7 @@ pub fn bregman_gradient(mu: &[Decimal], theta: &[Decimal]) -> Vec<Decimal> {
 /// # Arguments
 /// * `q` - Quantity vector
 /// * `b` - Liquidity parameter
-#[must_use] 
+#[must_use]
 pub fn lmsr_cost(q: &[Decimal], b: Decimal) -> Decimal {
     if q.is_empty() || b == Decimal::ZERO {
         return Decimal::ZERO;
@@ -100,7 +100,7 @@ pub fn lmsr_cost(q: &[Decimal], b: Decimal) -> Decimal {
 /// Compute LMSR prices from quantities.
 ///
 /// Pᵢ = exp(qᵢ/b) / Σₖ exp(qₖ/b)
-#[must_use] 
+#[must_use]
 pub fn lmsr_prices(q: &[Decimal], b: Decimal) -> Vec<Decimal> {
     if q.is_empty() || b == Decimal::ZERO {
         return vec![];

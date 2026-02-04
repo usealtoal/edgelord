@@ -24,7 +24,7 @@ pub struct MarketContext {
 
 impl MarketContext {
     /// Create context for a simple binary market (YES/NO).
-    #[must_use] 
+    #[must_use]
     pub const fn binary() -> Self {
         Self {
             outcome_count: 2,
@@ -34,7 +34,7 @@ impl MarketContext {
     }
 
     /// Create context for a multi-outcome market.
-    #[must_use] 
+    #[must_use]
     pub const fn multi_outcome(count: usize) -> Self {
         Self {
             outcome_count: count,
@@ -44,7 +44,7 @@ impl MarketContext {
     }
 
     /// Create context for a market with dependencies.
-    #[must_use] 
+    #[must_use]
     pub fn with_dependencies(mut self, markets: Vec<MarketId>) -> Self {
         self.has_dependencies = !markets.is_empty();
         self.correlated_markets = markets;
@@ -52,13 +52,13 @@ impl MarketContext {
     }
 
     /// Check if this is a binary market.
-    #[must_use] 
+    #[must_use]
     pub const fn is_binary(&self) -> bool {
         self.outcome_count == 2
     }
 
     /// Check if this is a multi-outcome market.
-    #[must_use] 
+    #[must_use]
     pub const fn is_multi_outcome(&self) -> bool {
         self.outcome_count > 2
     }
@@ -141,13 +141,13 @@ pub struct DetectionResult {
 
 impl DetectionResult {
     /// Create an empty result.
-    #[must_use] 
+    #[must_use]
     pub fn empty() -> Self {
         Self::default()
     }
 
     /// Create a result with opportunity count.
-    #[must_use] 
+    #[must_use]
     pub fn with_count(count: usize) -> Self {
         Self {
             opportunity_count: count,

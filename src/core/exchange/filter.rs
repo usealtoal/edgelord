@@ -314,10 +314,7 @@ mod tests {
     #[test]
     fn filter_none_eligible_returns_empty() {
         let filter = MockFilter::new(MarketFilterConfig::default());
-        let markets = vec![
-            make_market("m1", false, 2),
-            make_market("m2", false, 3),
-        ];
+        let markets = vec![make_market("m1", false, 2), make_market("m2", false, 3)];
 
         let filtered = filter.filter(&markets);
         assert!(filtered.is_empty());

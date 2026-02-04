@@ -15,13 +15,13 @@ pub struct PositionId(u64);
 
 impl PositionId {
     /// Create a new `PositionId` from a u64 value.
-    #[must_use] 
+    #[must_use]
     pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
     /// Get the underlying value.
-    #[must_use] 
+    #[must_use]
     pub const fn value(&self) -> u64 {
         self.0
     }
@@ -49,19 +49,19 @@ pub enum PositionStatus {
 
 impl PositionStatus {
     /// Returns true if the position is open.
-    #[must_use] 
+    #[must_use]
     pub const fn is_open(&self) -> bool {
         matches!(self, Self::Open)
     }
 
     /// Returns true if the position is a partial fill.
-    #[must_use] 
+    #[must_use]
     pub const fn is_partial(&self) -> bool {
         matches!(self, Self::PartialFill { .. })
     }
 
     /// Returns true if the position is closed.
-    #[must_use] 
+    #[must_use]
     pub const fn is_closed(&self) -> bool {
         matches!(self, Self::Closed { .. })
     }
@@ -77,7 +77,7 @@ pub struct PositionLeg {
 
 impl PositionLeg {
     /// Create a new position leg.
-    #[must_use] 
+    #[must_use]
     pub const fn new(token_id: TokenId, size: Volume, entry_price: Price) -> Self {
         Self {
             token_id,
@@ -87,25 +87,25 @@ impl PositionLeg {
     }
 
     /// Get the token ID.
-    #[must_use] 
+    #[must_use]
     pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
     /// Get the size.
-    #[must_use] 
+    #[must_use]
     pub const fn size(&self) -> Volume {
         self.size
     }
 
     /// Get the entry price.
-    #[must_use] 
+    #[must_use]
     pub const fn entry_price(&self) -> Price {
         self.entry_price
     }
 
     /// Calculate the cost of this leg (size * `entry_price`).
-    #[must_use] 
+    #[must_use]
     pub fn cost(&self) -> Price {
         self.size * self.entry_price
     }
@@ -125,7 +125,7 @@ pub struct Position {
 
 impl Position {
     /// Create a new position.
-    #[must_use] 
+    #[must_use]
     pub const fn new(
         id: PositionId,
         market_id: MarketId,
@@ -147,55 +147,55 @@ impl Position {
     }
 
     /// Get the position ID.
-    #[must_use] 
+    #[must_use]
     pub const fn id(&self) -> PositionId {
         self.id
     }
 
     /// Get the market ID.
-    #[must_use] 
+    #[must_use]
     pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
     /// Get the legs.
-    #[must_use] 
+    #[must_use]
     pub fn legs(&self) -> &[PositionLeg] {
         &self.legs
     }
 
     /// Get the entry cost.
-    #[must_use] 
+    #[must_use]
     pub const fn entry_cost(&self) -> Price {
         self.entry_cost
     }
 
     /// Get the guaranteed payout.
-    #[must_use] 
+    #[must_use]
     pub const fn guaranteed_payout(&self) -> Price {
         self.guaranteed_payout
     }
 
     /// Get when the position was opened.
-    #[must_use] 
+    #[must_use]
     pub const fn opened_at(&self) -> DateTime<Utc> {
         self.opened_at
     }
 
     /// Get the current status.
-    #[must_use] 
+    #[must_use]
     pub const fn status(&self) -> &PositionStatus {
         &self.status
     }
 
     /// Calculate the expected profit (`guaranteed_payout` - `entry_cost`).
-    #[must_use] 
+    #[must_use]
     pub fn expected_profit(&self) -> Price {
         self.guaranteed_payout - self.entry_cost
     }
 
     /// Returns true if the position is open.
-    #[must_use] 
+    #[must_use]
     pub const fn is_open(&self) -> bool {
         self.status.is_open()
     }
