@@ -47,28 +47,8 @@ use rust_decimal::Decimal;
 use crate::core::domain::{Opportunity, OrderBook, TokenId};
 use crate::error::Error;
 
-/// Unique identifier for an order on an exchange.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OrderId(pub String);
-
-impl OrderId {
-    /// Create a new `OrderId`.
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    /// Get the underlying ID string.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for OrderId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// Re-export execution types from domain for backward compatibility
+pub use crate::core::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, OrderId};
 
 /// Result of attempting to execute an order.
 #[derive(Debug, Clone)]
@@ -288,78 +268,6 @@ impl MarketDataStream for Box<dyn MarketDataStream> {
 
     fn exchange_name(&self) -> &'static str {
         (**self).exchange_name()
-    }
-}
-
-/// A successfully executed leg in an arbitrage trade.
-#[derive(Debug, Clone)]
-pub struct FilledLeg {
-    /// Token ID for this leg.
-    pub token_id: TokenId,
-    /// Order ID returned by exchange.
-    pub order_id: String,
-}
-
-/// A failed leg in an arbitrage trade.
-#[derive(Debug, Clone)]
-pub struct FailedLeg {
-    /// Token ID for this leg.
-    pub token_id: TokenId,
-    /// Error message.
-    pub error: String,
-}
-
-/// Result of executing a multi-leg arbitrage opportunity.
-#[derive(Debug, Clone)]
-pub enum ArbitrageExecutionResult {
-    /// All legs executed successfully.
-    Success { filled: Vec<FilledLeg> },
-    /// Some legs executed, some failed.
-    PartialFill {
-        filled: Vec<FilledLeg>,
-        failed: Vec<FailedLeg>,
-    },
-    /// All legs failed.
-    Failed { reason: String },
-}
-
-impl ArbitrageExecutionResult {
-    /// Check if all legs were successful.
-    #[must_use]
-    pub const fn is_success(&self) -> bool {
-        matches!(self, Self::Success { .. })
-    }
-
-    /// Check if there was a partial fill.
-    #[must_use]
-    pub const fn is_partial(&self) -> bool {
-        matches!(self, Self::PartialFill { .. })
-    }
-
-    /// Check if all legs failed.
-    #[must_use]
-    pub const fn is_failed(&self) -> bool {
-        matches!(self, Self::Failed { .. })
-    }
-
-    /// Get filled legs if any.
-    #[must_use]
-    pub fn filled(&self) -> &[FilledLeg] {
-        match self {
-            Self::Success { filled } => filled,
-            Self::PartialFill { filled, .. } => filled,
-            Self::Failed { .. } => &[],
-        }
-    }
-
-    /// Get failed legs if any.
-    #[must_use]
-    pub fn failed(&self) -> &[FailedLeg] {
-        match self {
-            Self::Success { .. } => &[],
-            Self::PartialFill { failed, .. } => failed,
-            Self::Failed { .. } => &[],
-        }
     }
 }
 

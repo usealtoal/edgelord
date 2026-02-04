@@ -9,8 +9,7 @@ mod telegram;
 #[cfg(feature = "telegram")]
 pub use telegram::{TelegramConfig, TelegramNotifier};
 
-use crate::core::domain::Opportunity;
-use crate::core::exchange::ArbitrageExecutionResult;
+use crate::core::domain::{ArbitrageExecutionResult, Opportunity};
 use crate::error::RiskError;
 
 /// Events that can trigger notifications.

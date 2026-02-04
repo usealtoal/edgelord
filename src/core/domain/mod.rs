@@ -11,6 +11,13 @@
 //! - [`Opportunity`] - Detected arbitrage opportunity with N legs
 //! - [`OpportunityLeg`] - A single leg (token purchase) in an opportunity
 //!
+//! ## Execution Types
+//!
+//! - [`ArbitrageExecutionResult`] - Result of executing an arbitrage opportunity
+//! - [`FilledLeg`] - A successfully executed leg
+//! - [`FailedLeg`] - A failed leg
+//! - [`OrderId`] - Unique order identifier
+//!
 //! ## Scoring Types
 //!
 //! - [`ScoreFactors`] - Individual scoring factors for a market
@@ -30,6 +37,7 @@
 //! - [`MarketId`] - Unique market identifier
 //! - [`TokenId`] - Unique token/outcome identifier
 
+mod execution;
 mod id;
 mod market;
 mod market_registry;
@@ -41,6 +49,7 @@ mod resource;
 mod scaling;
 mod score;
 
+pub use execution::{ArbitrageExecutionResult, FailedLeg, FilledLeg, OrderId};
 pub use id::{MarketId, TokenId};
 pub use market::{Market, Outcome};
 pub use market_registry::MarketRegistry;
