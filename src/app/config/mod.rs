@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{ConfigError, Result};
 
 // Submodules
+mod cluster;
 mod inference;
 mod llm;
 mod logging;
@@ -18,6 +19,7 @@ mod service;
 mod strategy;
 
 // Re-export all public types from submodules
+pub use cluster::ClusterDetectionConfig;
 pub use inference::InferenceConfig;
 // Note: AnthropicConfig and OpenAiConfig are exported for programmatic config construction
 #[allow(unused_imports)]
@@ -110,6 +112,9 @@ pub struct Config {
     /// Relation inference configuration.
     #[serde(default)]
     pub inference: InferenceConfig,
+    /// Cluster detection service configuration.
+    #[serde(default)]
+    pub cluster_detection: ClusterDetectionConfig,
 }
 
 impl Config {

@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use super::id::TokenId;
 use super::market::Market;
 
+use super::id::MarketId;
+
 /// A registry for markets that supports any outcome structure.
 ///
 /// This registry maps token IDs to their containing markets, enabling
@@ -17,6 +19,7 @@ use super::market::Market;
 #[derive(Debug, Default)]
 pub struct MarketRegistry {
     token_to_market: HashMap<TokenId, Market>,
+    market_id_to_market: HashMap<MarketId, Market>,
     markets: Vec<Market>,
 }
 
@@ -26,18 +29,28 @@ impl MarketRegistry {
     pub fn new() -> Self {
         Self {
             token_to_market: HashMap::new(),
+            market_id_to_market: HashMap::new(),
             markets: Vec::new(),
         }
     }
 
     /// Add a market to the registry, indexing all its token IDs.
     pub fn add(&mut self, market: Market) {
+        // Index by market ID
+        self.market_id_to_market
+            .insert(market.market_id().clone(), market.clone());
         // Index all token IDs
         for outcome in market.outcomes() {
             self.token_to_market
                 .insert(outcome.token_id().clone(), market.clone());
         }
         self.markets.push(market);
+    }
+
+    /// Look up a market by its market ID.
+    #[must_use]
+    pub fn get_by_market_id(&self, market_id: &MarketId) -> Option<&Market> {
+        self.market_id_to_market.get(market_id)
     }
 
     /// Look up the market for a given token ID.

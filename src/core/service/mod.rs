@@ -1,5 +1,6 @@
 //! Cross-cutting services - risk management, notifications, etc.
 
+pub mod cluster;
 mod governor;
 mod notification;
 mod risk;

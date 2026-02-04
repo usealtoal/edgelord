@@ -21,7 +21,8 @@ use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
 use crate::core::inference::{Inferrer, MarketSummary};
-use crate::core::service::RiskManager;
+use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::{Event, OpportunityEvent, RiskManager};
 use crate::error::Result;
 
 use builder::{
@@ -179,8 +180,48 @@ impl Orchestrator {
 
         info!(tokens = token_ids.len(), "Subscribing to tokens");
 
-        let cache = Arc::new(OrderBookCache::new());
         let registry = Arc::new(registry);
+
+        // Create order book cache (with notifications if cluster detection enabled)
+        let (cache, cluster_handle) = if config.cluster_detection.enabled {
+            let (cache, update_rx) = OrderBookCache::with_notifications(
+                config.cluster_detection.channel_capacity,
+            );
+            let cache = Arc::new(cache);
+
+            // Start cluster detection service
+            let service = ClusterDetectionService::new(
+                config.cluster_detection.to_core_config(),
+                Arc::clone(&cache),
+                Arc::clone(&cluster_cache),
+                Arc::clone(&registry),
+            );
+            let (handle, mut opp_rx) = service.start(update_rx);
+
+            // Spawn task to handle cluster opportunities
+            let notifiers_clone = Arc::clone(&notifiers);
+            tokio::spawn(async move {
+                while let Some(opp) = opp_rx.recv().await {
+                    info!(
+                        cluster = %opp.cluster_id,
+                        gap = %opp.gap,
+                        markets = ?opp.markets.iter().map(|m| m.as_str()).collect::<Vec<_>>(),
+                        "Cluster opportunity detected"
+                    );
+                    // Notify about the opportunity
+                    let event = Event::OpportunityDetected(OpportunityEvent::from(&opp.opportunity));
+                    notifiers_clone.notify_all(event);
+                }
+            });
+
+            info!("Cluster detection service started");
+            (cache, Some(handle))
+        } else {
+            (Arc::new(OrderBookCache::new()), None)
+        };
+
+        // Keep handle alive (drop on shutdown)
+        let _cluster_handle = cluster_handle;
 
         // Create data stream with reconnection support
         let inner_stream = ExchangeFactory::create_data_stream(&config);

@@ -5,5 +5,5 @@ mod order_book;
 mod position;
 
 pub use cluster::ClusterCache;
-pub use order_book::OrderBookCache;
+pub use order_book::{OrderBookCache, OrderBookUpdate};
 pub use position::PositionTracker;

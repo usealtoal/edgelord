@@ -255,3 +255,14 @@ ttl_seconds = 3600                  # How long relations are valid (1 hour)
 price_change_threshold = 0.05       # Re-infer on 5% price change
 scan_interval_seconds = 3600        # Full scan every hour
 batch_size = 30                     # Markets per LLM call
+
+# =============================================================================
+# CLUSTER DETECTION (Scalable Combinatorial Arbitrage)
+# =============================================================================
+
+[cluster_detection]
+enabled = false                     # Enable real-time cluster detection
+debounce_ms = 100                   # Minimum interval between detection runs
+min_gap = 0.02                      # Minimum arbitrage gap (2%)
+max_clusters_per_cycle = 50         # Max clusters to check per cycle
+channel_capacity = 1024             # Order book update channel size
