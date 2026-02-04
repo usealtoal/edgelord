@@ -7,7 +7,11 @@ use std::sync::Arc;
 use crate::app::{Config, Exchange};
 use crate::error::Result;
 
-use super::{ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, OrderExecutor};
+use super::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
+use super::{
+    ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter,
+    MarketScorer, MessageDeduplicator, OrderExecutor,
+};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -16,22 +20,18 @@ impl ExchangeFactory {
     /// Create a market fetcher for the configured exchange.
     pub fn create_market_fetcher(config: &Config) -> Box<dyn MarketFetcher> {
         match config.exchange {
-            Exchange::Polymarket => {
-                Box::new(super::polymarket::PolymarketClient::new(
-                    config.network().api_url.clone(),
-                ))
-            }
+            Exchange::Polymarket => Box::new(super::polymarket::PolymarketClient::new(
+                config.network().api_url.clone(),
+            )),
         }
     }
 
     /// Create a market data stream for the configured exchange.
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
-            Exchange::Polymarket => {
-                Box::new(super::polymarket::PolymarketDataStream::new(
-                    config.network().ws_url.clone(),
-                ))
-            }
+            Exchange::Polymarket => Box::new(super::polymarket::PolymarketDataStream::new(
+                config.network().ws_url.clone(),
+            )),
         }
     }
 
@@ -54,7 +54,9 @@ impl ExchangeFactory {
     /// Create an arbitrage executor for the configured exchange.
     ///
     /// Returns `None` if no wallet is configured.
-    pub async fn create_arbitrage_executor(config: &Config) -> Result<Option<Arc<dyn ArbitrageExecutor + Send + Sync>>> {
+    pub async fn create_arbitrage_executor(
+        config: &Config,
+    ) -> Result<Option<Arc<dyn ArbitrageExecutor + Send + Sync>>> {
         if config.wallet.private_key.is_none() {
             return Ok(None);
         }
@@ -73,8 +75,36 @@ impl ExchangeFactory {
     /// like payout amounts and outcome naming conventions.
     pub fn create_exchange_config(config: &Config) -> Box<dyn ExchangeConfig> {
         match config.exchange {
+            Exchange::Polymarket => Box::new(super::polymarket::PolymarketExchangeConfig),
+        }
+    }
+
+    /// Create a market scorer for the configured exchange.
+    pub fn create_scorer(config: &Config) -> Box<dyn MarketScorer> {
+        match config.exchange {
             Exchange::Polymarket => {
-                Box::new(super::polymarket::PolymarketExchangeConfig)
+                let poly_config = config.polymarket_config().unwrap();
+                Box::new(PolymarketScorer::new(&poly_config.scoring))
+            }
+        }
+    }
+
+    /// Create a market filter for the configured exchange.
+    pub fn create_filter(config: &Config) -> Box<dyn MarketFilter> {
+        match config.exchange {
+            Exchange::Polymarket => {
+                let poly_config = config.polymarket_config().unwrap();
+                Box::new(PolymarketFilter::new(&poly_config.market_filter))
+            }
+        }
+    }
+
+    /// Create a message deduplicator for the configured exchange.
+    pub fn create_deduplicator(config: &Config) -> Box<dyn MessageDeduplicator> {
+        match config.exchange {
+            Exchange::Polymarket => {
+                let poly_config = config.polymarket_config().unwrap();
+                Box::new(PolymarketDeduplicator::new(&poly_config.dedup))
             }
         }
     }
