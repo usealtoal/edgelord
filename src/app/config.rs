@@ -179,6 +179,9 @@ pub struct Config {
     pub status_file: Option<PathBuf>,
     #[serde(default)]
     pub reconnection: ReconnectionConfig,
+    /// Connection pool configuration for WebSocket shard management.
+    #[serde(default)]
+    pub connection_pool: ConnectionPoolConfig,
 }
 
 /// Configuration for all detection strategies.
@@ -408,6 +411,76 @@ impl Default for RiskConfig {
     }
 }
 
+/// Connection pool configuration for WebSocket shard management.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConnectionPoolConfig {
+    /// Number of shards to distribute connections across.
+    #[serde(default = "default_num_shards")]
+    pub num_shards: usize,
+    /// Number of connections per shard.
+    #[serde(default = "default_connections_per_shard")]
+    pub connections_per_shard: usize,
+    /// Stagger offset in seconds between connection attempts.
+    #[serde(default = "default_stagger_offset_secs")]
+    pub stagger_offset_secs: u64,
+    /// Health check interval in seconds.
+    #[serde(default = "default_health_check_interval_secs")]
+    pub health_check_interval_secs: u64,
+    /// Maximum silent period in seconds before considering connection unhealthy.
+    #[serde(default = "default_max_silent_secs")]
+    pub max_silent_secs: u64,
+}
+
+const fn default_num_shards() -> usize {
+    3
+}
+
+const fn default_connections_per_shard() -> usize {
+    2
+}
+
+const fn default_stagger_offset_secs() -> u64 {
+    60
+}
+
+const fn default_health_check_interval_secs() -> u64 {
+    5
+}
+
+const fn default_max_silent_secs() -> u64 {
+    10
+}
+
+impl Default for ConnectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            num_shards: default_num_shards(),
+            connections_per_shard: default_connections_per_shard(),
+            stagger_offset_secs: default_stagger_offset_secs(),
+            health_check_interval_secs: default_health_check_interval_secs(),
+            max_silent_secs: default_max_silent_secs(),
+        }
+    }
+}
+
+impl ConnectionPoolConfig {
+    /// Configuration for local development with minimal resources.
+    #[must_use]
+    pub fn local() -> Self {
+        Self {
+            num_shards: 1,
+            connections_per_shard: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Configuration for production with default scaling.
+    #[must_use]
+    pub fn production() -> Self {
+        Self::default()
+    }
+}
+
 /// WebSocket reconnection configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReconnectionConfig {
@@ -595,6 +668,7 @@ impl Default for Config {
             dry_run: false,
             status_file: None,
             reconnection: ReconnectionConfig::default(),
+            connection_pool: ConnectionPoolConfig::default(),
         }
     }
 }
