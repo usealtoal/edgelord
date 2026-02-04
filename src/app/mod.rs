@@ -13,5 +13,20 @@ pub use config::{
     RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
     WalletConfig,
 };
-pub use orchestrator::Orchestrator;
 pub use state::{AppState, RiskLimits};
+
+use crate::error::Result;
+use orchestrator::Orchestrator;
+
+/// Main application entry point.
+///
+/// Provides a clean public API for the CLI layer while delegating
+/// to internal orchestration components.
+pub struct App;
+
+impl App {
+    /// Run the main application with the given configuration.
+    pub async fn run(config: Config) -> Result<()> {
+        Orchestrator::run(config).await
+    }
+}

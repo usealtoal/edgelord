@@ -27,7 +27,7 @@ use builder::{build_notifier_registry, build_strategy_registry, init_executor};
 use handler::handle_market_event;
 
 /// Main application orchestrator.
-pub struct Orchestrator;
+pub(crate) struct Orchestrator;
 
 impl Orchestrator {
     /// Run the main application loop.
