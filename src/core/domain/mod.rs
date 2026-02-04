@@ -21,6 +21,10 @@
 //!
 //! - [`ResourceBudget`] - Resource constraints for adaptive subscription scaling
 //!
+//! ## Scaling Types
+//!
+//! - [`ScalingRecommendation`] - Scaling decision from the AdaptiveGovernor
+//!
 //! ## Identifier Types
 //!
 //! - [`MarketId`] - Unique market identifier
@@ -34,6 +38,7 @@ mod opportunity;
 mod orderbook;
 mod position;
 mod resource;
+mod scaling;
 mod score;
 
 pub use id::{MarketId, TokenId};
@@ -44,4 +49,5 @@ pub use opportunity::{Opportunity, OpportunityLeg};
 pub use orderbook::{OrderBook, PriceLevel};
 pub use position::{Position, PositionId, PositionLeg, PositionStatus};
 pub use resource::ResourceBudget;
+pub use scaling::ScalingRecommendation;
 pub use score::{MarketScore, ScoreFactors, ScoreWeights};
