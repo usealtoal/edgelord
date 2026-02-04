@@ -1,10 +1,12 @@
 //! Command-line interface definitions.
 
 pub mod banner;
+pub mod check;
 pub mod logs;
 pub mod run;
 pub mod service;
 pub mod status;
+pub mod wallet;
 
 use clap::{Parser, Subcommand};
 use rust_decimal::Decimal;
@@ -51,6 +53,18 @@ pub enum Commands {
 
     /// Uninstall systemd service
     Uninstall,
+
+    /// Validate configuration file
+    CheckConfig,
+
+    /// Test Telegram notification setup
+    TestTelegram,
+
+    /// Test WebSocket connection to exchange
+    CheckConnection,
+
+    /// Approve USDC spending for Polymarket
+    Approve(ApproveArgs),
 }
 
 /// Arguments for the `run` subcommand.
@@ -119,4 +133,16 @@ pub struct InstallArgs {
     /// Working directory for the service
     #[arg(long, default_value = "/opt/edgelord")]
     pub working_dir: PathBuf,
+}
+
+/// Arguments for the `approve` subcommand.
+#[derive(Parser, Debug)]
+pub struct ApproveArgs {
+    /// Amount of USDC to approve (in dollars)
+    #[arg(long, default_value = "10000")]
+    pub amount: Decimal,
+
+    /// Skip confirmation prompt
+    #[arg(long)]
+    pub yes: bool,
 }

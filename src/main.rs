@@ -25,6 +25,17 @@ async fn main() {
             edgelord::cli::service::execute_uninstall();
             Ok(())
         }
+        Commands::CheckConfig => {
+            edgelord::cli::check::execute_check_config(&cli.config);
+            Ok(())
+        }
+        Commands::TestTelegram => edgelord::cli::check::execute_test_telegram(&cli.config).await,
+        Commands::CheckConnection => {
+            edgelord::cli::check::execute_check_connection(&cli.config).await
+        }
+        Commands::Approve(args) => {
+            edgelord::cli::wallet::execute_approve(&cli.config, args.amount, args.yes).await
+        }
     };
 
     if let Err(e) = result {
