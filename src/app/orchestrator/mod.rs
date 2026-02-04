@@ -43,9 +43,10 @@ impl Orchestrator {
         // Initialize shared state
         let state = Arc::new(AppState::new(config.risk.clone().into()));
 
-        // Initialize database and stats recorder
+        // Initialize database and run migrations
         let db_url = format!("sqlite://{}", config.database);
         let db_pool = db::create_pool(&db_url)?;
+        db::run_migrations(&db_pool)?;
         let stats_recorder = stats::create_recorder(db_pool);
         info!(database = %config.database, "Database initialized");
 
