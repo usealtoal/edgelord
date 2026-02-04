@@ -1010,73 +1010,103 @@ max_tokens = 4096
 ```
 src/
 ├── core/
+│   ├── db/                     # NEW: Database layer (Diesel)
+│   │   ├── mod.rs              # Connection pool, re-exports
+│   │   ├── schema.rs           # diesel::table! macros (auto-generated)
+│   │   └── models.rs           # Insertable/Queryable structs
+│   │
+│   ├── store/                  # NEW: Persistence abstraction
+│   │   ├── mod.rs              # Store<T> trait
+│   │   ├── sqlite.rs           # SqliteStore (uses core::db)
+│   │   └── memory.rs           # MemoryStore (for tests)
+│   │
 │   ├── domain/
-│   │   ├── mod.rs              # Add dependency exports
-│   │   └── dependency.rs       # NEW: Dependency, DependencyKind, MarketCluster
+│   │   ├── mod.rs              # Add constraint exports
+│   │   └── constraint.rs       # NEW: Constraint, ConstraintKind, ConstraintCluster
 │   │
 │   ├── cache/
-│   │   ├── mod.rs              # Add DependencyCache export
-│   │   └── dependency.rs       # NEW: DependencyCache
+│   │   ├── mod.rs              # Add ConstraintCache export
+│   │   └── constraint.rs       # NEW: ConstraintCache (uses Store)
+│   │
+│   ├── llm/                    # NEW: LLM abstraction
+│   │   ├── mod.rs              # LlmClient trait
+│   │   ├── anthropic.rs        # AnthropicClient
+│   │   └── openai.rs           # OpenAiClient
 │   │
 │   ├── service/
-│   │   ├── mod.rs              # Add discovery exports
-│   │   └── discovery/          # NEW: Discovery service
-│   │       ├── mod.rs          # Trait + config
-│   │       ├── llm.rs          # LLM discoverer
-│   │       ├── rules.rs        # Rule-based discoverer
-│   │       └── service.rs      # Discovery service coordinator
+│   │   ├── mod.rs              # Add inference exports
+│   │   └── inference/          # NEW: Inference service
+│   │       ├── mod.rs          # Inferrer trait + config
+│   │       ├── llm.rs          # LlmInferrer
+│   │       ├── rules.rs        # RuleInferrer (heuristics)
+│   │       └── service.rs      # InferenceService coordinator
 │   │
 │   └── strategy/
 │       └── combinatorial/
 │           └── mod.rs          # Update detect() implementation
 │
-└── app/
-    ├── config/
-    │   ├── mod.rs              # Add DiscoveryConfig export
-    │   └── discovery.rs        # NEW: Discovery config
-    │
-    └── orchestrator/
-        ├── mod.rs              # Wire up discovery service
-        └── handler.rs          # Add price change tracking
+├── app/
+│   ├── config/
+│   │   ├── mod.rs              # Add LlmConfig, InferenceConfig exports
+│   │   ├── llm.rs              # NEW: LlmConfig, AnthropicConfig, OpenAiConfig
+│   │   └── inference.rs        # NEW: InferenceConfig
+│   │
+│   └── orchestrator/
+│       ├── mod.rs              # Wire up inference service
+│       └── handler.rs          # Add price change tracking
+│
+└── migrations/                 # Diesel migrations (repo root)
+    ├── 00000000000000_diesel_setup/
+    └── 2026020401_create_constraints/
 ```
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Domain Types (Day 1)
-- [ ] Add `Dependency`, `DependencyKind`, `MarketCluster` to domain
-- [ ] Add `DependencyId`, `ClusterId` to id.rs
-- [ ] Write unit tests for constraint generation
+### Phase 1: Domain Types + DB Layer (Day 1)
+- [ ] Add `Constraint`, `ConstraintKind`, `ConstraintCluster` to domain
+- [ ] Add `ConstraintId`, `ClusterId` to id.rs
+- [ ] Set up Diesel: `diesel setup`, initial migration
+- [ ] Create `core/db/` with schema.rs, models.rs
+- [ ] Write unit tests for constraint types
 
-### Phase 2: Cache Layer (Day 1-2)
-- [ ] Implement `DependencyCache` with TTL support
+### Phase 2: Store Layer (Day 1-2)
+- [ ] Define `Store<T>` trait in `core/store/mod.rs`
+- [ ] Implement `SqliteStore` using `core::db`
+- [ ] Implement `MemoryStore` for tests
+- [ ] Write tests for store operations
+
+### Phase 3: Cache Layer (Day 2)
+- [ ] Implement `ConstraintCache` with TTL support (uses Store)
 - [ ] Implement union-find for cluster building
 - [ ] Write tests for cache operations
 
-### Phase 3: Discoverer Trait (Day 2)
-- [ ] Define `DependencyDiscoverer` trait
-- [ ] Implement `NullDiscoverer` (no-op for testing)
-- [ ] Implement `RuleBasedDiscoverer` (simple heuristics)
+### Phase 4: LLM Module (Day 2-3)
+- [ ] Define `LlmClient` trait in `core/llm/mod.rs`
+- [ ] Implement `AnthropicClient`
+- [ ] Implement `OpenAiClient`
+- [ ] Add config in `app/config/llm.rs`
 
-### Phase 4: LLM Integration (Day 3-4)
-- [ ] Add `LlmClient` abstraction
-- [ ] Implement `LlmDiscoverer` with prompt engineering
+### Phase 5: Inference Service (Day 3-4)
+- [ ] Define `Inferrer` trait
+- [ ] Implement `LlmInferrer` with prompt engineering
+- [ ] Implement `RuleInferrer` (heuristics)
 - [ ] Add response parsing and validation
 - [ ] Write integration tests with mock LLM
 
-### Phase 5: Service Integration (Day 4-5)
-- [ ] Implement `DependencyDiscoveryService`
-- [ ] Add configuration support
+### Phase 6: Service Integration (Day 4-5)
+- [ ] Implement `InferenceService` coordinator
+- [ ] Add `app/config/inference.rs`
 - [ ] Wire into orchestrator
 - [ ] Add price change tracking
 
-### Phase 6: Strategy Update (Day 5)
+### Phase 7: Strategy Update (Day 5)
 - [ ] Update `CombinatorialStrategy::detect()`
-- [ ] Update `DetectionContext` with dependency lookup
+- [ ] Update `DetectionContext` with constraint lookup
 - [ ] End-to-end testing
 
-### Phase 7: Polish (Day 6)
+### Phase 8: Polish (Day 6)
 - [ ] Documentation
 - [ ] Metrics/logging
 - [ ] Configuration validation
