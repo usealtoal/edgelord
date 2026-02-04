@@ -6,7 +6,7 @@ use crate::app::Config;
 use crate::error::Result;
 
 /// Validate configuration file without starting the bot.
-pub fn execute_check_config<P: AsRef<Path>>(config_path: P) {
+pub fn execute_config<P: AsRef<Path>>(config_path: P) {
     let path = config_path.as_ref();
     println!("Checking configuration: {}", path.display());
     println!();
@@ -72,7 +72,7 @@ pub fn execute_check_config<P: AsRef<Path>>(config_path: P) {
 }
 
 /// Test Telegram notification by sending a test message.
-pub async fn execute_test_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
+pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let config = Config::load(config_path)?;
 
     let token = std::env::var("TELEGRAM_BOT_TOKEN").map_err(|_| {
@@ -143,7 +143,7 @@ pub async fn execute_test_telegram<P: AsRef<Path>>(config_path: P) -> Result<()>
 }
 
 /// Test WebSocket connection to the exchange.
-pub async fn execute_check_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
+pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let config = Config::load(config_path)?;
     let network = config.network();
 

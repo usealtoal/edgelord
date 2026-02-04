@@ -29,14 +29,14 @@ async fn main() {
         },
         Commands::Check(cmd) => match cmd {
             CheckCommand::Config(args) => {
-                edgelord::cli::check::execute_check_config(&args.config);
+                edgelord::cli::check::execute_config(&args.config);
                 Ok(())
             }
             CheckCommand::Connection(args) => {
-                edgelord::cli::check::execute_check_connection(&args.config).await
+                edgelord::cli::check::execute_connection(&args.config).await
             }
             CheckCommand::Telegram(args) => {
-                edgelord::cli::check::execute_test_telegram(&args.config).await
+                edgelord::cli::check::execute_telegram(&args.config).await
             }
         },
         Commands::Wallet(cmd) => match cmd {
