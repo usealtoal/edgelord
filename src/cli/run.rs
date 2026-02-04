@@ -3,25 +3,25 @@
 #[cfg(feature = "polymarket")]
 use crate::app::App;
 use crate::app::{Config, ExchangeSpecificConfig};
-use crate::cli::{banner, Cli, RunArgs};
+use crate::cli::{banner, RunArgs};
 use crate::error::Result;
 use tokio::signal;
 use tracing::{error, info};
 
 /// Execute the run command.
-pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
+pub async fn execute(args: &RunArgs) -> Result<()> {
     // Load and merge configuration
-    let mut config = Config::load(&cli.config)?;
+    let mut config = Config::load(&args.config)?;
 
     // Apply CLI overrides
-    if let Some(chain_id) = cli.chain_id {
+    if let Some(chain_id) = args.chain_id {
         match &mut config.exchange_config {
             ExchangeSpecificConfig::Polymarket(poly) => {
                 poly.chain_id = chain_id;
             }
         }
     }
-    if let Some(ref level) = cli.log_level {
+    if let Some(ref level) = args.log_level {
         config.logging.level = level.clone();
     }
     if args.json_logs {
@@ -50,7 +50,7 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
     if args.telegram_enabled {
         config.telegram.enabled = true;
     }
-    if cli.dry_run {
+    if args.dry_run {
         config.dry_run = true;
     }
 
