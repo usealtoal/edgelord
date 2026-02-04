@@ -176,6 +176,8 @@ pub struct OutcomeInfo {
     pub token_id: String,
     /// Human-readable outcome name (e.g., "Yes", "No", "Trump", "Biden").
     pub name: String,
+    /// Current price for this outcome (0.0-1.0), if available from REST API.
+    pub price: Option<f64>,
 }
 
 impl MarketInfo {

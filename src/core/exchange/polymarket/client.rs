@@ -83,6 +83,7 @@ impl From<PolymarketMarket> for MarketInfo {
                 .map(|t| OutcomeInfo {
                     token_id: t.token_id,
                     name: t.outcome,
+                    price: t.price,
                 })
                 .collect(),
             active: m.active && !m.closed,
