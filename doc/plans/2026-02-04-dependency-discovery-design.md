@@ -1081,72 +1081,703 @@ src/
 
 ## Implementation Plan
 
-### Phase 1: Domain Types + DB Layer (Day 1)
-- [ ] Add `Relation`, `RelationKind`, `Cluster` to domain
-- [ ] Add `RelationId`, `ClusterId` to id.rs
-- [ ] Set up Diesel: `diesel setup`, initial migration
-- [ ] Create `core/db/` with schema.rs, models.rs
-- [ ] Write unit tests for constraint types
+### Prerequisites: Dependencies & Setup
 
-### Phase 2: Store Layer (Day 1-2)
-- [ ] Define `Store<T>` trait in `core/store/mod.rs`
-- [ ] Implement `SqliteStore` using `core::db`
-- [ ] Implement `MemoryStore` for tests
-- [ ] Write tests for store operations
+**Cargo.toml additions:**
+```toml
+# Database
+diesel = { version = "2", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "2"
 
-### Phase 3: Cache Layer (Day 2)
-- [ ] Implement `ClusterCache` with TTL support (uses Store)
-- [ ] Implement union-find for cluster building
-- [ ] Write tests for cache operations
+# UUID for IDs
+uuid = { version = "1", features = ["v4", "serde"] }
 
-### Phase 4: LLM Module (Day 2-3)
-- [ ] Define `Llm` trait in `core/llm/mod.rs`
-- [ ] Implement `AnthropicLlm`
-- [ ] Implement `OpenAiLlm`
-- [ ] Add config in `app/config/llm.rs`
+# Union-find for clustering
+petgraph = "0.6"  # or implement simple union-find
+```
 
-### Phase 5: Inference Service (Day 3-4)
-- [ ] Define `Inferrer` trait
-- [ ] Implement `LlmInferrer` with prompt engineering
-- [ ] Implement `RuleInferrer` (heuristics)
-- [ ] Add response parsing and validation
-- [ ] Write integration tests with mock LLM
+**Environment variables:**
+```bash
+# Required for LLM inference
+ANTHROPIC_API_KEY=sk-ant-...
+# OR
+OPENAI_API_KEY=sk-...
 
-### Phase 6: Service Integration (Day 4-5)
-- [ ] Implement `InferenceService` coordinator
-- [ ] Add `app/config/inference.rs`
-- [ ] Wire into orchestrator
-- [ ] Add price change tracking
+# Database path (optional, defaults to ./data/edgelord.db)
+DATABASE_URL=sqlite://./data/edgelord.db
+```
 
-### Phase 7: Strategy Update (Day 5)
-- [ ] Update `CombinatorialStrategy::detect()`
-- [ ] Update `DetectionContext` with constraint lookup
-- [ ] End-to-end testing
+**New error variants in `src/error.rs`:**
+```rust
+#[derive(Error, Debug)]
+pub enum LlmError {
+    #[error("LLM request failed: {0}")]
+    RequestFailed(String),
+    #[error("LLM response parse error: {0}")]
+    ParseError(String),
+    #[error("LLM rate limited, retry after {retry_after_secs}s")]
+    RateLimited { retry_after_secs: u64 },
+    #[error("invalid API key")]
+    InvalidApiKey,
+}
 
-### Phase 8: Polish (Day 6)
-- [ ] Documentation
-- [ ] Metrics/logging
-- [ ] Configuration validation
-- [ ] Edge case handling
+#[derive(Error, Debug)]
+pub enum InferenceError {
+    #[error("inference failed: {0}")]
+    Failed(String),
+    #[error("no inferrer configured")]
+    NoInferrer,
+}
+
+#[derive(Error, Debug)]
+pub enum StoreError {
+    #[error("database error: {0}")]
+    Database(#[from] diesel::result::Error),
+    #[error("connection pool error: {0}")]
+    Pool(String),
+}
+
+// Add to main Error enum:
+#[error(transparent)]
+Llm(#[from] LlmError),
+#[error(transparent)]
+Inference(#[from] InferenceError),
+#[error(transparent)]
+Store(#[from] StoreError),
+```
 
 ---
 
-## Open Questions
+### Phase 1: Domain Types (Day 1, Morning)
 
-1. **LLM Provider Priority:** Claude vs GPT-4 vs local model?
-   - Claude 3.5 Sonnet recommended for consistency and JSON output quality
+**Files to create:**
+- `src/core/domain/relation.rs`
 
-2. **Confidence Calibration:** How to tune 0.7 threshold?
-   - Start conservative, lower if missing real constraints
+**Files to modify:**
+- `src/core/domain/mod.rs` — add `pub mod relation; pub use relation::*;`
+- `src/core/domain/id.rs` — add `RelationId`, `ClusterId`
 
-3. **Full Scan Frequency:** How often to re-analyze all markets?
-   - Suggest: hourly, or on significant market events (>10 new markets)
+**`src/core/domain/id.rs` additions:**
+```rust
+/// Unique identifier for an inferred relation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RelationId(String);
 
-4. **Multi-Exchange Relations:** Cross-exchange correlations?
-   - Out of scope for v1, but architecture supports it
+impl RelationId {
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4().to_string())
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
-5. **Persistence:** Should constraints survive restarts?
-   - Suggest: Yes, add simple file-based persistence
+impl Default for RelationId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for RelationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for RelationId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+// Same pattern for ClusterId
+```
+
+**Tests:**
+- `RelationKind::to_solver_constraints()` produces correct coefficients
+- `Cluster` builds valid ILP problems
+- Serialization round-trips
+
+---
+
+### Phase 2: Database Layer (Day 1, Afternoon)
+
+**Files to create:**
+- `src/core/db/mod.rs`
+- `src/core/db/schema.rs` (auto-generated by diesel)
+- `src/core/db/model.rs`
+- `migrations/2026020401_create_relations/up.sql`
+- `migrations/2026020401_create_relations/down.sql`
+
+**Files to modify:**
+- `src/core/mod.rs` — add `pub mod db;`
+
+**Migration SQL (`up.sql`):**
+```sql
+CREATE TABLE relations (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL,  -- JSON: {"Implies": {"if_yes": "...", "then_yes": "..."}}
+    confidence REAL NOT NULL,
+    reasoning TEXT NOT NULL,
+    inferred_at TEXT NOT NULL,  -- ISO 8601
+    expires_at TEXT NOT NULL,
+    
+    -- Denormalized for queries
+    market_ids TEXT NOT NULL  -- JSON array: ["market_1", "market_2"]
+);
+
+CREATE INDEX idx_relations_expires_at ON relations(expires_at);
+CREATE INDEX idx_relations_market_ids ON relations(market_ids);
+
+CREATE TABLE clusters (
+    id TEXT PRIMARY KEY NOT NULL,
+    market_ids TEXT NOT NULL,  -- JSON array
+    relation_ids TEXT NOT NULL,  -- JSON array
+    constraints_json TEXT NOT NULL,  -- Pre-computed solver constraints
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_clusters_updated_at ON clusters(updated_at);
+```
+
+**`src/core/db/model.rs`:**
+```rust
+use diesel::prelude::*;
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::core::db::schema::relations)]
+pub struct RelationRow {
+    pub id: String,
+    pub kind: String,  // JSON
+    pub confidence: f64,
+    pub reasoning: String,
+    pub inferred_at: String,
+    pub expires_at: String,
+    pub market_ids: String,  // JSON
+}
+
+// Conversion: RelationRow <-> domain::Relation
+```
+
+**`src/core/db/mod.rs`:**
+```rust
+pub mod model;
+pub mod schema;
+
+use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::SqliteConnection;
+
+pub type DbPool = Pool<ConnectionManager<SqliteConnection>>;
+
+pub fn create_pool(database_url: &str) -> Result<DbPool, StoreError> {
+    let manager = ConnectionManager::<SqliteConnection>::new(database_url);
+    Pool::builder()
+        .max_size(5)
+        .build(manager)
+        .map_err(|e| StoreError::Pool(e.to_string()))
+}
+```
+
+**Tests:**
+- Migration runs cleanly
+- Insert/query/delete relations
+- Insert/query clusters
+
+---
+
+### Phase 3: Store Layer (Day 2, Morning)
+
+**Files to create:**
+- `src/core/store/mod.rs`
+- `src/core/store/sqlite.rs`
+- `src/core/store/memory.rs`
+
+**Files to modify:**
+- `src/core/mod.rs` — add `pub mod store;`
+
+**`src/core/store/mod.rs`:**
+```rust
+mod memory;
+mod sqlite;
+
+pub use memory::MemoryStore;
+pub use sqlite::SqliteStore;
+
+use async_trait::async_trait;
+use crate::error::Result;
+
+/// Generic key-value store for persistence.
+#[async_trait]
+pub trait Store<T>: Send + Sync {
+    /// Get item by key.
+    async fn get(&self, key: &str) -> Result<Option<T>>;
+    
+    /// Put item (upsert).
+    async fn put(&self, key: &str, value: &T) -> Result<()>;
+    
+    /// Delete item.
+    async fn delete(&self, key: &str) -> Result<()>;
+    
+    /// List all keys.
+    async fn keys(&self) -> Result<Vec<String>>;
+    
+    /// List items matching a predicate.
+    async fn list<F>(&self, predicate: F) -> Result<Vec<T>>
+    where
+        F: Fn(&T) -> bool + Send + Sync;
+}
+```
+
+**`src/core/store/sqlite.rs`:**
+```rust
+pub struct SqliteRelationStore {
+    pool: DbPool,
+}
+
+impl SqliteRelationStore {
+    pub fn new(pool: DbPool) -> Self {
+        Self { pool }
+    }
+    
+    /// Get relations involving a specific market.
+    pub fn get_by_market(&self, market_id: &MarketId) -> Result<Vec<Relation>> {
+        // Query with LIKE on market_ids JSON
+    }
+    
+    /// Delete expired relations.
+    pub fn prune_expired(&self) -> Result<usize> {
+        // DELETE WHERE expires_at < now
+    }
+}
+
+#[async_trait]
+impl Store<Relation> for SqliteRelationStore { ... }
+```
+
+**Tests:**
+- Store CRUD operations
+- `get_by_market` returns correct relations
+- `prune_expired` removes old entries
+
+---
+
+### Phase 4: Cache Layer (Day 2, Afternoon)
+
+**Files to create:**
+- `src/core/cache/cluster.rs`
+
+**Files to modify:**
+- `src/core/cache/mod.rs` — add `pub mod cluster; pub use cluster::ClusterCache;`
+
+**Key implementation details:**
+- Union-find for building clusters from relations
+- In-memory HashMap for hot path, backed by Store for persistence
+- TTL-based expiration
+- Thread-safe with `parking_lot::RwLock`
+
+**Tests:**
+- Cluster building from relations
+- TTL expiration
+- Concurrent access
+
+---
+
+### Phase 5: LLM Module (Day 3)
+
+**Files to create:**
+- `src/core/llm/mod.rs`
+- `src/core/llm/anthropic.rs`
+- `src/core/llm/openai.rs`
+
+**Files to modify:**
+- `src/core/mod.rs` — add `pub mod llm;`
+
+**`src/core/llm/mod.rs`:**
+```rust
+mod anthropic;
+mod openai;
+
+pub use anthropic::AnthropicLlm;
+pub use openai::OpenAiLlm;
+
+use async_trait::async_trait;
+use crate::error::Result;
+
+#[async_trait]
+pub trait Llm: Send + Sync {
+    fn name(&self) -> &'static str;
+    async fn complete(&self, prompt: &str) -> Result<String>;
+}
+```
+
+**`src/core/llm/anthropic.rs`:**
+```rust
+pub struct AnthropicLlm {
+    client: reqwest::Client,
+    api_key: String,
+    model: String,
+    max_tokens: usize,
+    temperature: f64,
+}
+
+impl AnthropicLlm {
+    pub fn new(config: &AnthropicConfig) -> Result<Self> {
+        let api_key = std::env::var("ANTHROPIC_API_KEY")
+            .map_err(|_| LlmError::InvalidApiKey)?;
+        // ...
+    }
+}
+
+#[async_trait]
+impl Llm for AnthropicLlm {
+    fn name(&self) -> &'static str { "anthropic" }
+    
+    async fn complete(&self, prompt: &str) -> Result<String> {
+        let response = self.client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&serde_json::json!({
+                "model": self.model,
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "messages": [{"role": "user", "content": prompt}]
+            }))
+            .send()
+            .await?;
+        // Parse response, handle errors
+    }
+}
+```
+
+**Tests:**
+- Mock HTTP responses
+- Error handling (rate limits, invalid key, parse errors)
+
+---
+
+### Phase 6: Config Layer (Day 3-4)
+
+**Files to create:**
+- `src/app/config/llm.rs`
+- `src/app/config/inference.rs`
+
+**Files to modify:**
+- `src/app/config/mod.rs` — add modules and exports, add to `Config` struct
+
+**`src/app/config/llm.rs`:**
+```rust
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "provider", rename_all = "lowercase")]
+pub enum LlmConfig {
+    Anthropic(AnthropicConfig),
+    OpenAi(OpenAiConfig),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicConfig {
+    #[serde(default = "default_anthropic_model")]
+    pub model: String,
+    #[serde(default = "default_temperature")]
+    pub temperature: f64,
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: usize,
+}
+
+fn default_anthropic_model() -> String { "claude-3-5-sonnet-20241022".to_string() }
+fn default_temperature() -> f64 { 0.3 }
+fn default_max_tokens() -> usize { 4096 }
+```
+
+**`src/app/config/inference.rs`:**
+```rust
+#[derive(Debug, Clone, Deserialize)]
+pub struct InferenceConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_provider")]
+    pub provider: InferenceProvider,
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: f64,
+    #[serde(default = "default_ttl_seconds")]
+    pub ttl_seconds: u64,
+    #[serde(default = "default_price_threshold")]
+    pub price_change_threshold: f64,
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
+    #[serde(default = "default_rate_limit")]
+    pub rate_limit_per_minute: u32,
+    #[serde(default)]
+    pub llm: Option<LlmConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InferenceProvider {
+    #[default]
+    Null,
+    Llm,
+    Rules,
+}
+```
+
+**Add to `Config` struct:**
+```rust
+pub struct Config {
+    // ... existing fields ...
+    #[serde(default)]
+    pub inference: InferenceConfig,
+    #[serde(default)]
+    pub database_url: Option<String>,
+}
+```
+
+---
+
+### Phase 7: Inference Service (Day 4)
+
+**Files to create:**
+- `src/core/service/inference/mod.rs`
+- `src/core/service/inference/llm.rs`
+- `src/core/service/inference/rules.rs`
+- `src/core/service/inference/service.rs`
+
+**Files to modify:**
+- `src/core/service/mod.rs` — add `pub mod inference; pub use inference::*;`
+
+**Key types:**
+- `Inferrer` trait
+- `LlmInferrer` — uses `Llm` trait, builds prompts, parses responses
+- `RuleInferrer` — heuristic patterns (same question text = mutually exclusive)
+- `NullInferrer` — no-op for disabled inference
+- `InferenceService` — event-driven coordinator
+- `InferenceEvent` — NewMarket, PriceChange, FullScan
+
+**Tests:**
+- LlmInferrer prompt construction
+- LlmInferrer response parsing (valid JSON, invalid JSON, edge cases)
+- RuleInferrer pattern matching
+- InferenceService batching logic
+
+---
+
+### Phase 8: Orchestrator Integration (Day 5)
+
+**Files to modify:**
+- `src/app/orchestrator/mod.rs`
+- `src/app/orchestrator/builder.rs`
+- `src/app/orchestrator/handler.rs`
+
+**`src/app/orchestrator/builder.rs` additions:**
+```rust
+/// Build LLM client from configuration.
+pub(crate) fn build_llm(config: &Config) -> Option<Arc<dyn Llm>> {
+    config.inference.llm.as_ref().map(|llm_config| {
+        match llm_config {
+            LlmConfig::Anthropic(c) => Arc::new(AnthropicLlm::new(c).unwrap()) as Arc<dyn Llm>,
+            LlmConfig::OpenAi(c) => Arc::new(OpenAiLlm::new(c).unwrap()) as Arc<dyn Llm>,
+        }
+    })
+}
+
+/// Build inferrer from configuration.
+pub(crate) fn build_inferrer(config: &Config, llm: Option<Arc<dyn Llm>>) -> Arc<dyn Inferrer> {
+    match config.inference.provider {
+        InferenceProvider::Llm => {
+            let llm = llm.expect("LLM config required for LLM inferrer");
+            Arc::new(LlmInferrer::new(llm, config.inference.clone()))
+        }
+        InferenceProvider::Rules => Arc::new(RuleInferrer::new()),
+        InferenceProvider::Null => Arc::new(NullInferrer),
+    }
+}
+
+/// Build cluster cache with optional persistence.
+pub(crate) fn build_cluster_cache(config: &Config) -> Arc<ClusterCache> {
+    let store = config.database_url.as_ref().map(|url| {
+        let pool = crate::core::db::create_pool(url).expect("Failed to create DB pool");
+        Arc::new(SqliteRelationStore::new(pool)) as Arc<dyn Store<Relation>>
+    });
+    Arc::new(ClusterCache::new(CacheConfig {
+        default_ttl: chrono::Duration::seconds(config.inference.ttl_seconds as i64),
+        max_relations: 10_000,
+        max_clusters: 1_000,
+    }, store))
+}
+```
+
+**`src/app/orchestrator/mod.rs` additions:**
+```rust
+pub async fn run(config: Config) -> Result<()> {
+    // ... existing initialization ...
+    
+    // Initialize inference system (if enabled)
+    let cluster_cache = build_cluster_cache(&config);
+    let inference_tx = if config.inference.enabled {
+        let llm = build_llm(&config);
+        let inferrer = build_inferrer(&config, llm);
+        let mut inference_service = InferenceService::new(
+            inferrer,
+            cluster_cache.clone(),
+            config.inference.clone(),
+        );
+        let tx = inference_service.event_sender();
+        
+        // Spawn inference service task
+        tokio::spawn(async move {
+            inference_service.run().await;
+        });
+        
+        // Queue initial full scan with all markets
+        tx.send(InferenceEvent::FullScan(market_infos.clone())).await.ok();
+        
+        Some(tx)
+    } else {
+        None
+    };
+    
+    // Pass cluster_cache to strategies that need it
+    let strategies = Arc::new(build_strategy_registry(&config, cluster_cache.clone()));
+    
+    // ... rest of initialization ...
+}
+```
+
+**`src/app/orchestrator/handler.rs` additions:**
+```rust
+/// Track prices for change detection.
+struct PriceTracker {
+    last_prices: HashMap<TokenId, Decimal>,
+    threshold: Decimal,
+}
+
+impl PriceTracker {
+    fn check(&mut self, token_id: &TokenId, new_price: Decimal) -> Option<PriceChange> {
+        if let Some(old_price) = self.last_prices.get(token_id) {
+            let change = ((new_price - *old_price) / *old_price).abs();
+            if change > self.threshold {
+                let result = PriceChange {
+                    token_id: token_id.clone(),
+                    old_price: *old_price,
+                    new_price,
+                };
+                self.last_prices.insert(token_id.clone(), new_price);
+                return Some(result);
+            }
+        }
+        self.last_prices.insert(token_id.clone(), new_price);
+        None
+    }
+}
+```
+
+---
+
+### Phase 9: Strategy Update (Day 5)
+
+**Files to modify:**
+- `src/core/strategy/combinatorial/mod.rs`
+- `src/core/strategy/context.rs`
+- `src/app/orchestrator/builder.rs`
+
+**`CombinatorialStrategy` changes:**
+```rust
+pub struct CombinatorialStrategy {
+    config: CombinatorialConfig,
+    cluster_cache: Arc<ClusterCache>,  // NEW
+    fw: FrankWolfe,
+    solver: Solver,
+}
+
+impl CombinatorialStrategy {
+    pub fn new(config: CombinatorialConfig, cluster_cache: Arc<ClusterCache>) -> Self {
+        Self {
+            config,
+            cluster_cache,
+            fw: FrankWolfe::new(config.frank_wolfe.clone()),
+            solver: Solver::new(),
+        }
+    }
+}
+
+impl Strategy for CombinatorialStrategy {
+    fn applies_to(&self, ctx: &MarketContext) -> bool {
+        self.config.enabled && 
+        self.cluster_cache.get_cluster(ctx.market_id).is_some()
+    }
+    
+    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
+        let cluster = match self.cluster_cache.get_cluster(ctx.market.market_id()) {
+            Some(c) => c,
+            None => return vec![],
+        };
+        
+        // ... existing Frank-Wolfe logic using cluster.constraints ...
+    }
+}
+```
+
+**`build_strategy_registry` changes:**
+```rust
+pub(crate) fn build_strategy_registry(
+    config: &Config, 
+    cluster_cache: Arc<ClusterCache>
+) -> StrategyRegistry {
+    // ...
+    "combinatorial" => {
+        if config.strategies.combinatorial.enabled {
+            registry.register(Box::new(CombinatorialStrategy::new(
+                config.strategies.combinatorial.clone(),
+                cluster_cache.clone(),
+            )));
+        }
+    }
+    // ...
+}
+```
+
+---
+
+### Phase 10: End-to-End Testing (Day 6)
+
+**Integration tests to write:**
+1. **Full flow test**: Mock market data → inference → cluster → strategy detection
+2. **Persistence test**: Relations survive restart
+3. **Expiration test**: TTL correctly expires relations
+4. **Price change test**: Significant price changes trigger re-inference
+5. **Error handling**: LLM failures don't crash the system
+
+**Test files:**
+- `tests/inference_integration.rs`
+- `tests/cluster_persistence.rs`
+
+---
+
+### Phase 11: Documentation & Polish (Day 6)
+
+**Files to create/update:**
+- Update `README.md` with inference configuration
+- Update `config.toml.example` with inference section
+- Add rustdoc to all public types
+- Update `ARCHITECTURE.md` if needed
+
+**Metrics/logging:**
+- Add `tracing` spans for inference operations
+- Log inference latency, success rate
+- Log cluster cache hit rate
+
+---
+
+## Resolved Decisions
+
+| Question | Decision | Rationale |
+|----------|----------|-----------|
+| LLM Provider | Claude 3.5 Sonnet (default) | Best JSON output quality, consistent |
+| Confidence Threshold | 0.7 (configurable) | Start conservative, tune with data |
+| Full Scan Frequency | Hourly + on >10 new markets | Balance freshness vs cost |
+| Multi-Exchange | Out of scope v1 | Architecture supports it later |
+| Persistence | SQLite via Diesel | Survive restarts, query by market |
+| Cache TTL | 1 hour (configurable) | Force periodic re-validation |
 
 ---
 
