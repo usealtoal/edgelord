@@ -17,6 +17,10 @@
 //! - [`ScoreWeights`] - Weights for combining factors into a composite score
 //! - [`MarketScore`] - A market's computed score for subscription prioritization
 //!
+//! ## Resource Types
+//!
+//! - [`ResourceBudget`] - Resource constraints for adaptive subscription scaling
+//!
 //! ## Identifier Types
 //!
 //! - [`MarketId`] - Unique market identifier
@@ -29,6 +33,7 @@ mod money;
 mod opportunity;
 mod orderbook;
 mod position;
+mod resource;
 mod score;
 
 pub use id::{MarketId, TokenId};
@@ -38,4 +43,5 @@ pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityLeg};
 pub use orderbook::{OrderBook, PriceLevel};
 pub use position::{Position, PositionId, PositionLeg, PositionStatus};
+pub use resource::ResourceBudget;
 pub use score::{MarketScore, ScoreFactors, ScoreWeights};
