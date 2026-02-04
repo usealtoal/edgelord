@@ -12,7 +12,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::app::config::Config;
 use crate::app::state::AppState;
-use crate::app::status_file::{StatusConfig, StatusWriter};
+use crate::app::status::{StatusConfig, StatusWriter};
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::MarketRegistry;
 use crate::core::domain::{Opportunity, TokenId};

@@ -3,7 +3,7 @@
 mod config;
 mod orchestrator;
 mod state;
-pub mod status_file;
+pub mod status;
 
 pub use config::{
     Config, Environment, Exchange, ExchangeSpecificConfig, LoggingConfig, NetworkConfig,

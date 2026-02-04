@@ -6,7 +6,7 @@ use std::process::Command;
 
 use chrono::{DateTime, Duration, Utc};
 
-use crate::app::status_file::StatusFile;
+use crate::app::status::StatusFile;
 
 /// Default path for the status file.
 const DEFAULT_STATUS_PATH: &str = "/var/run/edgelord/status.json";
