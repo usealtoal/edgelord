@@ -1,15 +1,14 @@
 <div align="center">
   <img src="asset/banner.png" alt="edgelord" width="100%">
 
-  <p><strong>Multi-strategy arbitrage detection and execution for prediction markets</strong></p>
+  <p><strong>Multi-strategy arbitrage detection and execution for prediction markets, written in Rust</strong></p>
 
   <p>
     <a href="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml"><img src="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+    <img src="https://img.shields.io/badge/license-proprietary-lightgrey.svg" alt="License">
     <img src="https://img.shields.io/badge/rust-1.75%2B-orange.svg" alt="Rust">
   </p>
 
-  <hr width="60%">
 </div>
 
 ## What It Does
@@ -83,4 +82,4 @@ Implementation plans and research notes live in `doc/plans/` and `doc/research/`
 
 ## License
 
-MIT
+Proprietary. All rights reserved.
