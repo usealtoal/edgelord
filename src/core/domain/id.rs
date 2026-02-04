@@ -2,11 +2,13 @@
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// Token identifier - newtype for type safety.
 ///
 /// The inner String is private to ensure all construction goes through
 /// the defined constructors.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TokenId(String);
 
 impl TokenId {
@@ -44,7 +46,7 @@ impl From<&str> for TokenId {
 ///
 /// The inner String is private to ensure all construction goes through
 /// the defined constructors.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MarketId(String);
 
 impl MarketId {
@@ -75,6 +77,96 @@ impl From<String> for MarketId {
 impl From<&str> for MarketId {
     fn from(s: &str) -> Self {
         Self::new(s)
+    }
+}
+
+/// Unique identifier for an inferred relation between markets.
+///
+/// Generated as UUID v4 for new relations, or constructed from
+/// existing string for persistence/deserialization.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RelationId(String);
+
+impl RelationId {
+    /// Create a new `RelationId` with a generated UUID.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Get the relation ID as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Default for RelationId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for RelationId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for RelationId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for RelationId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+/// Unique identifier for a cluster of related markets.
+///
+/// Generated as UUID v4 for new clusters, or constructed from
+/// existing string for persistence/deserialization.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ClusterId(String);
+
+impl ClusterId {
+    /// Create a new `ClusterId` with a generated UUID.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4().to_string())
+    }
+
+    /// Get the cluster ID as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Default for ClusterId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for ClusterId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for ClusterId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for ClusterId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
     }
 }
 
@@ -128,5 +220,74 @@ mod tests {
     fn market_id_display() {
         let id = MarketId::new("display-test");
         assert_eq!(format!("{}", id), "display-test");
+    }
+
+    // RelationId tests
+    #[test]
+    fn relation_id_generates_unique_ids() {
+        let id1 = RelationId::new();
+        let id2 = RelationId::new();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn relation_id_as_str_returns_uuid_format() {
+        let id = RelationId::new();
+        // UUID v4 format: 8-4-4-4-12 hex chars
+        assert_eq!(id.as_str().len(), 36);
+        assert!(id.as_str().chars().filter(|c| *c == '-').count() == 4);
+    }
+
+    #[test]
+    fn relation_id_from_string() {
+        let id = RelationId::from("existing-id".to_string());
+        assert_eq!(id.as_str(), "existing-id");
+    }
+
+    #[test]
+    fn relation_id_display() {
+        let id = RelationId::from("display-test".to_string());
+        assert_eq!(format!("{}", id), "display-test");
+    }
+
+    #[test]
+    fn relation_id_default_generates_new() {
+        let id1 = RelationId::default();
+        let id2 = RelationId::default();
+        assert_ne!(id1, id2);
+    }
+
+    // ClusterId tests
+    #[test]
+    fn cluster_id_generates_unique_ids() {
+        let id1 = ClusterId::new();
+        let id2 = ClusterId::new();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn cluster_id_as_str_returns_uuid_format() {
+        let id = ClusterId::new();
+        assert_eq!(id.as_str().len(), 36);
+        assert!(id.as_str().chars().filter(|c| *c == '-').count() == 4);
+    }
+
+    #[test]
+    fn cluster_id_from_string() {
+        let id = ClusterId::from("existing-cluster".to_string());
+        assert_eq!(id.as_str(), "existing-cluster");
+    }
+
+    #[test]
+    fn cluster_id_display() {
+        let id = ClusterId::from("cluster-display".to_string());
+        assert_eq!(format!("{}", id), "cluster-display");
+    }
+
+    #[test]
+    fn cluster_id_default_generates_new() {
+        let id1 = ClusterId::default();
+        let id2 = ClusterId::default();
+        assert_ne!(id1, id2);
     }
 }

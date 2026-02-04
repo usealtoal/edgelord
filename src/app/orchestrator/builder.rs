@@ -2,14 +2,16 @@
 
 use std::sync::Arc;
 
+use chrono::Duration;
 use tracing::{info, warn};
 
-use crate::app::config::Config;
+use crate::app::config::{Config, LlmProvider};
+use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
+use crate::core::llm::{AnthropicLlm, Llm, OpenAiLlm};
+use crate::core::inference::{Inferrer, LlmInferrer};
 use crate::core::service::{LogNotifier, NotifierRegistry};
-use crate::core::strategy::{
-    CombinatorialStrategy, MarketRebalancingStrategy, SingleConditionStrategy, StrategyRegistry,
-};
+use crate::core::strategy::StrategyRegistry;
 
 #[cfg(feature = "telegram")]
 use crate::core::service::{TelegramConfig, TelegramNotifier};
@@ -45,28 +47,23 @@ pub(crate) fn build_notifier_registry(config: &Config) -> NotifierRegistry {
     registry
 }
 
-/// Build strategy registry from configuration.
-pub(crate) fn build_strategy_registry(config: &Config) -> StrategyRegistry {
-    let mut registry = StrategyRegistry::new();
+/// Build strategy registry from configuration using builder pattern.
+pub(crate) fn build_strategy_registry(
+    config: &Config,
+    cluster_cache: Arc<ClusterCache>,
+) -> StrategyRegistry {
+    let mut builder = StrategyRegistry::builder().cluster_cache(cluster_cache);
 
     for name in &config.strategies.enabled {
         match name.as_str() {
             "single_condition" => {
-                registry.register(Box::new(SingleConditionStrategy::new(
-                    config.strategies.single_condition.clone(),
-                )));
+                builder = builder.single_condition(config.strategies.single_condition.clone());
             }
             "market_rebalancing" => {
-                registry.register(Box::new(MarketRebalancingStrategy::new(
-                    config.strategies.market_rebalancing.clone(),
-                )));
+                builder = builder.market_rebalancing(config.strategies.market_rebalancing.clone());
             }
             "combinatorial" => {
-                if config.strategies.combinatorial.enabled {
-                    registry.register(Box::new(CombinatorialStrategy::new(
-                        config.strategies.combinatorial.clone(),
-                    )));
-                }
+                builder = builder.combinatorial(config.strategies.combinatorial.clone());
             }
             unknown => {
                 warn!(strategy = unknown, "Unknown strategy in config, skipping");
@@ -74,7 +71,7 @@ pub(crate) fn build_strategy_registry(config: &Config) -> StrategyRegistry {
         }
     }
 
-    registry
+    builder.build()
 }
 
 /// Initialize the executor if wallet is configured.
@@ -95,4 +92,62 @@ pub(crate) async fn init_executor(
             None
         }
     }
+}
+
+/// Build LLM client from configuration.
+pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
+    if !config.inference.enabled {
+        return None;
+    }
+
+    let client: Arc<dyn Llm> = match config.llm.provider {
+        LlmProvider::Anthropic => {
+            let api_key = match std::env::var("ANTHROPIC_API_KEY") {
+                Ok(k) => k,
+                Err(_) => {
+                    warn!("ANTHROPIC_API_KEY not set, inference disabled");
+                    return None;
+                }
+            };
+            Arc::new(AnthropicLlm::new(
+                api_key,
+                &config.llm.anthropic.model,
+                config.llm.anthropic.max_tokens,
+                config.llm.anthropic.temperature,
+            ))
+        }
+        LlmProvider::OpenAi => {
+            let api_key = match std::env::var("OPENAI_API_KEY") {
+                Ok(k) => k,
+                Err(_) => {
+                    warn!("OPENAI_API_KEY not set, inference disabled");
+                    return None;
+                }
+            };
+            Arc::new(OpenAiLlm::new(
+                api_key,
+                &config.llm.openai.model,
+                config.llm.openai.max_tokens,
+                config.llm.openai.temperature,
+            ))
+        }
+    };
+
+    info!(provider = client.name(), "LLM client initialized");
+    Some(client)
+}
+
+/// Build cluster cache for relation inference.
+pub(crate) fn build_cluster_cache(config: &Config) -> Arc<ClusterCache> {
+    let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
+    Arc::new(ClusterCache::new(ttl))
+}
+
+/// Build inference service components.
+pub(crate) fn build_inferrer(
+    config: &Config,
+    llm: Arc<dyn Llm>,
+) -> Arc<dyn Inferrer> {
+    let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
+    Arc::new(LlmInferrer::new(llm, ttl))
 }

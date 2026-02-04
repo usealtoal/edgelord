@@ -220,3 +220,49 @@ auto_detect = false                 # Auto-detect system resources
 # worker_threads = 4                # Worker thread count (optional)
 memory_usage_target = 0.80          # Target memory utilization
 cpu_usage_target = 0.70             # Target CPU utilization
+
+# =============================================================================
+# LLM (Language Model for Relation Inference)
+# =============================================================================
+
+# API key is loaded from ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.
+# NEVER put your API key in this file!
+
+[llm]
+# Provider: "anthropic" or "openai"
+provider = "anthropic"
+
+# Anthropic-specific settings
+[llm.anthropic]
+model = "claude-3-5-sonnet-20241022"  # Model to use
+temperature = 0.2                      # Low for consistent JSON output
+max_tokens = 4096                      # Max response tokens
+
+# OpenAI-specific settings (used if provider = "openai")
+[llm.openai]
+model = "gpt-4-turbo"
+temperature = 0.2
+max_tokens = 4096
+
+# =============================================================================
+# INFERENCE (Relation Discovery Service)
+# =============================================================================
+
+[inference]
+enabled = false                     # Enable automatic relation discovery
+min_confidence = 0.7                # Minimum confidence to accept (0.0-1.0)
+ttl_seconds = 3600                  # How long relations are valid (1 hour)
+price_change_threshold = 0.05       # Re-infer on 5% price change
+scan_interval_seconds = 3600        # Full scan every hour
+batch_size = 30                     # Markets per LLM call
+
+# =============================================================================
+# CLUSTER DETECTION (Scalable Combinatorial Arbitrage)
+# =============================================================================
+
+[cluster_detection]
+enabled = false                     # Enable real-time cluster detection
+debounce_ms = 100                   # Minimum interval between detection runs
+min_gap = 0.02                      # Minimum arbitrage gap (2%)
+max_clusters_per_cycle = 50         # Max clusters to check per cycle
+channel_capacity = 1024             # Order book update channel size

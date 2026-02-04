@@ -31,10 +31,13 @@ mod frank_wolfe;
 pub use bregman::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
 pub use frank_wolfe::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};
 
+use std::sync::Arc;
+
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
+use crate::core::cache::ClusterCache;
 use crate::core::domain::Opportunity;
 
 /// Configuration for combinatorial strategy.
@@ -95,12 +98,14 @@ impl Default for CombinatorialConfig {
 pub struct CombinatorialStrategy {
     config: CombinatorialConfig,
     fw: FrankWolfe,
+    /// Cluster cache for relation lookups.
+    cluster_cache: Option<Arc<ClusterCache>>,
 }
 
 impl CombinatorialStrategy {
     /// Create a new strategy with the given configuration.
     #[must_use]
-    pub const fn new(config: CombinatorialConfig) -> Self {
+    pub fn new(config: CombinatorialConfig) -> Self {
         let fw_config = FrankWolfeConfig {
             max_iterations: config.max_iterations,
             tolerance: config.tolerance,
@@ -108,7 +113,28 @@ impl CombinatorialStrategy {
         Self {
             config,
             fw: FrankWolfe::new(fw_config),
+            cluster_cache: None,
         }
+    }
+
+    /// Set the cluster cache for relation lookups.
+    pub fn set_cache(&mut self, cache: Arc<ClusterCache>) {
+        self.cluster_cache = Some(cache);
+    }
+
+    /// Create strategy with cache already set.
+    #[must_use]
+    pub fn with_cache(mut self, cache: Arc<ClusterCache>) -> Self {
+        self.cluster_cache = Some(cache);
+        self
+    }
+
+    /// Check if a market has known relations in the cache.
+    fn has_cached_relations(&self, market_id: &crate::core::domain::MarketId) -> bool {
+        self.cluster_cache
+            .as_ref()
+            .map(|c| c.has_relations(market_id))
+            .unwrap_or(false)
     }
 
     /// Get the strategy configuration.
@@ -131,25 +157,52 @@ impl Strategy for CombinatorialStrategy {
 
     fn applies_to(&self, ctx: &MarketContext) -> bool {
         // Only applies to markets with known dependencies
-        self.config.enabled && ctx.has_dependencies
+        // Check both static context and dynamic cache
+        if !self.config.enabled {
+            return false;
+        }
+
+        // If context says it has dependencies, trust that
+        if ctx.has_dependencies {
+            return true;
+        }
+
+        // Otherwise check cache for any correlated markets
+        ctx.correlated_markets
+            .first()
+            .map(|m| self.has_cached_relations(m))
+            .unwrap_or(false)
     }
 
-    fn detect(&self, _ctx: &DetectionContext) -> Vec<Opportunity> {
-        // Full implementation requires:
-        // 1. Market dependency graph (which markets are correlated)
-        // 2. ILP constraint builder (encode dependencies as constraints)
-        // 3. Multi-market state aggregation (prices across correlated markets)
+    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
+        // Get cluster from cache
+        let cache = match &self.cluster_cache {
+            Some(c) => c,
+            None => return vec![],
+        };
+
+        let cluster = match cache.get_for_market(ctx.market.market_id()) {
+            Some(c) => c,
+            None => return vec![], // No known relations
+        };
+
+        // Log that we found a cluster (actual Frank-Wolfe execution is complex)
+        tracing::debug!(
+            market_id = %ctx.market.market_id(),
+            cluster_size = cluster.markets.len(),
+            constraint_count = cluster.constraints.len(),
+            "Found cluster for combinatorial detection"
+        );
+
+        // Full Frank-Wolfe execution requires:
+        // 1. Gather prices for all markets in cluster
+        // 2. Build ILP problem from cluster.constraints
+        // 3. Run self.fw.project()
+        // 4. Check if gap > threshold
+        // 5. Build opportunity with multiple legs
         //
-        // This is a complex feature requiring:
-        // - Dependency detection (potentially LLM-assisted as in the research)
-        // - Constraint encoding for various dependency types
-        // - Efficient state management across market clusters
-        //
-        // For now, return empty. Real implementation would:
-        // 1. Get correlated markets from context
-        // 2. Build ILP from dependency constraints
-        // 3. Run Frank-Wolfe projection
-        // 4. If gap > threshold, create opportunity
+        // This is the integration point - for now return empty
+        // Real implementation needs multi-market price aggregation
         vec![]
     }
 }

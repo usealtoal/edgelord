@@ -45,13 +45,15 @@ mod money;
 mod opportunity;
 mod order_book;
 mod position;
+mod relation;
 mod resource;
 mod scaling;
 mod score;
 
 pub use execution::{ArbitrageExecutionResult, FailedLeg, FilledLeg, OrderId};
-pub use id::{MarketId, TokenId};
+pub use id::{ClusterId, MarketId, RelationId, TokenId};
 pub use market::{Market, Outcome};
+pub use relation::{Cluster, Relation, RelationKind};
 pub use market_registry::MarketRegistry;
 pub use money::{Price, Volume};
 pub use opportunity::{Opportunity, OpportunityLeg};

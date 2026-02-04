@@ -20,10 +20,15 @@ use crate::app::status::{StatusConfig, StatusWriter};
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
-use crate::core::service::RiskManager;
+use crate::core::inference::{Inferrer, MarketSummary};
+use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::{Event, OpportunityEvent, RiskManager};
 use crate::error::Result;
 
-use builder::{build_notifier_registry, build_strategy_registry, init_executor};
+use builder::{
+    build_cluster_cache, build_inferrer, build_llm_client, build_notifier_registry,
+    build_strategy_registry, init_executor,
+};
 use handler::handle_market_event;
 
 /// Main application orchestrator.
@@ -71,8 +76,21 @@ impl Orchestrator {
         // Initialize executor (optional)
         let executor = init_executor(&config).await;
 
-        // Build strategy registry
-        let strategies = Arc::new(build_strategy_registry(&config));
+        // Initialize inference infrastructure
+        let cluster_cache = build_cluster_cache(&config);
+        let llm_client = build_llm_client(&config);
+        let inferrer: Option<Arc<dyn Inferrer>> = llm_client
+            .map(|llm| build_inferrer(&config, llm));
+
+        if inferrer.is_some() {
+            info!("Inference service enabled");
+        }
+
+        // Build strategy registry with cache for combinatorial strategy
+        let strategies = Arc::new(build_strategy_registry(
+            &config,
+            Arc::clone(&cluster_cache),
+        ));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),
             "Strategies loaded"
@@ -120,6 +138,40 @@ impl Orchestrator {
             );
         }
 
+        // Run initial inference if enabled
+        if let Some(ref inf) = inferrer {
+            let summaries: Vec<MarketSummary> = registry
+                .markets()
+                .iter()
+                .take(config.inference.batch_size)
+                .map(|m| MarketSummary {
+                    id: m.market_id().clone(),
+                    question: m.question().to_string(),
+                    outcomes: m.outcomes().iter().map(|o| o.name().to_string()).collect(),
+                })
+                .collect();
+
+            if summaries.len() >= 2 {
+                info!(markets = summaries.len(), "Running initial inference");
+                match inf.infer(&summaries).await {
+                    Ok(relations) => {
+                        if !relations.is_empty() {
+                            info!(
+                                relations = relations.len(),
+                                "Discovered market relations"
+                            );
+                            cluster_cache.put_relations(relations);
+                        } else {
+                            debug!("No relations discovered in initial batch");
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Initial inference failed");
+                    }
+                }
+            }
+        }
+
         let token_ids: Vec<TokenId> = registry
             .markets()
             .iter()
@@ -128,8 +180,48 @@ impl Orchestrator {
 
         info!(tokens = token_ids.len(), "Subscribing to tokens");
 
-        let cache = Arc::new(OrderBookCache::new());
         let registry = Arc::new(registry);
+
+        // Create order book cache (with notifications if cluster detection enabled)
+        let (cache, cluster_handle) = if config.cluster_detection.enabled {
+            let (cache, update_rx) = OrderBookCache::with_notifications(
+                config.cluster_detection.channel_capacity,
+            );
+            let cache = Arc::new(cache);
+
+            // Start cluster detection service
+            let service = ClusterDetectionService::new(
+                config.cluster_detection.to_core_config(),
+                Arc::clone(&cache),
+                Arc::clone(&cluster_cache),
+                Arc::clone(&registry),
+            );
+            let (handle, mut opp_rx) = service.start(update_rx);
+
+            // Spawn task to handle cluster opportunities
+            let notifiers_clone = Arc::clone(&notifiers);
+            tokio::spawn(async move {
+                while let Some(opp) = opp_rx.recv().await {
+                    info!(
+                        cluster = %opp.cluster_id,
+                        gap = %opp.gap,
+                        markets = ?opp.markets.iter().map(|m| m.as_str()).collect::<Vec<_>>(),
+                        "Cluster opportunity detected"
+                    );
+                    // Notify about the opportunity
+                    let event = Event::OpportunityDetected(OpportunityEvent::from(&opp.opportunity));
+                    notifiers_clone.notify_all(event);
+                }
+            });
+
+            info!("Cluster detection service started");
+            (cache, Some(handle))
+        } else {
+            (Arc::new(OrderBookCache::new()), None)
+        };
+
+        // Keep handle alive (drop on shutdown)
+        let _cluster_handle = cluster_handle;
 
         // Create data stream with reconnection support
         let inner_stream = ExchangeFactory::create_data_stream(&config);
