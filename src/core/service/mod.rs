@@ -1,6 +1,7 @@
 //! Cross-cutting services - risk management, notifications, etc.
 
 mod governor;
+mod latency_governor;
 mod notifier;
 mod priority_subscription;
 mod risk;
@@ -12,6 +13,7 @@ mod telegram;
 pub use governor::{
     AdaptiveGovernor, GovernorConfig, LatencyMetrics, LatencyTargets, ScalingConfig,
 };
+pub use latency_governor::LatencyGovernor;
 pub use notifier::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
     RiskEvent, SummaryEvent,
