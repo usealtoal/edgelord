@@ -1,8 +1,10 @@
 //! Integration tests for multi-exchange abstraction.
 
-use edgelord::core::domain::{Market, MarketId, MarketRegistry, Opportunity, OpportunityLeg, Outcome, TokenId};
-use edgelord::core::exchange::{ExchangeConfig, MarketInfo, OutcomeInfo};
+use edgelord::core::domain::{
+    Market, MarketId, MarketRegistry, Opportunity, OpportunityLeg, Outcome, TokenId,
+};
 use edgelord::core::exchange::polymarket::PolymarketExchangeConfig;
+use edgelord::core::exchange::{ExchangeConfig, MarketInfo, OutcomeInfo};
 use rust_decimal_macros::dec;
 
 #[test]
@@ -18,17 +20,21 @@ fn test_polymarket_config_values() {
 fn test_exchange_config_parses_binary_markets() {
     let config = PolymarketExchangeConfig;
 
-    let market_infos = vec![
-        MarketInfo {
-            id: "market-1".to_string(),
-            question: "Will it rain?".to_string(),
-            outcomes: vec![
-                OutcomeInfo { token_id: "yes-token".to_string(), name: "Yes".to_string() },
-                OutcomeInfo { token_id: "no-token".to_string(), name: "No".to_string() },
-            ],
-            active: true,
-        },
-    ];
+    let market_infos = vec![MarketInfo {
+        id: "market-1".to_string(),
+        question: "Will it rain?".to_string(),
+        outcomes: vec![
+            OutcomeInfo {
+                token_id: "yes-token".to_string(),
+                name: "Yes".to_string(),
+            },
+            OutcomeInfo {
+                token_id: "no-token".to_string(),
+                name: "No".to_string(),
+            },
+        ],
+        active: true,
+    }];
 
     let markets = config.parse_markets(&market_infos);
 

@@ -20,7 +20,7 @@ pub struct HiGHSSolver;
 
 impl HiGHSSolver {
     /// Create a new `HiGHS` solver instance.
-    #[must_use] 
+    #[must_use]
     pub const fn new() -> Self {
         Self
     }
@@ -219,10 +219,7 @@ mod tests {
 
         let problem = LpProblem {
             objective: vec![Decimal::ONE, Decimal::ZERO],
-            constraints: vec![Constraint::eq(
-                vec![Decimal::ONE, Decimal::ONE],
-                dec!(2),
-            )],
+            constraints: vec![Constraint::eq(vec![Decimal::ONE, Decimal::ONE], dec!(2))],
             bounds: vec![VariableBounds::non_negative(); 2],
         };
 

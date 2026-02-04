@@ -137,9 +137,7 @@ mod tests {
         assert!((scorer.weights.liquidity - config.weights.liquidity).abs() < f64::EPSILON);
         assert!((scorer.weights.spread - config.weights.spread).abs() < f64::EPSILON);
         assert!((scorer.weights.opportunity - config.weights.opportunity).abs() < f64::EPSILON);
-        assert!(
-            (scorer.weights.outcome_count - config.weights.outcome_count).abs() < f64::EPSILON
-        );
+        assert!((scorer.weights.outcome_count - config.weights.outcome_count).abs() < f64::EPSILON);
         assert!((scorer.weights.activity - config.weights.activity).abs() < f64::EPSILON);
     }
 

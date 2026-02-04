@@ -397,7 +397,10 @@ mod tests {
         assert_eq!(parsed.version, original.version);
         assert_eq!(parsed.pid, original.pid);
         assert_eq!(parsed.config.chain_id, original.config.chain_id);
-        assert_eq!(parsed.runtime.positions_open, original.runtime.positions_open);
+        assert_eq!(
+            parsed.runtime.positions_open,
+            original.runtime.positions_open
+        );
         assert_eq!(parsed.today.trades_executed, original.today.trades_executed);
     }
 }

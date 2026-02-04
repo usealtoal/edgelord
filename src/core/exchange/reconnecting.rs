@@ -140,7 +140,10 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
 
                 // Resubscribe to tokens
                 if !self.subscribed_tokens.is_empty() {
-                    debug!(tokens = self.subscribed_tokens.len(), "Resubscribing to tokens");
+                    debug!(
+                        tokens = self.subscribed_tokens.len(),
+                        "Resubscribing to tokens"
+                    );
                     self.inner.subscribe(&self.subscribed_tokens).await?;
                 }
 
@@ -266,9 +269,7 @@ mod tests {
     impl MarketDataStream for MockDataStream {
         async fn connect(&mut self) -> Result<(), Error> {
             self.connect_count.fetch_add(1, Ordering::SeqCst);
-            self.connect_results
-                .pop_front()
-                .unwrap_or(Ok(()))
+            self.connect_results.pop_front().unwrap_or(Ok(()))
         }
 
         async fn subscribe(&mut self, _token_ids: &[TokenId]) -> Result<(), Error> {
@@ -297,13 +298,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_successful_connection() {
-        let mock = MockDataStream::new()
-            .with_events(vec![
-                Some(MarketEvent::OrderBookSnapshot {
-                    token_id: TokenId::from("token1".to_string()),
-                    book: OrderBook::new(TokenId::from("token1".to_string())),
-                }),
-            ]);
+        let mock = MockDataStream::new().with_events(vec![Some(MarketEvent::OrderBookSnapshot {
+            token_id: TokenId::from("token1".to_string()),
+            book: OrderBook::new(TokenId::from("token1".to_string())),
+        })]);
 
         let mut stream = ReconnectingDataStream::new(mock, test_config());
         stream.connect().await.unwrap();
@@ -314,18 +312,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_reconnect_after_disconnect() {
-        let mock = MockDataStream::new()
-            .with_events(vec![
-                Some(MarketEvent::Disconnected { reason: "test".into() }),
-                Some(MarketEvent::OrderBookSnapshot {
-                    token_id: TokenId::from("token1".to_string()),
-                    book: OrderBook::new(TokenId::from("token1".to_string())),
-                }),
-            ]);
+        let mock = MockDataStream::new().with_events(vec![
+            Some(MarketEvent::Disconnected {
+                reason: "test".into(),
+            }),
+            Some(MarketEvent::OrderBookSnapshot {
+                token_id: TokenId::from("token1".to_string()),
+                book: OrderBook::new(TokenId::from("token1".to_string())),
+            }),
+        ]);
 
         let mut stream = ReconnectingDataStream::new(mock, test_config());
         stream.connect().await.unwrap();
-        stream.subscribe(&[TokenId::from("token1".to_string())]).await.unwrap();
+        stream
+            .subscribe(&[TokenId::from("token1".to_string())])
+            .await
+            .unwrap();
 
         // First call should trigger reconnect, second should return snapshot
         let event = stream.next_event().await;
@@ -339,10 +341,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_exponential_backoff() {
-        let mut stream = ReconnectingDataStream::new(
-            MockDataStream::new(),
-            test_config(),
-        );
+        let mut stream = ReconnectingDataStream::new(MockDataStream::new(), test_config());
 
         // Initial delay
         let delay1 = stream.next_delay();
@@ -366,10 +365,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_circuit_breaker_trips() {
-        let mut stream = ReconnectingDataStream::new(
-            MockDataStream::new(),
-            test_config(),
-        );
+        let mut stream = ReconnectingDataStream::new(MockDataStream::new(), test_config());
 
         // Record failures up to threshold
         for _ in 0..3 {
@@ -383,10 +379,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_backoff() {
-        let mut stream = ReconnectingDataStream::new(
-            MockDataStream::new(),
-            test_config(),
-        );
+        let mut stream = ReconnectingDataStream::new(MockDataStream::new(), test_config());
 
         // Simulate some failures
         stream.consecutive_failures = 5;

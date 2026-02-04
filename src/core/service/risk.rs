@@ -23,13 +23,13 @@ pub enum RiskCheckResult {
 
 impl RiskCheckResult {
     /// Check if approved.
-    #[must_use] 
+    #[must_use]
     pub const fn is_approved(&self) -> bool {
         matches!(self, RiskCheckResult::Approved)
     }
 
     /// Get rejection error if rejected.
-    #[must_use] 
+    #[must_use]
     pub const fn rejection_error(&self) -> Option<&RiskError> {
         match self {
             RiskCheckResult::Rejected(e) => Some(e),
@@ -50,7 +50,7 @@ impl RiskManager {
     }
 
     /// Check if an opportunity passes all risk checks.
-    #[must_use] 
+    #[must_use]
     pub fn check(&self, opportunity: &Opportunity) -> RiskCheckResult {
         // Check circuit breaker first
         if let Err(e) = self.check_circuit_breaker() {
@@ -94,7 +94,10 @@ impl RiskManager {
         let expected = opportunity.expected_profit();
 
         if expected < threshold {
-            return Err(RiskError::ProfitBelowThreshold { expected, threshold });
+            return Err(RiskError::ProfitBelowThreshold {
+                expected,
+                threshold,
+            });
         }
         Ok(())
     }

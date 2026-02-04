@@ -16,11 +16,11 @@ use tracing::{info, warn};
 
 use crate::app::Config;
 use crate::core::domain::Opportunity;
-use crate::error::{ConfigError, ExecutionError, Result};
 use crate::core::exchange::{
     ArbitrageExecutionResult, ArbitrageExecutor, ExecutionResult, FailedLeg, FilledLeg,
     OrderExecutor, OrderId, OrderRequest, OrderSide,
 };
+use crate::error::{ConfigError, ExecutionError, Result};
 
 /// Type alias for the authenticated CLOB client.
 type AuthenticatedClient = Client<Authenticated<Normal>>;
@@ -78,7 +78,10 @@ impl PolymarketExecutor {
     }
 
     /// Execute an arbitrage opportunity by placing orders on all legs in parallel.
-    async fn execute_arbitrage_impl(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
+    async fn execute_arbitrage_impl(
+        &self,
+        opportunity: &Opportunity,
+    ) -> Result<ArbitrageExecutionResult> {
         info!(
             market = %opportunity.market_id(),
             edge = %opportunity.edge(),
@@ -104,7 +107,9 @@ impl PolymarketExecutor {
                 let token_str = token_id.to_string();
                 let price = leg.ask_price();
                 async move {
-                    let result = self.submit_order(&token_str, Side::Buy, volume, price).await;
+                    let result = self
+                        .submit_order(&token_str, Side::Buy, volume, price)
+                        .await;
                     (token_id, result)
                 }
             })
@@ -161,10 +166,11 @@ impl PolymarketExecutor {
         price: Decimal,
     ) -> Result<PostOrderResponse> {
         // Parse token ID to U256
-        let token_id_u256 = U256::from_str(token_id).map_err(|e| ExecutionError::InvalidTokenId {
-            token_id: token_id.to_string(),
-            reason: e.to_string(),
-        })?;
+        let token_id_u256 =
+            U256::from_str(token_id).map_err(|e| ExecutionError::InvalidTokenId {
+                token_id: token_id.to_string(),
+                reason: e.to_string(),
+            })?;
 
         // Build limit order
         let order = self
@@ -234,7 +240,10 @@ impl OrderExecutor for PolymarketExecutor {
             OrderSide::Sell => Side::Sell,
         };
 
-        match self.submit_order(&order.token_id, side, order.size, order.price).await {
+        match self
+            .submit_order(&order.token_id, side, order.size, order.price)
+            .await
+        {
             Ok(response) => Ok(ExecutionResult::Success {
                 order_id: OrderId::new(response.order_id),
                 filled_amount: order.size,
@@ -257,7 +266,10 @@ impl OrderExecutor for PolymarketExecutor {
 
 #[async_trait]
 impl ArbitrageExecutor for PolymarketExecutor {
-    async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<ArbitrageExecutionResult> {
+    async fn execute_arbitrage(
+        &self,
+        opportunity: &Opportunity,
+    ) -> Result<ArbitrageExecutionResult> {
         self.execute_arbitrage_impl(opportunity).await
     }
 

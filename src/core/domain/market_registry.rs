@@ -292,11 +292,7 @@ mod tests {
         // All 4 tokens should be indexed
         for token_id in &["red-token", "blue-token", "green-token", "yellow-token"] {
             let market = registry.get_by_token(&TokenId::from(*token_id));
-            assert!(
-                market.is_some(),
-                "Token {} should be in registry",
-                token_id
-            );
+            assert!(market.is_some(), "Token {} should be in registry", token_id);
             assert_eq!(market.unwrap().market_id().as_str(), "multi");
         }
     }

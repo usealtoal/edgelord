@@ -13,7 +13,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::solver::{IlpProblem, LpProblem, Solver, SolutionStatus};
+use crate::core::solver::{IlpProblem, LpProblem, SolutionStatus, Solver};
 use crate::error::Result;
 
 use super::bregman::{bregman_divergence, bregman_gradient};
@@ -43,13 +43,13 @@ pub struct FrankWolfe {
 
 impl FrankWolfe {
     /// Create a new Frank-Wolfe instance with the given configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn new(config: FrankWolfeConfig) -> Self {
         Self { config }
     }
 
     /// Get the configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn config(&self) -> &FrankWolfeConfig {
         &self.config
     }
@@ -196,7 +196,7 @@ pub struct FrankWolfeResult {
 
 impl FrankWolfeResult {
     /// Check if significant arbitrage exists.
-    #[must_use] 
+    #[must_use]
     pub fn has_arbitrage(&self, threshold: Decimal) -> bool {
         self.gap > threshold
     }

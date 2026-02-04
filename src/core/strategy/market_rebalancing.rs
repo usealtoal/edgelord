@@ -58,13 +58,13 @@ pub struct MarketRebalancingStrategy {
 
 impl MarketRebalancingStrategy {
     /// Create a new strategy with the given configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn new(config: MarketRebalancingConfig) -> Self {
         Self { config }
     }
 
     /// Get the strategy configuration.
-    #[must_use] 
+    #[must_use]
     pub const fn config(&self) -> &MarketRebalancingConfig {
         &self.config
     }
@@ -141,7 +141,7 @@ pub struct RebalancingLeg {
 
 impl RebalancingLeg {
     /// Create a new rebalancing leg.
-    #[must_use] 
+    #[must_use]
     pub const fn new(token_id: TokenId, price: Price, volume: Volume) -> Self {
         Self {
             token_id,
@@ -175,7 +175,7 @@ pub struct RebalancingOpportunity {
 
 impl RebalancingOpportunity {
     /// Number of outcomes in this opportunity.
-    #[must_use] 
+    #[must_use]
     pub const fn outcome_count(&self) -> usize {
         self.legs.len()
     }
@@ -312,7 +312,14 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE);
+        let opp = detect_rebalancing(
+            &market_id,
+            "Who wins?",
+            &tokens,
+            &cache,
+            &config,
+            Decimal::ONE,
+        );
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -350,17 +357,21 @@ mod tests {
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_rebalancing(
+            &market_id,
+            "Who wins?",
+            &tokens,
+            &cache,
+            &config,
+            Decimal::ONE
+        )
+        .is_none());
     }
 
     #[test]
     fn test_no_opportunity_when_edge_too_small() {
         let market_id = MarketId::from("election");
-        let tokens = vec![
-            TokenId::from("a"),
-            TokenId::from("b"),
-            TokenId::from("c"),
-        ];
+        let tokens = vec![TokenId::from("a"), TokenId::from("b"), TokenId::from("c")];
         let cache = OrderBookCache::new();
         let config = make_config();
 
@@ -381,17 +392,21 @@ mod tests {
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
         ));
 
-        assert!(detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_rebalancing(
+            &market_id,
+            "Who wins?",
+            &tokens,
+            &cache,
+            &config,
+            Decimal::ONE
+        )
+        .is_none());
     }
 
     #[test]
     fn test_volume_limited_by_smallest_leg() {
         let market_id = MarketId::from("election");
-        let tokens = vec![
-            TokenId::from("a"),
-            TokenId::from("b"),
-            TokenId::from("c"),
-        ];
+        let tokens = vec![TokenId::from("a"), TokenId::from("b"), TokenId::from("c")];
         let cache = OrderBookCache::new();
         let config = make_config();
 
@@ -412,7 +427,15 @@ mod tests {
             vec![PriceLevel::new(dec!(0.30), dec!(200))],
         ));
 
-        let opp = detect_rebalancing(&market_id, "Who wins?", &tokens, &cache, &config, Decimal::ONE).unwrap();
+        let opp = detect_rebalancing(
+            &market_id,
+            "Who wins?",
+            &tokens,
+            &cache,
+            &config,
+            Decimal::ONE,
+        )
+        .unwrap();
         assert_eq!(opp.volume, dec!(50));
         assert_eq!(opp.expected_profit, dec!(5.00)); // 50 * 0.10
     }
@@ -436,7 +459,15 @@ mod tests {
         ));
 
         // Should return None for binary markets (handled by single_condition)
-        assert!(detect_rebalancing(&market_id, "Yes/No?", &tokens, &cache, &config, Decimal::ONE).is_none());
+        assert!(detect_rebalancing(
+            &market_id,
+            "Yes/No?",
+            &tokens,
+            &cache,
+            &config,
+            Decimal::ONE
+        )
+        .is_none());
     }
 
     #[test]
@@ -463,12 +494,7 @@ mod tests {
             Outcome::new(tokens[1].clone(), "Candidate B"),
             Outcome::new(tokens[2].clone(), "Candidate C"),
         ];
-        let market_1 = Market::new(
-            MarketId::from("election"),
-            "Who wins?",
-            outcomes_1,
-            dec!(1),
-        );
+        let market_1 = Market::new(MarketId::from("election"), "Who wins?", outcomes_1, dec!(1));
 
         let cache = OrderBookCache::new();
 
@@ -494,7 +520,10 @@ mod tests {
         // With default $1 payout, no opportunity (cost $90 > payout $1)
         let ctx_default = DetectionContext::new(&market_1, &cache);
         let opps_default = strategy.detect(&ctx_default);
-        assert!(opps_default.is_empty(), "Should have no opportunity with $1 payout");
+        assert!(
+            opps_default.is_empty(),
+            "Should have no opportunity with $1 payout"
+        );
 
         // Create market with $100 payout
         let outcomes_100 = vec![
@@ -512,7 +541,11 @@ mod tests {
         // With $100 payout, opportunity exists (cost $90 < payout $100)
         let ctx_custom = DetectionContext::new(&market_100, &cache);
         let opps_custom = strategy.detect(&ctx_custom);
-        assert_eq!(opps_custom.len(), 1, "Should have opportunity with $100 payout");
+        assert_eq!(
+            opps_custom.len(),
+            1,
+            "Should have opportunity with $100 payout"
+        );
 
         let opp = &opps_custom[0];
         // Edge = payout - total_cost = 100 - 90 = 10

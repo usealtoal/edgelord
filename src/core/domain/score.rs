@@ -171,7 +171,11 @@ impl MarketScore {
 
     /// Create a market score by computing the composite from factors and weights.
     #[must_use]
-    pub fn from_factors(market_id: MarketId, factors: ScoreFactors, weights: &ScoreWeights) -> Self {
+    pub fn from_factors(
+        market_id: MarketId,
+        factors: ScoreFactors,
+        weights: &ScoreWeights,
+    ) -> Self {
         let composite = factors.composite(weights);
         Self {
             market_id,

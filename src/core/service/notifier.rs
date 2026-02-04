@@ -3,8 +3,8 @@
 //! The `Notifier` trait defines the interface for notification handlers.
 //! Multiple notifiers can be registered with the `NotifierRegistry`.
 
-use crate::core::exchange::ArbitrageExecutionResult;
 use crate::core::domain::Opportunity;
+use crate::core::exchange::ArbitrageExecutionResult;
 use crate::error::RiskError;
 
 /// Events that can trigger notifications.
@@ -72,7 +72,10 @@ impl ExecutionEvent {
                 Self {
                     market_id: market_id.to_string(),
                     success: false,
-                    details: format!("Partial fill - filled: {:?}, failed: {:?}", filled_ids, failed_ids),
+                    details: format!(
+                        "Partial fill - filled: {:?}, failed: {:?}",
+                        filled_ids, failed_ids
+                    ),
                 }
             }
             ArbitrageExecutionResult::Failed { reason } => Self {
@@ -128,7 +131,7 @@ pub struct NotifierRegistry {
 
 impl NotifierRegistry {
     /// Create an empty registry.
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self { notifiers: vec![] }
     }
@@ -146,13 +149,13 @@ impl NotifierRegistry {
     }
 
     /// Number of registered notifiers.
-    #[must_use] 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.notifiers.len()
     }
 
     /// Check if registry is empty.
-    #[must_use] 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.notifiers.is_empty()
     }
@@ -244,8 +247,12 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0));
         let mut registry = NotifierRegistry::new();
 
-        registry.register(Box::new(CountingNotifier { count: count.clone() }));
-        registry.register(Box::new(CountingNotifier { count: count.clone() }));
+        registry.register(Box::new(CountingNotifier {
+            count: count.clone(),
+        }));
+        registry.register(Box::new(CountingNotifier {
+            count: count.clone(),
+        }));
 
         registry.notify_all(Event::CircuitBreakerReset);
 

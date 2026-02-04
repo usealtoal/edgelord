@@ -1,8 +1,8 @@
 //! Handler for the `run` command.
 
-use crate::app::{Config, ExchangeSpecificConfig};
 #[cfg(feature = "polymarket")]
 use crate::app::App;
+use crate::app::{Config, ExchangeSpecificConfig};
 use crate::cli::{banner, Cli, RunArgs};
 use crate::error::Result;
 use tokio::signal;
@@ -28,7 +28,10 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
         config.logging.format = "json".to_string();
     }
     if let Some(ref strategies) = args.strategies {
-        config.strategies.enabled = strategies.split(',').map(|s| s.trim().to_string()).collect();
+        config.strategies.enabled = strategies
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
     }
     if let Some(min_edge) = args.min_edge {
         config.strategies.single_condition.min_edge = min_edge;

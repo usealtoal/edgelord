@@ -10,24 +10,26 @@ use std::sync::Arc;
 
 use tracing::{debug, error, info, warn};
 
-use crate::core::exchange::{ArbitrageExecutionResult, ArbitrageExecutor, MarketDataStream, ReconnectingDataStream};
-use crate::core::domain::MarketRegistry;
 use crate::app::config::Config;
 use crate::app::state::AppState;
 use crate::app::status_file::{StatusConfig, StatusWriter};
-use crate::core::strategy::{
-    CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
-    StrategyRegistry,
-};
 use crate::core::cache::OrderBookCache;
+use crate::core::domain::MarketRegistry;
 use crate::core::domain::{Opportunity, TokenId};
-use crate::error::{Result, RiskError};
+use crate::core::exchange::{
+    ArbitrageExecutionResult, ArbitrageExecutor, MarketDataStream, ReconnectingDataStream,
+};
 use crate::core::exchange::{ExchangeFactory, MarketEvent, OrderId};
-use rust_decimal::Decimal;
 use crate::core::service::{
     Event, ExecutionEvent, LogNotifier, NotifierRegistry, OpportunityEvent, RiskCheckResult,
     RiskEvent, RiskManager,
 };
+use crate::core::strategy::{
+    CombinatorialStrategy, DetectionContext, MarketRebalancingStrategy, SingleConditionStrategy,
+    StrategyRegistry,
+};
+use crate::error::{Result, RiskError};
+use rust_decimal::Decimal;
 
 #[cfg(feature = "telegram")]
 use crate::core::service::{TelegramConfig, TelegramNotifier};
@@ -56,7 +58,11 @@ impl App {
             let status_config = StatusConfig {
                 exchange: format!("{:?}", config.exchange).to_lowercase(),
                 environment: network.environment.to_string(),
-                chain_id: if network.chain_id > 0 { Some(network.chain_id) } else { None },
+                chain_id: if network.chain_id > 0 {
+                    Some(network.chain_id)
+                } else {
+                    None
+                },
                 strategies: config.strategies.enabled.clone(),
                 dry_run: config.dry_run,
             };
@@ -82,7 +88,10 @@ impl App {
 
         // Fetch markets using exchange-agnostic trait
         let market_fetcher = ExchangeFactory::create_market_fetcher(&config);
-        info!(exchange = market_fetcher.exchange_name(), "Fetching markets");
+        info!(
+            exchange = market_fetcher.exchange_name(),
+            "Fetching markets"
+        );
         let market_infos = market_fetcher.get_markets(20).await?;
 
         if market_infos.is_empty() {
@@ -132,7 +141,8 @@ impl App {
 
         // Create data stream with reconnection support
         let inner_stream = ExchangeFactory::create_data_stream(&config);
-        let mut data_stream = ReconnectingDataStream::new(inner_stream, config.reconnection.clone());
+        let mut data_stream =
+            ReconnectingDataStream::new(inner_stream, config.reconnection.clone());
         data_stream.connect().await?;
         data_stream.subscribe(&token_ids).await?;
 
@@ -263,7 +273,16 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run, status_writer.clone());
+                    handle_opportunity(
+                        opp,
+                        executor.clone(),
+                        risk_manager,
+                        notifiers,
+                        state,
+                        cache,
+                        dry_run,
+                        status_writer.clone(),
+                    );
                 }
             }
         }
@@ -276,7 +295,16 @@ fn handle_market_event(
                 let opportunities = strategies.detect_all(&ctx);
 
                 for opp in opportunities {
-                    handle_opportunity(opp, executor.clone(), risk_manager, notifiers, state, cache, dry_run, status_writer.clone());
+                    handle_opportunity(
+                        opp,
+                        executor.clone(),
+                        risk_manager,
+                        notifiers,
+                        state,
+                        cache,
+                        dry_run,
+                        status_writer.clone(),
+                    );
                 }
             }
         }
@@ -427,8 +455,10 @@ fn spawn_execution(
                         }
                     }
                     ArbitrageExecutionResult::PartialFill { filled, failed } => {
-                        let filled_ids: Vec<_> = filled.iter().map(|f| f.token_id.to_string()).collect();
-                        let failed_ids: Vec<_> = failed.iter().map(|f| f.token_id.to_string()).collect();
+                        let filled_ids: Vec<_> =
+                            filled.iter().map(|f| f.token_id.to_string()).collect();
+                        let failed_ids: Vec<_> =
+                            failed.iter().map(|f| f.token_id.to_string()).collect();
                         warn!(
                             filled = ?filled_ids,
                             failed = ?failed_ids,
@@ -439,7 +469,9 @@ fn spawn_execution(
                         let mut cancel_failed = false;
                         for fill in filled {
                             let order_id = OrderId::new(fill.order_id.clone());
-                            if let Err(cancel_err) = ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await {
+                            if let Err(cancel_err) =
+                                ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await
+                            {
                                 warn!(error = %cancel_err, token = %fill.token_id, "Failed to cancel filled leg");
                                 cancel_failed = true;
                             }
@@ -467,7 +499,8 @@ fn spawn_execution(
 
                 // Notify execution result
                 notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
-                    &market_id, &exec_result,
+                    &market_id,
+                    &exec_result,
                 )));
             }
             Err(e) => {
@@ -489,7 +522,13 @@ fn record_position(state: &AppState, opportunity: &Opportunity) {
     let position_legs: Vec<PositionLeg> = opportunity
         .legs()
         .iter()
-        .map(|leg| PositionLeg::new(leg.token_id().clone(), opportunity.volume(), leg.ask_price()))
+        .map(|leg| {
+            PositionLeg::new(
+                leg.token_id().clone(),
+                opportunity.volume(),
+                leg.ask_price(),
+            )
+        })
         .collect();
 
     let mut positions = state.positions_mut();
@@ -522,10 +561,19 @@ fn record_partial_position(
         .legs()
         .iter()
         .filter(|leg| filled_token_ids.contains(leg.token_id()))
-        .map(|leg| PositionLeg::new(leg.token_id().clone(), opportunity.volume(), leg.ask_price()))
+        .map(|leg| {
+            PositionLeg::new(
+                leg.token_id().clone(),
+                opportunity.volume(),
+                leg.ask_price(),
+            )
+        })
         .collect();
 
-    let entry_cost: Decimal = position_legs.iter().map(|l| l.entry_price() * l.size()).sum();
+    let entry_cost: Decimal = position_legs
+        .iter()
+        .map(|l| l.entry_price() * l.size())
+        .sum();
 
     let mut positions = state.positions_mut();
     let position = Position::new(
