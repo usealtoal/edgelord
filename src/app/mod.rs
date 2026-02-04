@@ -4,6 +4,7 @@ mod config;
 mod orchestrator;
 mod state;
 pub mod status;
+mod wallet;
 
 pub use config::{
     Config, ConnectionPoolConfig, DedupStrategyConfig, Environment, Exchange,
@@ -14,6 +15,7 @@ pub use config::{
     WalletConfig,
 };
 pub use state::{AppState, RiskLimits};
+pub use wallet::{ApprovalOutcome, WalletApprovalStatus, WalletService};
 
 use crate::error::Result;
 use orchestrator::Orchestrator;
