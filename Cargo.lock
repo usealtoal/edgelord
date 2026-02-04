@@ -1716,6 +1716,7 @@ dependencies = [
  "futures-util",
  "good_lp",
  "libc",
+ "num_cpus",
  "parking_lot",
  "polymarket-client-sdk",
  "reqwest 0.12.28",
