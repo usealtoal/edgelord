@@ -5,7 +5,6 @@ use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use crate::app::state::AppState;
-use crate::app::status::StatusWriter;
 use crate::core::domain::{
     ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
     PositionStatus, TokenId,
@@ -20,10 +19,8 @@ pub(crate) fn spawn_execution(
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
     state: Arc<AppState>,
-    status_writer: Option<Arc<StatusWriter>>,
 ) {
     let market_id = opportunity.market_id().to_string();
-    let expected_profit = opportunity.expected_profit();
 
     tokio::spawn(async move {
         let result = executor.execute_arbitrage(&opportunity).await;
@@ -36,19 +33,6 @@ pub(crate) fn spawn_execution(
                 match &exec_result {
                     ArbitrageExecutionResult::Success { .. } => {
                         record_position(&state, &opportunity);
-                        // Record execution with profit in status file
-                        if let Some(ref writer) = status_writer {
-                            writer.record_execution(expected_profit);
-                            // Update runtime stats
-                            let positions = state.positions();
-                            let open_count = positions.open_positions().count();
-                            let exposure = positions.total_exposure();
-                            let max_exposure = state.risk_limits().max_total_exposure;
-                            writer.update_runtime(open_count, exposure, max_exposure);
-                            if let Err(e) = writer.write() {
-                                warn!(error = %e, "Failed to write status file");
-                            }
-                        }
                     }
                     ArbitrageExecutionResult::PartialFill { filled, failed } => {
                         let filled_ids: Vec<_> =
@@ -76,16 +60,6 @@ pub(crate) fn spawn_execution(
                         if cancel_failed {
                             warn!("Some cancellations failed, recording partial position");
                             record_partial_position(&state, &opportunity, filled, failed);
-                            if let Some(ref writer) = status_writer {
-                                let positions = state.positions();
-                                let open_count = positions.open_positions().count();
-                                let exposure = positions.total_exposure();
-                                let max_exposure = state.risk_limits().max_total_exposure;
-                                writer.update_runtime(open_count, exposure, max_exposure);
-                                if let Err(e) = writer.write() {
-                                    warn!(error = %e, "Failed to write status file");
-                                }
-                            }
                         } else {
                             info!("Successfully cancelled all filled legs, no position recorded");
                         }

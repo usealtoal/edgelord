@@ -4,7 +4,7 @@
 //! for sensitive values like `WALLET_PRIVATE_KEY`.
 
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::{ConfigError, Result};
 
@@ -97,10 +97,6 @@ pub struct Config {
     /// Dry-run mode: detect opportunities but don't execute trades.
     #[serde(default)]
     pub dry_run: bool,
-    /// Path to the status file for external monitoring.
-    /// Set to enable status file writing (e.g., "/var/run/edgelord/status.json").
-    #[serde(default)]
-    pub status_file: Option<PathBuf>,
     #[serde(default)]
     pub reconnection: ReconnectionConfig,
     /// Connection pool configuration for WebSocket shard management.

@@ -4,6 +4,7 @@ pub mod cluster;
 mod governor;
 mod notification;
 mod risk;
+pub mod stats;
 mod subscription;
 
 pub use governor::{
@@ -14,6 +15,9 @@ pub use notification::{
     RiskEvent, SummaryEvent,
 };
 pub use risk::{RiskCheckResult, RiskManager};
+pub use stats::{
+    RecordedOpportunity, StatsSummary, StatsRecorder, TradeCloseEvent, TradeOpenEvent, TradeLeg,
+};
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 
 #[cfg(feature = "telegram")]

@@ -88,8 +88,8 @@ mod tests {
         Relation::new(
             RelationKind::MutuallyExclusive {
                 markets: vec![
-                    MarketId::new(&format!("m1{suffix}")),
-                    MarketId::new(&format!("m2{suffix}")),
+                    MarketId::new(format!("m1{suffix}")),
+                    MarketId::new(format!("m2{suffix}")),
                 ],
             },
             0.9,

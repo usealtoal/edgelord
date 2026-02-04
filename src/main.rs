@@ -1,5 +1,7 @@
 use clap::Parser;
-use edgelord::cli::{CheckCommand, Cli, Commands, ServiceCommand, WalletCommand};
+use edgelord::cli::{
+    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatsCommand, WalletCommand,
+};
 
 #[tokio::main]
 async fn main() {
@@ -9,10 +11,24 @@ async fn main() {
 
     let result = match cli.command {
         Commands::Run(args) => edgelord::cli::run::execute(&args).await,
-        Commands::Status => {
-            edgelord::cli::status::execute();
+        Commands::Status(args) => {
+            edgelord::cli::status::execute(&args.db);
             Ok(())
         }
+        Commands::Stats(cmd) => match cmd {
+            StatsCommand::Today(args) => edgelord::cli::stats::execute_today(&args.db),
+            StatsCommand::Week(args) => edgelord::cli::stats::execute_week(&args.db),
+            StatsCommand::History(args) => {
+                edgelord::cli::stats::execute_history(&args.db, args.days)
+            }
+        },
+        Commands::Config(cmd) => match cmd {
+            ConfigCommand::Init(args) => edgelord::cli::config::execute_init(&args.path, args.force),
+            ConfigCommand::Show(args) => edgelord::cli::config::execute_show(&args.config),
+            ConfigCommand::Validate(args) => {
+                edgelord::cli::config::execute_validate(&args.config)
+            }
+        },
         Commands::Logs(args) => {
             edgelord::cli::logs::execute(&args);
             Ok(())

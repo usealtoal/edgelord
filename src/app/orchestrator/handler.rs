@@ -6,7 +6,6 @@ use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
 use crate::app::state::AppState;
-use crate::app::status::StatusWriter;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
@@ -28,7 +27,6 @@ pub(crate) fn handle_market_event(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
     dry_run: bool,
-    status_writer: Option<Arc<StatusWriter>>,
 ) {
     match event {
         MarketEvent::OrderBookSnapshot { token_id, book } => {
@@ -47,7 +45,6 @@ pub(crate) fn handle_market_event(
                         state,
                         cache,
                         dry_run,
-                        status_writer.clone(),
                     );
                 }
             }
@@ -69,7 +66,6 @@ pub(crate) fn handle_market_event(
                         state,
                         cache,
                         dry_run,
-                        status_writer.clone(),
                     );
                 }
             }
@@ -92,7 +88,6 @@ pub(crate) fn handle_opportunity(
     state: &Arc<AppState>,
     cache: &OrderBookCache,
     dry_run: bool,
-    status_writer: Option<Arc<StatusWriter>>,
 ) {
     // Check for duplicate execution
     if !state.try_lock_execution(opp.market_id().as_str()) {
@@ -123,14 +118,6 @@ pub(crate) fn handle_opportunity(
         }
     }
 
-    // Record opportunity in status file
-    if let Some(ref writer) = status_writer {
-        writer.record_opportunity();
-        if let Err(e) = writer.write() {
-            warn!(error = %e, "Failed to write status file");
-        }
-    }
-
     // Notify opportunity detected
     notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
 
@@ -146,7 +133,7 @@ pub(crate) fn handle_opportunity(
                 );
                 state.release_execution(opp.market_id().as_str());
             } else if let Some(exec) = executor {
-                spawn_execution(exec, opp, notifiers.clone(), state.clone(), status_writer);
+                spawn_execution(exec, opp, notifiers.clone(), state.clone());
             } else {
                 // No executor, release the lock
                 state.release_execution(opp.market_id().as_str());

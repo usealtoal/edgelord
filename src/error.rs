@@ -14,6 +14,9 @@ pub enum ConfigError {
 
     #[error("failed to parse config: {0}")]
     Parse(#[source] toml::de::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
 /// Execution-related errors with structured variants.

@@ -17,7 +17,6 @@ profile = "local"
 dry_run = false
 
 # Path to status file for external monitoring (optional)
-# status_file = "/var/run/edgelord/status.json"
 
 # =============================================================================
 # EXCHANGE
