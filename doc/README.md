@@ -10,7 +10,7 @@ Welcome to the edgelord documentation.
 ### Reference
 - **[Configuration](configuration.md)** — All configuration options with defaults and examples
 - **[Architecture](architecture/overview.md)** — System design, module structure, data flow
-- **[Deployment](deployment.md)** — VPS setup, wallet funding, production operations
+- **[Deployment](deployment/)** — VPS setup, wallet funding, Telegram alerts, operations
 
 ### Strategies
 - **[Strategy Overview](strategies/overview.md)** — How the strategy system works
