@@ -7,8 +7,8 @@ pub mod status_file;
 
 pub use config::{
     Config, Environment, Exchange, ExchangeSpecificConfig, LoggingConfig, NetworkConfig,
-    PolymarketConfig, ReconnectionConfig, RiskConfig, StrategiesConfig, TelegramAppConfig,
-    WalletConfig,
+    OutcomeBonusConfig, PolymarketConfig, PolymarketScoringConfig, ReconnectionConfig, RiskConfig,
+    ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig, WalletConfig,
 };
 pub use orchestrator::App;
 pub use state::{AppState, RiskLimits};
