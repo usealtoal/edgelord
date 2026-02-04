@@ -1,7 +1,7 @@
 //! Handler for the `run` command.
 
 #[cfg(feature = "polymarket")]
-use crate::app::App;
+use crate::app::Orchestrator;
 use crate::app::{Config, ExchangeSpecificConfig};
 use crate::cli::{banner, Cli, RunArgs};
 use crate::error::Result;
@@ -72,7 +72,7 @@ pub async fn execute(cli: &Cli, args: &RunArgs) -> Result<()> {
     #[cfg(feature = "polymarket")]
     {
         tokio::select! {
-            result = App::run(config) => {
+            result = Orchestrator::run(config) => {
                 if let Err(e) = result {
                     error!(error = %e, "Fatal error");
                     std::process::exit(1);

@@ -13,5 +13,5 @@ pub use config::{
     RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
     WalletConfig,
 };
-pub use orchestrator::App;
+pub use orchestrator::Orchestrator;
 pub use state::{AppState, RiskLimits};
