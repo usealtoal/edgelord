@@ -83,7 +83,7 @@ pub enum Error {
     Risk(#[from] RiskError),
 
     #[error("WebSocket error: {0}")]
-    WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+    WebSocket(Box<tokio_tungstenite::tungstenite::Error>),
 
     #[error("JSON parsing error: {0}")]
     Json(#[from] serde_json::Error),
@@ -106,3 +106,9 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<tokio_tungstenite::tungstenite::Error> for Error {
+    fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
+        Error::WebSocket(Box::new(err))
+    }
+}

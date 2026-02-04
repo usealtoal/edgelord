@@ -44,7 +44,7 @@ pub use traits::ExchangeConfig;
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-use crate::core::domain::{Opportunity, OrderBook, TokenId};
+use crate::core::domain::{ArbitrageExecutionResult, Opportunity, OrderBook, OrderId, TokenId};
 use crate::error::Error;
 
 /// Result of attempting to execute an order.
