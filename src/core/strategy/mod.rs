@@ -29,12 +29,12 @@
 
 pub mod combinatorial;
 mod context;
-pub mod market_rebalancing;
+pub mod rebalancing;
 pub mod condition;
 
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 pub use context::{DetectionContext, DetectionResult, MarketContext};
-pub use market_rebalancing::{
+pub use rebalancing::{
     MarketRebalancingConfig, MarketRebalancingStrategy, RebalancingLeg, RebalancingOpportunity,
 };
 pub use condition::{SingleConditionConfig, SingleConditionStrategy};
