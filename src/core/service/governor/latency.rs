@@ -10,7 +10,8 @@ use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use crate::core::domain::{ResourceBudget, ScalingRecommendation};
-use crate::core::service::{AdaptiveGovernor, GovernorConfig, LatencyMetrics};
+
+use super::{AdaptiveGovernor, GovernorConfig, LatencyMetrics};
 
 /// Maximum number of latency/throughput samples to retain.
 const MAX_SAMPLES: usize = 1000;
@@ -227,8 +228,8 @@ impl AdaptiveGovernor for LatencyGovernor {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{LatencyTargets, ScalingConfig};
     use super::*;
-    use crate::core::service::{LatencyTargets, ScalingConfig};
 
     // --- LatencyGovernor::new tests ---
 

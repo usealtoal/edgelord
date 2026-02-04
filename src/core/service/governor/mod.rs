@@ -4,6 +4,9 @@
 //! throughput metrics, then recommending scaling actions based on configurable targets
 //! and thresholds.
 
+mod latency;
+pub use latency::LatencyGovernor;
+
 use std::time::Duration;
 
 use crate::core::domain::{ResourceBudget, ScalingRecommendation};
