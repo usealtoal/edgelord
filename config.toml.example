@@ -19,6 +19,11 @@ dry_run = false
 # Path to SQLite database for stats and persistence
 database = "edgelord.db"
 
+# Raw data retention (days). Older opportunities/trades are pruned.
+# Aggregated daily_stats are kept forever for historical analysis.
+# Use `edgelord stats prune --days N` to manually prune.
+# retention_days = 30
+
 # =============================================================================
 # EXCHANGE
 # =============================================================================

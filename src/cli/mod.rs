@@ -64,6 +64,10 @@ pub enum StatsCommand {
     Week(StatsArgs),
     /// Historical view
     History(StatsHistoryArgs),
+    /// Export stats to CSV
+    Export(StatsExportArgs),
+    /// Prune old records (keeps daily aggregates)
+    Prune(StatsPruneArgs),
 }
 
 /// Subcommands for `edgelord config`
@@ -135,6 +139,31 @@ pub struct StatsArgs {
 pub struct StatsHistoryArgs {
     /// Number of days to show
     #[arg(default_value = "30")]
+    pub days: u32,
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `stats export`.
+#[derive(Parser, Debug)]
+pub struct StatsExportArgs {
+    /// Number of days to export
+    #[arg(long, default_value = "30")]
+    pub days: u32,
+    /// Output file (stdout if not specified)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `stats prune`.
+#[derive(Parser, Debug)]
+pub struct StatsPruneArgs {
+    /// Keep records newer than this many days
+    #[arg(long, default_value = "30")]
     pub days: u32,
     /// Path to database file
     #[arg(long, default_value = "edgelord.db")]

@@ -264,6 +264,38 @@ fn print_open_positions(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Res
     Ok(())
 }
 
+/// Execute `stats export [--days N] [--output FILE]`.
+pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Result<()> {
+    let pool = connect(db_path)?;
+    let today = Utc::now().date_naive();
+    let start = today - Duration::days(i64::from(days));
+
+    let stats_recorder = crate::core::service::stats::StatsRecorder::new(pool);
+    let csv = stats_recorder.export_daily_csv(start, today);
+
+    if let Some(path) = output {
+        std::fs::write(path, &csv)?;
+        println!("Exported {} days of stats to {}", days, path.display());
+    } else {
+        print!("{csv}");
+    }
+
+    Ok(())
+}
+
+/// Execute `stats prune [--days N]`.
+pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
+    let pool = connect(db_path)?;
+    let stats_recorder = crate::core::service::stats::StatsRecorder::new(pool);
+    stats_recorder.prune_old_records(retention_days);
+    println!(
+        "Pruned opportunities and trades older than {} days",
+        retention_days
+    );
+    println!("Note: Aggregated daily stats are preserved.");
+    Ok(())
+}
+
 fn aggregate_rows(rows: &[DailyStatsRow]) -> StatsSummary {
     use rust_decimal::prelude::FromPrimitive;
 

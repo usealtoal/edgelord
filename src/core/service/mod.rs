@@ -16,7 +16,8 @@ pub use notification::{
 };
 pub use risk::{RiskCheckResult, RiskManager};
 pub use stats::{
-    RecordedOpportunity, StatsSummary, StatsRecorder, TradeCloseEvent, TradeOpenEvent, TradeLeg,
+    OpportunitySummary, RecordedOpportunity, StatsSummary, StatsRecorder, TradeCloseEvent,
+    TradeOpenEvent, TradeLeg,
 };
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 

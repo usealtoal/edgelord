@@ -1,6 +1,7 @@
 //! Event and opportunity handling.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use rust_decimal::Decimal;
 use tracing::{debug, info, warn};
@@ -30,6 +31,8 @@ pub(crate) fn handle_market_event(
     stats: &Arc<StatsRecorder>,
     dry_run: bool,
 ) {
+    let start = Instant::now();
+
     match event {
         MarketEvent::OrderBookSnapshot { token_id, book } => {
             cache.update(book);
@@ -51,6 +54,10 @@ pub(crate) fn handle_market_event(
                     );
                 }
             }
+
+            // Record processing latency
+            let elapsed = start.elapsed();
+            stats.record_latency(elapsed.as_millis() as u32);
         }
         MarketEvent::OrderBookDelta { token_id, book } => {
             // For now, treat deltas as snapshots (simple approach)
@@ -73,6 +80,10 @@ pub(crate) fn handle_market_event(
                     );
                 }
             }
+
+            // Record processing latency
+            let elapsed = start.elapsed();
+            stats.record_latency(elapsed.as_millis() as u32);
         }
         MarketEvent::Connected => {
             info!("Data stream connected");

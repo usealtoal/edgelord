@@ -37,6 +37,10 @@ pub(crate) fn spawn_execution(
                     ArbitrageExecutionResult::Success { filled: _ } => {
                         record_position(&state, &opportunity);
 
+                        // Track peak exposure
+                        let exposure = state.total_exposure();
+                        stats.update_peak_exposure(exposure);
+
                         // Record trade open
                         if let Some(opp_id) = opportunity_id {
                             // Use opportunity legs for price info (actual fill prices not tracked)

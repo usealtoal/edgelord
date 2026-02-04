@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 use tracing::{debug, warn};
 
 use crate::core::db::model::{
-    DailyStatsRow, NewOpportunityRow, NewTradeRow, StrategyDailyStatsRow, TradeRow,
+    DailyStatsRow, NewOpportunityRow, NewTradeRow, OpportunityRow, StrategyDailyStatsRow, TradeRow,
 };
 use crate::core::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
 
@@ -377,6 +377,135 @@ impl StatsRecorder {
                 .execute(&mut conn);
         }
     }
+
+    /// Prune old raw records, keeping aggregated daily stats.
+    ///
+    /// Deletes opportunities and trades older than `retention_days`.
+    /// Daily stats are never pruned.
+    pub fn prune_old_records(&self, retention_days: u32) {
+        let cutoff = Utc::now().date_naive() - chrono::Duration::days(i64::from(retention_days));
+        let cutoff_str = cutoff.to_string();
+
+        let mut conn = match self.pool.get() {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("Failed to get DB connection for pruning: {e}");
+                return;
+            }
+        };
+
+        // Delete old opportunities
+        let opp_deleted = diesel::delete(
+            opportunities::table.filter(opportunities::detected_at.lt(&cutoff_str)),
+        )
+        .execute(&mut conn)
+        .unwrap_or(0);
+
+        // Delete old trades (cascade would be nice but SQLite support varies)
+        let trades_deleted =
+            diesel::delete(trades::table.filter(trades::opened_at.lt(&cutoff_str)))
+                .execute(&mut conn)
+                .unwrap_or(0);
+
+        if opp_deleted > 0 || trades_deleted > 0 {
+            debug!(
+                opportunities = opp_deleted,
+                trades = trades_deleted,
+                "Pruned old records"
+            );
+        }
+    }
+
+    /// Export daily stats to CSV format.
+    pub fn export_daily_csv(&self, from: NaiveDate, to: NaiveDate) -> String {
+        let mut conn = match self.pool.get() {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("Failed to get DB connection for CSV export: {e}");
+                return String::new();
+            }
+        };
+
+        let rows: Vec<DailyStatsRow> = daily_stats::table
+            .filter(daily_stats::date.ge(from.to_string()))
+            .filter(daily_stats::date.le(to.to_string()))
+            .order(daily_stats::date.asc())
+            .load(&mut conn)
+            .unwrap_or_default();
+
+        let mut csv = String::from(
+            "date,opportunities_detected,opportunities_executed,trades_opened,trades_closed,profit,loss,net,win_count,loss_count,win_rate,volume,peak_exposure\n"
+        );
+
+        for row in rows {
+            let net = row.profit_realized - row.loss_realized;
+            let total = row.win_count + row.loss_count;
+            let win_rate = if total > 0 {
+                row.win_count as f32 / total as f32 * 100.0
+            } else {
+                0.0
+            };
+            csv.push_str(&format!(
+                "{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{:.1},{:.2},{:.2}\n",
+                row.date,
+                row.opportunities_detected,
+                row.opportunities_executed,
+                row.trades_opened,
+                row.trades_closed,
+                row.profit_realized,
+                row.loss_realized,
+                net,
+                row.win_count,
+                row.loss_count,
+                win_rate,
+                row.total_volume,
+                row.peak_exposure
+            ));
+        }
+
+        csv
+    }
+
+    /// Get recent opportunities.
+    pub fn recent_opportunities(&self, limit: i64) -> Vec<OpportunitySummary> {
+        let mut conn = match self.pool.get() {
+            Ok(c) => c,
+            Err(e) => {
+                warn!("Failed to get DB connection for opportunities query: {e}");
+                return Vec::new();
+            }
+        };
+
+        let rows: Vec<OpportunityRow> = opportunities::table
+            .order(opportunities::detected_at.desc())
+            .limit(limit)
+            .load(&mut conn)
+            .unwrap_or_default();
+
+        rows.into_iter()
+            .map(|r| OpportunitySummary {
+                id: r.id.unwrap_or(0),
+                strategy: r.strategy,
+                edge: f32_to_decimal(r.edge),
+                expected_profit: f32_to_decimal(r.expected_profit),
+                executed: r.executed != 0,
+                rejected_reason: r.rejected_reason,
+                detected_at: r.detected_at,
+            })
+            .collect()
+    }
+}
+
+/// Summary of an opportunity for display.
+#[derive(Debug, Clone)]
+pub struct OpportunitySummary {
+    pub id: i32,
+    pub strategy: String,
+    pub edge: Decimal,
+    pub expected_profit: Decimal,
+    pub executed: bool,
+    pub rejected_reason: Option<String>,
+    pub detected_at: String,
 }
 
 fn decimal_to_f32(d: Decimal) -> f32 {
