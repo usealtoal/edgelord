@@ -17,6 +17,74 @@ use std::path::PathBuf;
 #[command(name = "edgelord")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Run the arbitrage detector (foreground, interactive)
+    Run(RunArgs),
+
+    /// Show service status
+    Status,
+
+    /// Tail service logs
+    Logs(LogsArgs),
+
+    /// Manage systemd service
+    #[command(subcommand)]
+    Service(ServiceCommand),
+
+    /// Run diagnostic checks
+    #[command(subcommand)]
+    Check(CheckCommand),
+
+    /// Manage wallet approvals
+    #[command(subcommand)]
+    Wallet(WalletCommand),
+}
+
+/// Subcommands for `edgelord service`
+#[derive(Subcommand, Debug)]
+pub enum ServiceCommand {
+    /// Install systemd service
+    Install(InstallArgs),
+    /// Uninstall systemd service
+    Uninstall,
+}
+
+/// Subcommands for `edgelord check`
+#[derive(Subcommand, Debug)]
+pub enum CheckCommand {
+    /// Validate configuration file
+    Config(ConfigPathArg),
+    /// Test WebSocket connection to exchange
+    Connection(ConfigPathArg),
+    /// Test Telegram notification setup
+    Telegram(ConfigPathArg),
+}
+
+/// Subcommands for `edgelord wallet`
+#[derive(Subcommand, Debug)]
+pub enum WalletCommand {
+    /// Approve token spending for exchange
+    Approve(WalletApproveArgs),
+    /// Show wallet approval status
+    Status(ConfigPathArg),
+}
+
+/// Shared argument for commands that only need a config path.
+#[derive(Parser, Debug)]
+pub struct ConfigPathArg {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "config.toml")]
+    pub config: PathBuf,
+}
+
+/// Arguments for the `run` subcommand.
+#[derive(Parser, Debug)]
+pub struct RunArgs {
     /// Path to configuration file
     #[arg(short, long, default_value = "config.toml")]
     pub config: PathBuf,
@@ -33,43 +101,6 @@ pub struct Cli {
     #[arg(long)]
     pub dry_run: bool,
 
-    #[command(subcommand)]
-    pub command: Commands,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum Commands {
-    /// Run the arbitrage detector (foreground, interactive)
-    Run(RunArgs),
-
-    /// Show service status
-    Status,
-
-    /// Tail service logs
-    Logs(LogsArgs),
-
-    /// Install systemd service
-    Install(InstallArgs),
-
-    /// Uninstall systemd service
-    Uninstall,
-
-    /// Validate configuration file
-    CheckConfig,
-
-    /// Test Telegram notification setup
-    TestTelegram,
-
-    /// Test WebSocket connection to exchange
-    CheckConnection,
-
-    /// Approve USDC spending for Polymarket
-    Approve(ApproveArgs),
-}
-
-/// Arguments for the `run` subcommand.
-#[derive(Parser, Debug)]
-pub struct RunArgs {
     /// Skip ASCII art banner
     #[arg(long)]
     pub no_banner: bool,
@@ -135,9 +166,13 @@ pub struct InstallArgs {
     pub working_dir: PathBuf,
 }
 
-/// Arguments for the `approve` subcommand.
+/// Arguments for the `wallet approve` subcommand.
 #[derive(Parser, Debug)]
-pub struct ApproveArgs {
+pub struct WalletApproveArgs {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "config.toml")]
+    pub config: PathBuf,
+
     /// Amount of USDC to approve (in dollars)
     #[arg(long, default_value = "10000")]
     pub amount: Decimal,
