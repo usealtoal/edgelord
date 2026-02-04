@@ -65,6 +65,7 @@ flowchart LR
 ## Documentation
 
 - **[Getting Started](doc/getting-started.md)** — Installation, configuration, first run
+- **[Deployment](doc/deployment.md)** — VPS setup, wallet funding, production operations
 - **[Architecture](doc/architecture/overview.md)** — System design and data flow
 - **[Strategies](doc/strategies/overview.md)** — How each detection algorithm works
 - **[Configuration](doc/configuration.md)** — All options explained
