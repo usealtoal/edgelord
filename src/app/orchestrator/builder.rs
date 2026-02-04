@@ -2,10 +2,14 @@
 
 use std::sync::Arc;
 
+use chrono::Duration;
 use tracing::{info, warn};
 
-use crate::app::config::Config;
+use crate::app::config::{Config, LlmProvider};
+use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
+use crate::core::llm::{AnthropicLlm, Llm, OpenAiLlm};
+use crate::core::service::inference::{Inferrer, LlmInferrer};
 use crate::core::service::{LogNotifier, NotifierRegistry};
 use crate::core::strategy::{
     CombinatorialStrategy, MarketRebalancingStrategy, SingleConditionStrategy, StrategyRegistry,
@@ -95,4 +99,62 @@ pub(crate) async fn init_executor(
             None
         }
     }
+}
+
+/// Build LLM client from configuration.
+pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
+    if !config.inference.enabled {
+        return None;
+    }
+
+    let client: Arc<dyn Llm> = match config.llm.provider {
+        LlmProvider::Anthropic => {
+            let api_key = match std::env::var("ANTHROPIC_API_KEY") {
+                Ok(k) => k,
+                Err(_) => {
+                    warn!("ANTHROPIC_API_KEY not set, inference disabled");
+                    return None;
+                }
+            };
+            Arc::new(AnthropicLlm::new(
+                api_key,
+                &config.llm.anthropic.model,
+                config.llm.anthropic.max_tokens,
+                config.llm.anthropic.temperature,
+            ))
+        }
+        LlmProvider::OpenAi => {
+            let api_key = match std::env::var("OPENAI_API_KEY") {
+                Ok(k) => k,
+                Err(_) => {
+                    warn!("OPENAI_API_KEY not set, inference disabled");
+                    return None;
+                }
+            };
+            Arc::new(OpenAiLlm::new(
+                api_key,
+                &config.llm.openai.model,
+                config.llm.openai.max_tokens,
+                config.llm.openai.temperature,
+            ))
+        }
+    };
+
+    info!(provider = client.name(), "LLM client initialized");
+    Some(client)
+}
+
+/// Build cluster cache for relation inference.
+pub(crate) fn build_cluster_cache(config: &Config) -> Arc<ClusterCache> {
+    let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
+    Arc::new(ClusterCache::new(ttl))
+}
+
+/// Build inference service components.
+pub(crate) fn build_inferrer(
+    config: &Config,
+    llm: Arc<dyn Llm>,
+) -> Arc<dyn Inferrer> {
+    let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
+    Arc::new(LlmInferrer::new(llm, ttl))
 }
