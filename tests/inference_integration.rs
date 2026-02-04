@@ -7,7 +7,7 @@ use chrono::Duration;
 use edgelord::core::cache::ClusterCache;
 use edgelord::core::domain::{MarketId, Relation, RelationKind};
 use edgelord::core::llm::Llm;
-use edgelord::core::service::inference::{Inferrer, LlmInferrer, MarketSummary};
+use edgelord::core::inference::{Inferrer, LlmInferrer, MarketSummary};
 use edgelord::error::Result;
 
 /// Mock LLM that returns predefined responses.

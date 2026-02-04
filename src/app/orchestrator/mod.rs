@@ -20,7 +20,7 @@ use crate::app::status::{StatusConfig, StatusWriter};
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
-use crate::core::service::inference::{Inferrer, MarketSummary};
+use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::RiskManager;
 use crate::error::Result;
 
@@ -88,7 +88,7 @@ impl Orchestrator {
         // Build strategy registry with cache for combinatorial strategy
         let strategies = Arc::new(build_strategy_registry(
             &config,
-            Some(Arc::clone(&cluster_cache)),
+            Arc::clone(&cluster_cache),
         ));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),

@@ -1,7 +1,6 @@
 //! Cross-cutting services - risk management, notifications, etc.
 
 mod governor;
-pub mod inference;
 mod notification;
 mod risk;
 mod subscription;

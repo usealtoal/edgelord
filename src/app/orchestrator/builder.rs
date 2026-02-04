@@ -9,11 +9,9 @@ use crate::app::config::{Config, LlmProvider};
 use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
 use crate::core::llm::{AnthropicLlm, Llm, OpenAiLlm};
-use crate::core::service::inference::{Inferrer, LlmInferrer};
+use crate::core::inference::{Inferrer, LlmInferrer};
 use crate::core::service::{LogNotifier, NotifierRegistry};
-use crate::core::strategy::{
-    CombinatorialStrategy, MarketRebalancingStrategy, SingleConditionStrategy, StrategyRegistry,
-};
+use crate::core::strategy::StrategyRegistry;
 
 #[cfg(feature = "telegram")]
 use crate::core::service::{TelegramConfig, TelegramNotifier};
@@ -49,35 +47,23 @@ pub(crate) fn build_notifier_registry(config: &Config) -> NotifierRegistry {
     registry
 }
 
-/// Build strategy registry from configuration.
+/// Build strategy registry from configuration using builder pattern.
 pub(crate) fn build_strategy_registry(
     config: &Config,
-    cluster_cache: Option<Arc<ClusterCache>>,
+    cluster_cache: Arc<ClusterCache>,
 ) -> StrategyRegistry {
-    let mut registry = StrategyRegistry::new();
+    let mut builder = StrategyRegistry::builder().cluster_cache(cluster_cache);
 
     for name in &config.strategies.enabled {
         match name.as_str() {
             "single_condition" => {
-                registry.register(Box::new(SingleConditionStrategy::new(
-                    config.strategies.single_condition.clone(),
-                )));
+                builder = builder.single_condition(config.strategies.single_condition.clone());
             }
             "market_rebalancing" => {
-                registry.register(Box::new(MarketRebalancingStrategy::new(
-                    config.strategies.market_rebalancing.clone(),
-                )));
+                builder = builder.market_rebalancing(config.strategies.market_rebalancing.clone());
             }
             "combinatorial" => {
-                if config.strategies.combinatorial.enabled {
-                    let mut strategy = CombinatorialStrategy::new(
-                        config.strategies.combinatorial.clone(),
-                    );
-                    if let Some(ref cache) = cluster_cache {
-                        strategy.set_cache(Arc::clone(cache));
-                    }
-                    registry.register(Box::new(strategy));
-                }
+                builder = builder.combinatorial(config.strategies.combinatorial.clone());
             }
             unknown => {
                 warn!(strategy = unknown, "Unknown strategy in config, skipping");
@@ -85,7 +71,7 @@ pub(crate) fn build_strategy_registry(
         }
     }
 
-    registry
+    builder.build()
 }
 
 /// Initialize the executor if wallet is configured.
