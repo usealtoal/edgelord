@@ -9,9 +9,7 @@ use crate::app::{Config, Exchange};
 use crate::error::Result;
 
 #[cfg(feature = "polymarket")]
-use crate::core::exchange::polymarket::PolymarketApproval;
-#[cfg(feature = "polymarket")]
-use crate::core::exchange::TokenApproval;
+use crate::core::exchange::{polymarket::PolymarketApproval, ApprovalResult, TokenApproval};
 
 /// Current approval status for CLI display.
 ///
@@ -102,7 +100,7 @@ impl WalletService {
     #[cfg(feature = "polymarket")]
     async fn get_polymarket_status(config: &Config) -> Result<WalletApprovalStatus> {
         let approval = PolymarketApproval::new(config)?;
-        let wallet_address = format!("{}", approval.wallet_address());
+        let wallet_address = approval.wallet_address().to_string();
         let status = approval.get_approval_status().await?;
 
         Ok(WalletApprovalStatus {
@@ -130,15 +128,13 @@ impl WalletService {
         let result = approval.approve(amount).await?;
 
         Ok(match result {
-            crate::core::exchange::ApprovalResult::Approved { tx_hash, amount } => {
+            ApprovalResult::Approved { tx_hash, amount } => {
                 ApprovalOutcome::Approved { tx_hash, amount }
             }
-            crate::core::exchange::ApprovalResult::AlreadyApproved { current_allowance } => {
+            ApprovalResult::AlreadyApproved { current_allowance } => {
                 ApprovalOutcome::AlreadyApproved { current_allowance }
             }
-            crate::core::exchange::ApprovalResult::Failed { reason } => {
-                ApprovalOutcome::Failed { reason }
-            }
+            ApprovalResult::Failed { reason } => ApprovalOutcome::Failed { reason },
         })
     }
 

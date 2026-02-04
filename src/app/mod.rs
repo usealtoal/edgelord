@@ -4,7 +4,7 @@ mod config;
 mod orchestrator;
 mod state;
 pub mod status;
-mod wallet;
+pub mod wallet;
 
 pub use config::{
     Config, ConnectionPoolConfig, DedupStrategyConfig, Environment, Exchange,
