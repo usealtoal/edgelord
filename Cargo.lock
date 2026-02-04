@@ -99,6 +99,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-contract"
+version = "1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2140796bc79150b1b7375daeab99750f0ff5e27b1f8b0aa81ccde229c7f02a2"
+dependencies = [
+ "alloy-consensus",
+ "alloy-dyn-abi",
+ "alloy-json-abi",
+ "alloy-network",
+ "alloy-network-primitives",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types-eth",
+ "alloy-sol-types",
+ "alloy-transport",
+ "futures",
+ "futures-util",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "alloy-core"
 version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -120,6 +142,8 @@ dependencies = [
  "alloy-sol-type-parser",
  "alloy-sol-types",
  "itoa",
+ "serde",
+ "serde_json",
  "winnow",
 ]
 
@@ -1707,7 +1731,11 @@ dependencies = [
 name = "edgelord"
 version = "0.1.0"
 dependencies = [
+ "alloy-contract",
+ "alloy-primitives",
+ "alloy-provider",
  "alloy-signer-local",
+ "alloy-sol-types",
  "anyhow",
  "async-trait",
  "chrono",
