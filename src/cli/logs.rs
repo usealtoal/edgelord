@@ -27,7 +27,7 @@ pub fn execute(args: &LogsArgs) {
                 if let Some(code) = exit.code() {
                     if code == 1 {
                         eprintln!("No logs found. Is the edgelord service installed?");
-                        eprintln!("Run 'sudo edgelord install' to install the service.");
+                        eprintln!("Run 'sudo edgelord service install' to install the service.");
                     }
                 }
             }

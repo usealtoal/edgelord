@@ -33,7 +33,7 @@
 
 4. Install and start service:
    ```bash
-   sudo /opt/edgelord/edgelord install
+   sudo /opt/edgelord/edgelord service install
    sudo systemctl start edgelord
    ```
 

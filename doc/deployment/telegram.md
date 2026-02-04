@@ -85,7 +85,7 @@ alert_on_execution = true     # Alert when trade executes
 ## Step 7: Test
 
 ```bash
-./target/release/edgelord test-telegram
+./target/release/edgelord check telegram
 ```
 
 You should receive a test message.
@@ -134,4 +134,4 @@ WebSocket disconnected, reconnecting...
 
 - Verify `enabled = true` in config
 - Check edgelord logs for notification errors
-- Test with `./target/release/edgelord test-telegram`
+- Test with `./target/release/edgelord check telegram`
