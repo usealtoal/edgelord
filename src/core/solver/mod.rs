@@ -123,7 +123,7 @@ impl Constraint {
 }
 
 /// Constraint sense.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ConstraintSense {
     GreaterEqual,
     LessEqual,
