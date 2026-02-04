@@ -301,16 +301,110 @@ Add to crontab:
 
 ### Telegram Alerts
 
-The bot sends alerts for:
-- Opportunities detected
-- Trades executed
-- Errors and restarts
+The bot sends alerts for opportunities detected, trades executed, and errors.
 
-Configure in `config.toml`:
+#### Step 1: Create a Telegram Bot
+
+1. Open Telegram and search for **@BotFather**
+2. Send `/newbot`
+3. Choose a name: `Edgelord Alerts` (display name, can have spaces)
+4. Choose a username: `edgelord_alerts_bot` (must end in `bot`, be unique)
+5. BotFather replies with your **bot token**:
+   ```
+   Use this token to access the HTTP API:
+   7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+   Save this — it's your `TELEGRAM_BOT_TOKEN`
+
+#### Step 2: Set Bot Profile Picture
+
+1. Still in BotFather chat, send `/setuserpic`
+2. Select your bot from the list
+3. Send an image (square recommended, 512x512px works well)
+4. BotFather confirms: "Success! Userpic for 'Edgelord Alerts' has been updated."
+
+Optional bot customization:
+```
+/setdescription  — Short description shown when someone opens the bot
+/setabouttext    — Longer about text
+/setcommands     — Set command menu (not needed for alert-only bot)
+```
+
+#### Step 3: Get Your Chat ID
+
+The bot needs to know where to send messages. Get your personal chat ID:
+
+1. Start a chat with your new bot (search for it, click Start)
+2. Send any message to the bot (e.g., "hello")
+3. Open this URL in your browser (replace TOKEN with your bot token):
+   ```
+   https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
+4. Find `"chat":{"id":` in the response — that number is your chat ID:
+   ```json
+   "chat": {
+     "id": 123456789,
+     "first_name": "Your Name",
+     "type": "private"
+   }
+   ```
+
+**For a group chat**: Add the bot to the group, send a message in the group, then check `getUpdates`. Group chat IDs are negative numbers (e.g., `-987654321`).
+
+#### Step 4: Configure Environment
+
+Add to your `.env` file:
+
+```bash
+TELEGRAM_BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TELEGRAM_CHAT_ID=123456789
+```
+
+#### Step 5: Configure Alerts
+
+In `config.toml`:
+
 ```toml
 [notifications.telegram]
 enabled = true
 min_profit_alert = 1.00  # Only alert for profits > $1
+alert_on_error = true    # Alert on errors/restarts
+alert_on_opportunity = true  # Alert when opportunity detected
+alert_on_execution = true    # Alert when trade executes
+```
+
+#### Step 6: Test
+
+```bash
+# Test that alerts work
+./target/release/edgelord test-telegram
+```
+
+You should receive a test message in Telegram.
+
+#### Example Alert Messages
+
+**Opportunity detected:**
+```
+🔍 Opportunity Found
+Market: Will Bitcoin hit $100k?
+Strategy: single_condition
+Edge: 3.2% ($4.80)
+Volume: 150 shares
+```
+
+**Trade executed:**
+```
+✅ Trade Executed
+Market: Will Bitcoin hit $100k?
+Profit: $4.52
+Legs: 2/2 filled
+```
+
+**Error:**
+```
+⚠️ Error
+WebSocket disconnected, reconnecting...
 ```
 
 ## Security Checklist
