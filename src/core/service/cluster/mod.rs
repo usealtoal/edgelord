@@ -3,6 +3,23 @@
 //! This service monitors order book updates and runs Frank-Wolfe detection
 //! on clusters of related markets. It operates independently of per-market
 //! detection for better scalability.
+//!
+//! # Architecture
+//!
+//! ```text
+//! OrderBookCache ──(broadcast)──► ClusterDetectionService
+//!                                        │
+//!                                        ├─ tracks dirty clusters
+//!                                        ├─ debounces detection
+//!                                        └─ ClusterDetector::detect()
+//!                                                   │
+//!                                                   ▼
+//!                                           ClusterOpportunity
+//! ```
+
+mod detector;
+
+pub use detector::{ClusterDetector, DetectionError};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -14,9 +31,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, info, trace, warn};
 
 use crate::core::cache::{ClusterCache, OrderBookCache, OrderBookUpdate};
-use crate::core::domain::{Cluster, MarketId, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
-use crate::core::solver::{HiGHSSolver, IlpProblem, LpProblem};
-use crate::core::strategy::combinatorial::{FrankWolfe, FrankWolfeConfig};
+use crate::core::domain::{MarketId, MarketRegistry, Opportunity, TokenId};
 
 /// Configuration for the cluster detection service.
 #[derive(Debug, Clone)]
@@ -58,7 +73,7 @@ pub struct ClusterDetectionHandle {
 }
 
 impl ClusterDetectionHandle {
-    /// Signal the service to shut down.
+    /// Signal the service to shut down gracefully.
     pub async fn shutdown(&self) {
         let _ = self.shutdown_tx.send(()).await;
     }
@@ -67,19 +82,17 @@ impl ClusterDetectionHandle {
 /// Cluster detection service.
 ///
 /// Monitors order book updates and runs Frank-Wolfe detection on clusters.
+/// Uses [`ClusterDetector`] for the actual detection logic.
 pub struct ClusterDetectionService {
     config: ClusterDetectionConfig,
     order_book_cache: Arc<OrderBookCache>,
     cluster_cache: Arc<ClusterCache>,
     registry: Arc<MarketRegistry>,
+    detector: ClusterDetector,
     /// Maps token ID to market ID for reverse lookup.
     token_to_market: HashMap<TokenId, MarketId>,
     /// Clusters that have pending updates.
     dirty_clusters: Arc<RwLock<HashSet<String>>>,
-    /// Frank-Wolfe solver.
-    fw_solver: FrankWolfe,
-    /// ILP solver.
-    ilp_solver: HiGHSSolver,
 }
 
 impl ClusterDetectionService {
@@ -90,7 +103,7 @@ impl ClusterDetectionService {
         cluster_cache: Arc<ClusterCache>,
         registry: Arc<MarketRegistry>,
     ) -> Self {
-        // Build token -> market mapping
+        // Build token -> market mapping for efficient lookups
         let token_to_market: HashMap<TokenId, MarketId> = registry
             .markets()
             .iter()
@@ -101,24 +114,22 @@ impl ClusterDetectionService {
             })
             .collect();
 
-        let fw_config = FrankWolfeConfig {
-            max_iterations: 20,
-            tolerance: Decimal::new(1, 4), // 0.0001
-        };
+        let detector = ClusterDetector::new(config.clone());
 
         Self {
             config,
             order_book_cache,
             cluster_cache,
             registry,
+            detector,
             token_to_market,
             dirty_clusters: Arc::new(RwLock::new(HashSet::new())),
-            fw_solver: FrankWolfe::new(fw_config),
-            ilp_solver: HiGHSSolver::new(),
         }
     }
 
     /// Start the service, returning a handle and opportunity receiver.
+    ///
+    /// The service runs in a background task until shutdown is signaled.
     pub fn start(
         self,
         mut update_rx: broadcast::Receiver<OrderBookUpdate>,
@@ -143,10 +154,10 @@ impl ClusterDetectionService {
                         match update {
                             Ok(u) => service.handle_update(&u),
                             Err(broadcast::error::RecvError::Lagged(n)) => {
-                                warn!(skipped = n, "Cluster detection lagged");
+                                warn!(skipped = n, "Cluster detection lagged, some updates missed");
                             }
                             Err(broadcast::error::RecvError::Closed) => {
-                                info!("Order book channel closed");
+                                info!("Order book update channel closed");
                                 break;
                             }
                         }
@@ -154,12 +165,11 @@ impl ClusterDetectionService {
 
                     _ = tokio::time::sleep(debounce_duration) => {
                         if last_detection.elapsed() >= debounce_duration {
-                            if let Some(opps) = service.run_detection() {
-                                for opp in opps {
-                                    if opportunity_tx.send(opp).await.is_err() {
-                                        debug!("Opportunity receiver dropped");
-                                        break;
-                                    }
+                            let opportunities = service.run_detection();
+                            for opp in opportunities {
+                                if opportunity_tx.send(opp).await.is_err() {
+                                    debug!("Opportunity receiver dropped, stopping service");
+                                    return;
                                 }
                             }
                             last_detection = Instant::now();
@@ -172,6 +182,7 @@ impl ClusterDetectionService {
         (ClusterDetectionHandle { shutdown_tx }, opportunity_rx)
     }
 
+    /// Handle an order book update by marking affected clusters as dirty.
     fn handle_update(&self, update: &OrderBookUpdate) {
         let Some(market_id) = self.token_to_market.get(&update.token_id) else {
             return;
@@ -179,11 +190,13 @@ impl ClusterDetectionService {
 
         if let Some(cluster) = self.cluster_cache.get_for_market(market_id) {
             self.dirty_clusters.write().insert(cluster.id.to_string());
-            trace!(market = %market_id, "Marked cluster dirty");
+            trace!(market = %market_id, cluster = %cluster.id, "Marked cluster dirty");
         }
     }
 
-    fn run_detection(&self) -> Option<Vec<ClusterOpportunity>> {
+    /// Run detection on all dirty clusters.
+    fn run_detection(&self) -> Vec<ClusterOpportunity> {
+        // Atomically grab and clear dirty clusters
         let dirty: Vec<String> = {
             let mut clusters = self.dirty_clusters.write();
             let dirty: Vec<_> = clusters
@@ -198,105 +211,51 @@ impl ClusterDetectionService {
         };
 
         if dirty.is_empty() {
-            return None;
+            return Vec::new();
         }
 
-        debug!(count = dirty.len(), "Detecting on dirty clusters");
+        debug!(count = dirty.len(), "Running detection on dirty clusters");
 
         let mut opportunities = Vec::new();
+        let mut errors = 0;
+
         for cluster_id in dirty {
-            if let Some(opp) = self.detect_cluster(&cluster_id) {
-                opportunities.push(opp);
+            match self.detect_cluster(&cluster_id) {
+                Ok(Some(opp)) => opportunities.push(opp),
+                Ok(None) => {} // Gap below threshold, not an error
+                Err(e) => {
+                    debug!(cluster = %cluster_id, error = %e, "Detection failed");
+                    errors += 1;
+                }
             }
         }
 
-        if opportunities.is_empty() { None } else { Some(opportunities) }
+        if errors > 0 {
+            debug!(errors = errors, "Some cluster detections failed");
+        }
+
+        opportunities
     }
 
-    fn detect_cluster(&self, cluster_id: &str) -> Option<ClusterOpportunity> {
-        let cluster = self.cluster_cache
+    /// Detect arbitrage in a single cluster.
+    fn detect_cluster(&self, cluster_id: &str) -> crate::error::Result<Option<ClusterOpportunity>> {
+        let cluster = self
+            .cluster_cache
             .all_clusters()
             .into_iter()
-            .find(|c| c.id.to_string() == cluster_id)?;
+            .find(|c| c.id.to_string() == cluster_id)
+            .ok_or_else(|| {
+                crate::error::Error::Parse(format!("Cluster not found: {cluster_id}"))
+            })?;
 
-        let (prices, token_ids) = self.gather_cluster_prices(&cluster)?;
-
-        if prices.len() < 2 {
-            return None;
-        }
-
-        // Build ILP problem from cluster constraints
-        let lp = LpProblem {
-            objective: prices.clone(),
-            constraints: cluster.constraints.clone(),
-            bounds: vec![crate::core::solver::VariableBounds::binary(); prices.len()],
-        };
-        let ilp = IlpProblem::all_binary(lp);
-
-        // Run Frank-Wolfe projection
-        let result = match self.fw_solver.project(&prices, &ilp, &self.ilp_solver) {
-            Ok(r) => r,
-            Err(e) => {
-                warn!(cluster = cluster_id, error = %e, "Frank-Wolfe failed");
-                return None;
-            }
-        };
-
-        if result.gap < self.config.min_gap {
-            trace!(cluster = cluster_id, gap = %result.gap, "Gap below threshold");
-            return None;
-        }
-
-        info!(
-            cluster = cluster_id,
-            gap = %result.gap,
-            iterations = result.iterations,
-            "Found cluster arbitrage"
-        );
-
-        // Build opportunity legs from projected prices
-        let legs: Vec<OpportunityLeg> = token_ids
-            .into_iter()
-            .zip(result.mu.iter())
-            .map(|(token_id, &price)| OpportunityLeg::new(token_id, price))
-            .collect();
-
-        let market_id = cluster.markets.first()?.clone();
-        let question = self.registry
-            .get_by_market_id(&market_id)
-            .map(|m| m.question().to_string())
-            .unwrap_or_else(|| format!("Cluster {cluster_id}"));
-
-        let opportunity = Opportunity::new(
-            market_id,
-            question,
-            legs,
-            result.gap,        // Use gap as volume indicator
-            Decimal::ONE,      // Standard payout
-        );
-
-        Some(ClusterOpportunity {
-            cluster_id: cluster_id.to_string(),
-            markets: cluster.markets.clone(),
-            gap: result.gap,
-            opportunity,
-        })
+        self.detector
+            .detect(&cluster, &self.order_book_cache, &self.registry)
     }
 
-    fn gather_cluster_prices(&self, cluster: &Cluster) -> Option<(Vec<Decimal>, Vec<TokenId>)> {
-        let mut prices = Vec::with_capacity(cluster.markets.len());
-        let mut token_ids = Vec::with_capacity(cluster.markets.len());
-
-        for market_id in &cluster.markets {
-            let market = self.registry.get_by_market_id(market_id)?;
-            let yes_token = market.outcomes().first()?.token_id();
-            let book = self.order_book_cache.get(yes_token)?;
-            let price = book.best_ask().map(|l| l.price()).unwrap_or(Decimal::ONE);
-            prices.push(price);
-            token_ids.push(yes_token.clone());
-        }
-
-        Some((prices, token_ids))
+    /// Get the number of currently dirty clusters (for testing/monitoring).
+    #[must_use]
+    pub fn dirty_count(&self) -> usize {
+        self.dirty_clusters.read().len()
     }
 }
 
@@ -309,5 +268,14 @@ mod tests {
         let config = ClusterDetectionConfig::default();
         assert_eq!(config.debounce_ms, 100);
         assert_eq!(config.min_gap, Decimal::new(2, 2));
+        assert_eq!(config.max_clusters_per_cycle, 50);
+    }
+
+    #[test]
+    fn test_handle_creation() {
+        let (tx, _rx) = mpsc::channel(1);
+        let handle = ClusterDetectionHandle { shutdown_tx: tx };
+        // Handle should be created successfully
+        drop(handle);
     }
 }
