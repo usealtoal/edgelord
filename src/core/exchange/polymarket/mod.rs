@@ -2,6 +2,7 @@
 
 mod client;
 mod config;
+mod dedup;
 mod executor;
 mod filter;
 mod messages;
@@ -11,6 +12,7 @@ mod websocket;
 
 pub use client::PolymarketClient;
 pub use config::{PolymarketExchangeConfig, POLYMARKET_PAYOUT};
+pub use dedup::PolymarketDeduplicator;
 pub use executor::PolymarketExecutor;
 pub use filter::PolymarketFilter;
 pub use messages::{PolymarketBookMessage, PolymarketWsMessage, PolymarketWsPriceLevel};
