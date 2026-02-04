@@ -139,7 +139,7 @@ Error: Transaction failed
 ```
 
 - Check gas price isn't spiking
-- Verify USDC approval: `./target/release/edgelord approve --amount 1000`
+- Verify USDC approval: `./target/release/edgelord wallet approve --amount 1000`
 - Check wallet isn't flagged/blocked
 
 ### Performance Issues
@@ -160,7 +160,7 @@ Warning: Detection latency > 100ms
 journalctl -u edgelord -n 50
 
 # Check config syntax
-./target/release/edgelord check-config
+./target/release/edgelord check config
 
 # Permission issues
 ls -la ~/.config/edgelord/

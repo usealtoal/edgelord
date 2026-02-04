@@ -1,5 +1,6 @@
 //! Polymarket exchange integration.
 
+mod approval;
 mod client;
 mod config;
 mod dedup;
@@ -10,6 +11,7 @@ mod scorer;
 mod types;
 mod websocket;
 
+pub use approval::PolymarketApproval;
 pub use client::PolymarketClient;
 pub use config::{PolymarketExchangeConfig, POLYMARKET_PAYOUT};
 pub use dedup::PolymarketDeduplicator;

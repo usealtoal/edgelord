@@ -210,7 +210,7 @@ sudo systemctl stop edgelord
 
 ```bash
 # Check WebSocket connection
-./target/release/edgelord check-connection
+./target/release/edgelord check connection
 
 # Verify non-US IP
 curl ifconfig.me

@@ -149,7 +149,7 @@ Before trading, Polymarket contracts need approval to spend your USDC:
 
 ```bash
 # The bot handles this automatically, or manually:
-./target/release/edgelord approve --amount 1000
+./target/release/edgelord wallet approve --amount 1000
 ```
 
 This is a one-time transaction per wallet.

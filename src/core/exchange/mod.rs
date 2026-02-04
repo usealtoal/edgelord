@@ -22,6 +22,7 @@
 //! }
 //! ```
 
+mod approval;
 mod dedup;
 mod factory;
 mod filter;
@@ -30,6 +31,7 @@ mod reconnecting;
 mod scorer;
 mod traits;
 
+pub use approval::{ApprovalResult, ApprovalStatus, TokenApproval};
 pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
 pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};

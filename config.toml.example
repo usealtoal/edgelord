@@ -1,0 +1,222 @@
+# Edgelord Configuration
+# Copy this file to config.toml and customize for your setup.
+# Sensitive values (private keys) should be set via environment variables.
+
+# =============================================================================
+# GENERAL
+# =============================================================================
+
+# Application profile: "local", "production", or "custom"
+# - local: Conservative settings for development
+# - production: Higher capacity for live trading
+# - custom: Uses explicit resource settings below
+profile = "local"
+
+# Dry-run mode: detect opportunities but don't execute trades
+# Useful for testing and validating configuration
+dry_run = false
+
+# Path to status file for external monitoring (optional)
+# status_file = "/var/run/edgelord/status.json"
+
+# =============================================================================
+# EXCHANGE
+# =============================================================================
+
+# Which exchange to connect to (currently only "polymarket")
+exchange = "polymarket"
+
+# Polymarket-specific configuration
+[polymarket]
+# Environment: "testnet" or "mainnet"
+# IMPORTANT: Use testnet for testing, mainnet for real trading
+environment = "testnet"
+
+# Chain ID: 80002 (Amoy testnet) or 137 (Polygon mainnet)
+chain_id = 80002
+
+# WebSocket URL for market data (usually don't need to change)
+ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+
+# REST API URL (usually don't need to change)
+api_url = "https://clob.polymarket.com"
+
+# Connection management
+[polymarket.connections]
+connection_ttl_secs = 120           # How long connections live
+preemptive_reconnect_secs = 30      # Reconnect this many secs before TTL
+max_connections = 10                # Max simultaneous connections
+subscriptions_per_connection = 500  # Max subscriptions per connection
+
+# Market filtering - which markets to monitor
+[polymarket.market_filter]
+max_markets = 500                   # Maximum markets to track
+max_subscriptions = 2000            # Maximum token subscriptions
+min_volume_24h = 1000.0             # Minimum 24h volume ($)
+min_liquidity = 500.0               # Minimum liquidity ($)
+max_spread_pct = 0.10               # Maximum spread (10%)
+include_binary = true               # Include 2-outcome markets
+include_multi_outcome = true        # Include 3+ outcome markets
+max_outcomes = 20                   # Skip markets with more outcomes
+
+# Scoring weights for market prioritization
+[polymarket.scoring.weights]
+liquidity = 0.0                     # Disabled until Phase 2
+spread = 0.0                        # Disabled until Phase 2
+opportunity = 0.50                  # Primary factor (price imbalance)
+outcome_count = 0.40                # More outcomes = more potential
+activity = 0.10                     # Placeholder
+
+# Bonus multipliers for outcome counts
+[polymarket.scoring.outcome_bonus]
+binary = 1.0                        # 2-outcome markets
+three_to_five = 1.5                 # 3-5 outcome markets
+six_plus = 2.0                      # 6+ outcome markets
+
+# Deduplication settings
+[polymarket.dedup]
+enabled = true
+strategy = "hash"                   # "hash", "timestamp", or "content"
+fallback = "timestamp"
+cache_ttl_secs = 5
+max_cache_entries = 100000
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+
+[logging]
+# Log level: "debug", "info", "warn", "error"
+level = "info"
+
+# Log format: "pretty" (human-readable) or "json" (structured)
+format = "pretty"
+
+# =============================================================================
+# STRATEGIES
+# =============================================================================
+
+[strategies]
+# Which strategies to enable (list of names)
+enabled = ["single_condition", "market_rebalancing"]
+
+# Single-condition: YES + NO < $1 in binary markets
+[strategies.single_condition]
+min_edge = 0.05                     # Minimum edge (5%)
+min_profit = 0.50                   # Minimum profit ($0.50)
+
+# Market rebalancing: sum of all outcomes < $1 in multi-outcome markets
+[strategies.market_rebalancing]
+min_edge = 0.03                     # Minimum edge (3%)
+min_profit = 1.00                   # Minimum profit ($1.00)
+max_outcomes = 10                   # Skip markets with more outcomes
+
+# Combinatorial: cross-market arbitrage via Frank-Wolfe + ILP
+# NOTE: Requires dependency configuration (not yet implemented)
+[strategies.combinatorial]
+enabled = false                     # Disabled by default
+max_iterations = 20                 # Frank-Wolfe iterations
+tolerance = 0.0001                  # Convergence threshold
+gap_threshold = 0.02                # Minimum gap to trade (2%)
+
+# =============================================================================
+# RISK MANAGEMENT
+# =============================================================================
+
+[risk]
+# Maximum position size per market in dollars
+max_position_per_market = 100.0
+
+# Maximum total exposure across all positions
+max_total_exposure = 500.0
+
+# Minimum profit threshold to execute a trade
+min_profit_threshold = 0.50
+
+# Maximum slippage tolerance (e.g., 0.02 = 2%)
+max_slippage = 0.02
+
+# =============================================================================
+# WALLET
+# =============================================================================
+
+# Private key is loaded from WALLET_PRIVATE_KEY environment variable.
+# NEVER put your private key in this file!
+#
+# Set it via:
+#   export WALLET_PRIVATE_KEY=your_key_without_0x_prefix
+#
+# Or in a .env file (chmod 600):
+#   WALLET_PRIVATE_KEY=your_key_without_0x_prefix
+
+[wallet]
+# No settings here - private key comes from env var
+
+# =============================================================================
+# TELEGRAM NOTIFICATIONS
+# =============================================================================
+
+# Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.
+# See doc/deployment/telegram.md for setup instructions.
+
+[telegram]
+enabled = false                     # Enable Telegram alerts
+notify_opportunities = false        # Alert on opportunity detection (noisy!)
+notify_executions = true            # Alert on trade execution
+notify_risk_rejections = true       # Alert when risk manager rejects
+
+# =============================================================================
+# GOVERNOR (Adaptive Subscription Management)
+# =============================================================================
+
+[governor]
+enabled = true                      # Enable adaptive scaling
+
+# Latency targets in milliseconds
+[governor.latency]
+target_p50_ms = 10
+target_p95_ms = 50
+target_p99_ms = 100
+max_p99_ms = 200                    # Max acceptable p99 latency
+
+# Scaling behavior
+[governor.scaling]
+check_interval_secs = 10            # How often to check metrics
+expand_threshold = 0.70             # Add subs when utilization below this
+contract_threshold = 1.20           # Remove subs when utilization above this
+expand_step = 50                    # Subscriptions to add
+contract_step = 100                 # Subscriptions to remove
+cooldown_secs = 60                  # Wait between scaling actions
+
+# =============================================================================
+# RECONNECTION
+# =============================================================================
+
+[reconnection]
+initial_delay_ms = 1000             # First retry delay (1 second)
+max_delay_ms = 60000                # Maximum retry delay (60 seconds)
+backoff_multiplier = 2.0            # Exponential backoff multiplier
+max_consecutive_failures = 10       # Circuit breaker threshold
+circuit_breaker_cooldown_ms = 300000  # Cooldown after circuit break (5 min)
+
+# =============================================================================
+# CONNECTION POOL
+# =============================================================================
+
+[connection_pool]
+num_shards = 3                      # Number of shards
+connections_per_shard = 2           # Connections per shard
+stagger_offset_secs = 60            # Stagger between connection attempts
+health_check_interval_secs = 5      # Health check frequency
+max_silent_secs = 10                # Max silence before unhealthy
+
+# =============================================================================
+# RESOURCES (for profile = "custom")
+# =============================================================================
+
+[resources]
+auto_detect = false                 # Auto-detect system resources
+# max_memory_mb = 4096              # Memory limit in MB (optional)
+# worker_threads = 4                # Worker thread count (optional)
+memory_usage_target = 0.80          # Target memory utilization
+cpu_usage_target = 0.70             # Target CPU utilization
