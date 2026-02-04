@@ -225,7 +225,7 @@ impl Default for OutcomeBonusConfig {
 }
 
 /// Polymarket scoring configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct PolymarketScoringConfig {
     /// Scoring weights for market prioritization.
     #[serde(default)]
@@ -233,15 +233,6 @@ pub struct PolymarketScoringConfig {
     /// Outcome count bonus configuration.
     #[serde(default)]
     pub outcome_bonus: OutcomeBonusConfig,
-}
-
-impl Default for PolymarketScoringConfig {
-    fn default() -> Self {
-        Self {
-            weights: ScoringWeightsConfig::default(),
-            outcome_bonus: OutcomeBonusConfig::default(),
-        }
-    }
 }
 
 /// Deduplication strategy.

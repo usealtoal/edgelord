@@ -60,7 +60,7 @@ pub struct NetworkConfig {
 }
 
 /// Main application configuration.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct Config {
     /// Application profile for resource allocation.
     #[serde(default)]
@@ -154,23 +154,3 @@ impl Config {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            profile: Profile::default(),
-            resources: ResourceConfig::default(),
-            exchange: Exchange::default(),
-            exchange_config: ExchangeSpecificConfig::default(),
-            logging: LoggingConfig::default(),
-            strategies: StrategiesConfig::default(),
-            wallet: WalletConfig::default(),
-            risk: RiskConfig::default(),
-            telegram: TelegramAppConfig::default(),
-            governor: GovernorAppConfig::default(),
-            dry_run: false,
-            status_file: None,
-            reconnection: ReconnectionConfig::default(),
-            connection_pool: ConnectionPoolConfig::default(),
-        }
-    }
-}
