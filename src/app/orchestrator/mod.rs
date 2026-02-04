@@ -20,10 +20,14 @@ use crate::app::status::{StatusConfig, StatusWriter};
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
+use crate::core::service::inference::{Inferrer, MarketSummary};
 use crate::core::service::RiskManager;
 use crate::error::Result;
 
-use builder::{build_notifier_registry, build_strategy_registry, init_executor};
+use builder::{
+    build_cluster_cache, build_inferrer, build_llm_client, build_notifier_registry,
+    build_strategy_registry, init_executor,
+};
 use handler::handle_market_event;
 
 /// Main application orchestrator.
@@ -71,8 +75,21 @@ impl Orchestrator {
         // Initialize executor (optional)
         let executor = init_executor(&config).await;
 
-        // Build strategy registry
-        let strategies = Arc::new(build_strategy_registry(&config));
+        // Initialize inference infrastructure
+        let cluster_cache = build_cluster_cache(&config);
+        let llm_client = build_llm_client(&config);
+        let inferrer: Option<Arc<dyn Inferrer>> = llm_client
+            .map(|llm| build_inferrer(&config, llm));
+
+        if inferrer.is_some() {
+            info!("Inference service enabled");
+        }
+
+        // Build strategy registry with cache for combinatorial strategy
+        let strategies = Arc::new(build_strategy_registry(
+            &config,
+            Some(Arc::clone(&cluster_cache)),
+        ));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),
             "Strategies loaded"
@@ -118,6 +135,40 @@ impl Orchestrator {
                 question = %market.question(),
                 "Tracking market"
             );
+        }
+
+        // Run initial inference if enabled
+        if let Some(ref inf) = inferrer {
+            let summaries: Vec<MarketSummary> = registry
+                .markets()
+                .iter()
+                .take(config.inference.batch_size)
+                .map(|m| MarketSummary {
+                    id: m.market_id().clone(),
+                    question: m.question().to_string(),
+                    outcomes: m.outcomes().iter().map(|o| o.name().to_string()).collect(),
+                })
+                .collect();
+
+            if summaries.len() >= 2 {
+                info!(markets = summaries.len(), "Running initial inference");
+                match inf.infer(&summaries).await {
+                    Ok(relations) => {
+                        if !relations.is_empty() {
+                            info!(
+                                relations = relations.len(),
+                                "Discovered market relations"
+                            );
+                            cluster_cache.put_relations(relations);
+                        } else {
+                            debug!("No relations discovered in initial batch");
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Initial inference failed");
+                    }
+                }
+            }
         }
 
         let token_ids: Vec<TokenId> = registry
