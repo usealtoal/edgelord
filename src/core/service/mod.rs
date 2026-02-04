@@ -3,6 +3,7 @@
 mod governor;
 mod notifier;
 mod risk;
+mod subscription;
 
 #[cfg(feature = "telegram")]
 mod telegram;
@@ -15,6 +16,7 @@ pub use notifier::{
     RiskEvent, SummaryEvent,
 };
 pub use risk::{RiskCheckResult, RiskManager};
+pub use subscription::{ConnectionEvent, SubscriptionManager};
 
 #[cfg(feature = "telegram")]
 pub use telegram::{TelegramConfig, TelegramNotifier};
