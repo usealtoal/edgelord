@@ -114,12 +114,13 @@ impl Strategy for MarketRebalancingStrategy {
                 .map(|leg| OpportunityLeg::new(leg.token_id.clone(), leg.price))
                 .collect();
 
-            let opp = Opportunity::new(
+            let opp = Opportunity::with_strategy(
                 rebal_opp.market_id.clone(),
                 &rebal_opp.question,
                 legs,
                 rebal_opp.volume,
                 payout,
+                "market_rebalancing",
             );
             return vec![opp];
         }

@@ -17,10 +17,12 @@ use tracing::{debug, info, warn};
 use crate::app::config::Config;
 use crate::app::state::AppState;
 use crate::core::cache::OrderBookCache;
+use crate::core::db;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
 use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::stats;
 use crate::core::service::{Event, OpportunityEvent, RiskManager};
 use crate::error::Result;
 
@@ -40,6 +42,12 @@ impl Orchestrator {
 
         // Initialize shared state
         let state = Arc::new(AppState::new(config.risk.clone().into()));
+
+        // Initialize database and stats recorder
+        let db_url = format!("sqlite://{}", config.database);
+        let db_pool = db::create_pool(&db_url)?;
+        let stats_recorder = stats::create_recorder(db_pool);
+        info!(database = %config.database, "Database initialized");
 
         // Initialize risk manager
         let risk_manager = Arc::new(RiskManager::new(state.clone()));
@@ -220,6 +228,7 @@ impl Orchestrator {
                 &risk_manager,
                 &notifiers,
                 &state,
+                &stats_recorder,
                 dry_run,
             );
         }

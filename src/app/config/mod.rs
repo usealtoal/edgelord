@@ -111,6 +111,13 @@ pub struct Config {
     /// Cluster detection service configuration.
     #[serde(default)]
     pub cluster_detection: ClusterDetectionConfig,
+    /// Path to SQLite database file.
+    #[serde(default = "default_database_path")]
+    pub database: String,
+}
+
+fn default_database_path() -> String {
+    "edgelord.db".to_string()
 }
 
 impl Config {

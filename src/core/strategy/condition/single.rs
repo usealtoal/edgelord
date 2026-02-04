@@ -139,12 +139,13 @@ pub fn detect_single_condition(
         OpportunityLeg::new(negative_outcome.token_id().clone(), negative_ask.price()),
     ];
 
-    Some(Opportunity::new(
+    Some(Opportunity::with_strategy(
         market.market_id().clone(),
         market.question(),
         legs,
         volume,
         payout,
+        "single_condition",
     ))
 }
 

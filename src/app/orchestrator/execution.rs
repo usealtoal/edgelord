@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use rust_decimal::Decimal;
 use tracing::{error, info, warn};
 
 use crate::app::state::AppState;
@@ -10,8 +11,8 @@ use crate::core::domain::{
     PositionStatus, TokenId,
 };
 use crate::core::exchange::ArbitrageExecutor;
+use crate::core::service::stats::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
-use rust_decimal::Decimal;
 
 /// Spawn async execution without blocking message processing.
 pub(crate) fn spawn_execution(
@@ -19,6 +20,8 @@ pub(crate) fn spawn_execution(
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
     state: Arc<AppState>,
+    stats: Arc<StatsRecorder>,
+    opportunity_id: Option<i32>,
 ) {
     let market_id = opportunity.market_id().to_string();
 
@@ -31,8 +34,32 @@ pub(crate) fn spawn_execution(
         match result {
             Ok(exec_result) => {
                 match &exec_result {
-                    ArbitrageExecutionResult::Success { .. } => {
+                    ArbitrageExecutionResult::Success { filled: _ } => {
                         record_position(&state, &opportunity);
+
+                        // Record trade open
+                        if let Some(opp_id) = opportunity_id {
+                            // Use opportunity legs for price info (actual fill prices not tracked)
+                            let legs: Vec<TradeLeg> = opportunity
+                                .legs()
+                                .iter()
+                                .map(|leg| TradeLeg {
+                                    token_id: leg.token_id().to_string(),
+                                    side: "buy".to_string(),
+                                    price: leg.ask_price(),
+                                    size: opportunity.volume(),
+                                })
+                                .collect();
+
+                            stats.record_trade_open(&TradeOpenEvent {
+                                opportunity_id: opp_id,
+                                strategy: opportunity.strategy().to_string(),
+                                market_ids: vec![market_id.clone()],
+                                legs,
+                                size: opportunity.volume(),
+                                expected_profit: opportunity.expected_profit(),
+                            });
+                        }
                     }
                     ArbitrageExecutionResult::PartialFill { filled, failed } => {
                         let filled_ids: Vec<_> =

@@ -16,7 +16,8 @@ profile = "local"
 # Useful for testing and validating configuration
 dry_run = false
 
-# Path to status file for external monitoring (optional)
+# Path to SQLite database for stats and persistence
+database = "edgelord.db"
 
 # =============================================================================
 # EXCHANGE

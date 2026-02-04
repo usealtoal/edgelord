@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use rust_decimal::Decimal;
 use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
@@ -9,12 +10,12 @@ use crate::app::state::AppState;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
+use crate::core::service::stats::{RecordedOpportunity, StatsRecorder};
 use crate::core::service::{
     Event, NotifierRegistry, OpportunityEvent, RiskCheckResult, RiskEvent, RiskManager,
 };
 use crate::core::strategy::{DetectionContext, StrategyRegistry};
 use crate::error::RiskError;
-use rust_decimal::Decimal;
 
 /// Handle incoming market events from the data stream.
 pub(crate) fn handle_market_event(
@@ -26,6 +27,7 @@ pub(crate) fn handle_market_event(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    stats: &Arc<StatsRecorder>,
     dry_run: bool,
 ) {
     match event {
@@ -43,6 +45,7 @@ pub(crate) fn handle_market_event(
                         risk_manager,
                         notifiers,
                         state,
+                        stats,
                         cache,
                         dry_run,
                     );
@@ -64,6 +67,7 @@ pub(crate) fn handle_market_event(
                         risk_manager,
                         notifiers,
                         state,
+                        stats,
                         cache,
                         dry_run,
                     );
@@ -86,6 +90,7 @@ pub(crate) fn handle_opportunity(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    stats: &Arc<StatsRecorder>,
     cache: &OrderBookCache,
     dry_run: bool,
 ) {
@@ -106,6 +111,17 @@ pub(crate) fn handle_opportunity(
                 "Slippage check failed, rejecting opportunity"
             );
             state.release_execution(opp.market_id().as_str());
+
+            // Record rejected opportunity
+            stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: false,
+                rejected_reason: Some("slippage_too_high".to_string()),
+            });
+
             let error = RiskError::SlippageTooHigh {
                 actual: slippage,
                 max: max_slippage,
@@ -124,6 +140,16 @@ pub(crate) fn handle_opportunity(
     // Check risk
     match risk_manager.check(&opp) {
         RiskCheckResult::Approved => {
+            // Record approved opportunity
+            let opp_id = stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: !dry_run,
+                rejected_reason: None,
+            });
+
             if dry_run {
                 info!(
                     market_id = %opp.market_id(),
@@ -133,13 +159,30 @@ pub(crate) fn handle_opportunity(
                 );
                 state.release_execution(opp.market_id().as_str());
             } else if let Some(exec) = executor {
-                spawn_execution(exec, opp, notifiers.clone(), state.clone());
+                spawn_execution(
+                    exec,
+                    opp,
+                    notifiers.clone(),
+                    state.clone(),
+                    Arc::clone(stats),
+                    opp_id,
+                );
             } else {
                 // No executor, release the lock
                 state.release_execution(opp.market_id().as_str());
             }
         }
         RiskCheckResult::Rejected(error) => {
+            // Record rejected opportunity
+            stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: false,
+                rejected_reason: Some(format!("{error}")),
+            });
+
             // Release the lock on rejection
             state.release_execution(opp.market_id().as_str());
             notifiers.notify_all(Event::RiskRejected(RiskEvent::new(
