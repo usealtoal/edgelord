@@ -6,10 +6,11 @@ use tracing::{error, info, warn};
 
 use crate::app::state::AppState;
 use crate::app::status::StatusWriter;
-use crate::core::domain::{Opportunity, Position, PositionLeg, PositionStatus, TokenId};
-use crate::core::exchange::{
-    ArbitrageExecutionResult, ArbitrageExecutor, FailedLeg, FilledLeg, OrderId,
+use crate::core::domain::{
+    ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
+    PositionStatus, TokenId,
 };
+use crate::core::exchange::ArbitrageExecutor;
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
 use rust_decimal::Decimal;
 

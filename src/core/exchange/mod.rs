@@ -47,9 +47,6 @@ use rust_decimal::Decimal;
 use crate::core::domain::{Opportunity, OrderBook, TokenId};
 use crate::error::Error;
 
-// Re-export execution types from domain for backward compatibility
-pub use crate::core::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, OrderId};
-
 /// Result of attempting to execute an order.
 #[derive(Debug, Clone)]
 pub enum ExecutionResult {

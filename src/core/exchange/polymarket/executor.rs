@@ -15,10 +15,11 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::Config;
-use crate::core::domain::Opportunity;
+use crate::core::domain::{
+    ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId,
+};
 use crate::core::exchange::{
-    ArbitrageExecutionResult, ArbitrageExecutor, ExecutionResult, FailedLeg, FilledLeg,
-    OrderExecutor, OrderId, OrderRequest, OrderSide,
+    ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide,
 };
 use crate::error::{ConfigError, ExecutionError, Result};
 
