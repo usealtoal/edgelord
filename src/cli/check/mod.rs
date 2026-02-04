@@ -88,7 +88,12 @@ pub async fn execute_test_telegram<P: AsRef<Path>>(config_path: P) -> Result<()>
     })?;
 
     println!("Sending test message to Telegram...");
-    println!("  Bot token: {}...{}", &token[..10], &token[token.len() - 5..]);
+    let masked_token = if token.len() >= 15 {
+        format!("{}...{}", &token[..10], &token[token.len() - 5..])
+    } else {
+        format!("{}...", &token[..token.len().min(10)])
+    };
+    println!("  Bot token: {masked_token}");
     println!("  Chat ID: {chat_id}");
     println!();
 
