@@ -23,6 +23,8 @@ Three detection strategies, ordered by historical profit share:
 | Single-Condition | YES + NO < $1 | 27% ($10.5M) |
 | Combinatorial | Cross-market logical dependencies | <1% ($95K) |
 
+**New:** LLM-powered relation inference automatically discovers which markets are correlated, enabling combinatorial arbitrage without manual configuration.
+
 ## Quick Start
 
 ```bash
@@ -34,43 +36,102 @@ cargo build --release
 # Configure (copy and edit)
 cp config.toml.example config.toml
 
+# Set API keys
+export WALLET_PRIVATE_KEY="..."        # For execution
+export ANTHROPIC_API_KEY="..."         # For relation inference
+
 # Run
 ./target/release/edgelord run
 ```
 
-See [Getting Started](doc/getting-started.md) for detailed setup including environment variables and configuration options.
+See [Getting Started](doc/getting-started.md) for detailed setup.
 
 ## How It Works
 
-The system connects to prediction market exchanges via WebSocket, maintaining a real-time order book cache. When prices update, registered detection strategies scan for arbitrage opportunities. Each strategy implements a different detection algorithm—from simple price sum checks to Frank-Wolfe optimization over the marginal polytope.
-
-When an opportunity passes minimum thresholds (edge, profit, volume), it goes through risk management checks: position limits, exposure caps, slippage tolerance. Approved opportunities execute via the exchange's order API. The system handles partial fills, order cancellation, and maintains position tracking throughout.
-
 ```mermaid
 flowchart LR
-    WS[WebSocket] --> Cache[Order Book Cache]
-    Cache --> Strategies
-
-    subgraph Strategies
-        SC[Single Condition]
-        RB[Rebalancing]
-        CB[Combinatorial]
+    subgraph Startup
+        Markets[Fetch Markets] --> LLM[LLM Inference]
+        LLM --> Relations[Discover Relations]
+        Relations --> Cache[Cluster Cache]
     end
 
-    Strategies --> Risk[Risk Manager]
+    subgraph Runtime
+        WS[WebSocket] --> OB[Order Book Cache]
+        OB --> S1[Single Condition]
+        OB --> S2[Rebalancing]
+        OB --> CD[Cluster Detection]
+        CD --> FW[Frank-Wolfe]
+    end
+
+    S1 --> Risk[Risk Manager]
+    S2 --> Risk
+    FW --> Risk
     Risk --> Exec[Executor]
     Exec --> Exchange[Exchange API]
 ```
 
+**Startup:**
+1. Fetch active markets from exchange
+2. Run LLM inference to discover market relations (if enabled)
+3. Build clusters of related markets with pre-computed constraints
+
+**Runtime:**
+1. WebSocket streams order book updates
+2. Per-market strategies (single-condition, rebalancing) check each update
+3. Cluster detection service monitors related markets, runs Frank-Wolfe when prices change
+4. Opportunities pass through risk management and execute
+
+## Configuration
+
+Key settings in `config.toml`:
+
+```toml
+[strategies]
+enabled = ["single_condition", "market_rebalancing", "combinatorial"]
+
+[strategies.combinatorial]
+enabled = true
+
+[inference]
+enabled = true              # LLM discovers market relations
+
+[cluster_detection]
+enabled = true              # Real-time cluster arbitrage detection
+
+[llm]
+provider = "anthropic"      # or "openai"
+```
+
+See [Configuration](doc/configuration.md) for all options.
+
 ## Documentation
 
 - **[Getting Started](doc/getting-started.md)** — Installation, configuration, first run
-- **[Deployment](doc/deployment/)** — VPS, wallet, Telegram alerts, operations
-- **[Architecture](doc/architecture/overview.md)** — System design and data flow
-- **[Strategies](doc/strategies/overview.md)** — How each detection algorithm works
 - **[Configuration](doc/configuration.md)** — All options explained
+- **[Strategies](doc/strategies/overview.md)** — How each detection algorithm works
+- **[Architecture](doc/architecture/overview.md)** — System design and data flow
+- **[Deployment](doc/deployment/)** — VPS, wallet, Telegram alerts, operations
 
 Implementation plans and research notes live in `doc/plans/` and `doc/research/`.
+
+## Project Structure
+
+```
+src/
+├── core/
+│   ├── domain/         # Pure types (Market, Relation, Cluster)
+│   ├── exchange/       # Exchange abstraction + Polymarket impl
+│   ├── strategy/       # Detection algorithms
+│   ├── inference/      # LLM-powered relation discovery
+│   ├── llm/            # Anthropic/OpenAI clients
+│   ├── cache/          # Order book + cluster caches
+│   ├── store/          # Persistence (SQLite, memory)
+│   ├── solver/         # Frank-Wolfe, HiGHS ILP
+│   └── service/        # Cluster detection, risk, notifications
+├── app/                # Orchestration, config, CLI
+└── cli/                # Command handlers
+```
 
 ## Status
 
@@ -79,7 +140,9 @@ Implementation plans and research notes live in `doc/plans/` and `doc/research/`
 - [x] Execution — Order submission, position tracking
 - [x] Risk Management — Limits, circuit breakers, slippage checks
 - [x] Multi-Exchange Abstraction — Generic traits, Polymarket implementation
-- [ ] Mainnet — Production deployment
+- [x] LLM Inference — Automatic relation discovery
+- [x] Combinatorial Strategy — Frank-Wolfe + cluster detection
+- [ ] Mainnet Validation — Production testing with real capital
 
 ## License
 

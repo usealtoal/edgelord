@@ -52,10 +52,14 @@ cli → app → {exchange, strategy, service} → domain
 |-------|---------------|----------------|
 | `domain` | Nothing | Pure data types, no I/O |
 | `exchange` | `domain` | Exchange abstraction & implementations |
-| `strategy` | `domain` | Detection algorithms |
-| `service` | `domain` | Runtime services (governor, subscription) |
+| `strategy` | `domain`, `cache` | Detection algorithms |
+| `service` | `domain`, `cache`, `solver` | Runtime services (cluster detection, governor) |
 | `solver` | `domain` | LP/ILP solver abstraction |
-| `cache` | `domain` | Stateful caches |
+| `cache` | `domain` | Stateful caches (order books, clusters) |
+| `llm` | `error` | LLM provider abstraction |
+| `inference` | `domain`, `llm` | Relation inference |
+| `store` | `domain`, `db` | Persistence abstraction |
+| `db` | Nothing | Diesel ORM schema/models |
 | `app` | All of `core` | Application orchestration, configuration |
 | `cli` | `app` | User interface |
 
@@ -78,13 +82,14 @@ src/
 │   │
 │   ├── domain/                 # Pure business types
 │   │   ├── mod.rs
-│   │   ├── id.rs               # TokenId, MarketId
+│   │   ├── id.rs               # TokenId, MarketId, RelationId, ClusterId
 │   │   ├── money.rs            # Price, Volume
 │   │   ├── market.rs
 │   │   ├── market_registry.rs
 │   │   ├── order_book.rs
 │   │   ├── opportunity.rs
 │   │   ├── position.rs
+│   │   ├── relation.rs         # Relation, RelationKind, Cluster
 │   │   ├── resource.rs
 │   │   ├── scaling.rs
 │   │   └── score.rs
@@ -110,6 +115,9 @@ src/
 │   │
 │   ├── service/                # Runtime services
 │   │   ├── mod.rs
+│   │   ├── cluster/            # Cluster detection service
+│   │   │   ├── mod.rs          # ClusterDetectionService
+│   │   │   └── detector.rs     # Detection logic
 │   │   ├── subscription/
 │   │   │   ├── mod.rs          # SubscriptionManager trait
 │   │   │   └── priority.rs
@@ -125,10 +133,30 @@ src/
 │   │   ├── mod.rs
 │   │   └── highs.rs
 │   │
-│   └── cache/                  # Stateful caches
+│   ├── cache/                  # Stateful caches
+│   │   ├── mod.rs
+│   │   ├── order_book.rs
+│   │   ├── cluster.rs          # ClusterCache for relations
+│   │   └── position.rs
+│   │
+│   ├── llm/                    # LLM provider abstraction
+│   │   ├── mod.rs              # Llm trait
+│   │   ├── anthropic.rs
+│   │   └── openai.rs
+│   │
+│   ├── inference/              # Relation inference
+│   │   ├── mod.rs              # Inferrer trait
+│   │   └── llm.rs              # LlmInferrer implementation
+│   │
+│   ├── store/                  # Persistence abstraction
+│   │   ├── mod.rs              # Store traits
+│   │   ├── sqlite.rs
+│   │   └── memory.rs
+│   │
+│   └── db/                     # Database (Diesel ORM)
 │       ├── mod.rs
-│       ├── order_book.rs
-│       └── position.rs
+│       ├── schema.rs
+│       └── model.rs
 │
 ├── app/                        # Application layer
 │   ├── mod.rs
@@ -142,6 +170,9 @@ src/
 │       ├── strategy.rs         # Strategy configs
 │       ├── service.rs          # Service configs
 │       ├── logging.rs          # LoggingConfig
+│       ├── llm.rs              # LlmConfig, provider settings
+│       ├── inference.rs        # InferenceConfig
+│       ├── cluster.rs          # ClusterDetectionConfig
 │       └── <exchange>.rs       # Per-exchange config
 │
 └── cli/                        # Command-line interface
