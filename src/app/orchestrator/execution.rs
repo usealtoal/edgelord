@@ -35,15 +35,8 @@ pub(crate) fn spawn_execution(
             Ok(exec_result) => {
                 match &exec_result {
                     ArbitrageExecutionResult::Success { filled: _ } => {
-                        record_position(&state, &opportunity);
-
-                        // Track peak exposure
-                        let exposure = state.total_exposure();
-                        stats.update_peak_exposure(exposure);
-
-                        // Record trade open
-                        if let Some(opp_id) = opportunity_id {
-                            // Use opportunity legs for price info (actual fill prices not tracked)
+                        // Record trade open first to get trade_id
+                        let trade_id = if let Some(opp_id) = opportunity_id {
                             let legs: Vec<TradeLeg> = opportunity
                                 .legs()
                                 .iter()
@@ -62,8 +55,17 @@ pub(crate) fn spawn_execution(
                                 legs,
                                 size: opportunity.volume(),
                                 expected_profit: opportunity.expected_profit(),
-                            });
-                        }
+                            })
+                        } else {
+                            None
+                        };
+
+                        // Record position with trade_id for close tracking
+                        record_position(&state, &opportunity, trade_id);
+
+                        // Track peak exposure
+                        let exposure = state.total_exposure();
+                        stats.update_peak_exposure(exposure);
                     }
                     ArbitrageExecutionResult::PartialFill { filled, failed } => {
                         let filled_ids: Vec<_> =
@@ -90,7 +92,7 @@ pub(crate) fn spawn_execution(
 
                         if cancel_failed {
                             warn!("Some cancellations failed, recording partial position");
-                            record_partial_position(&state, &opportunity, filled, failed);
+                            record_partial_position(&state, &opportunity, filled, failed, None);
                         } else {
                             info!("Successfully cancelled all filled legs, no position recorded");
                         }
@@ -117,7 +119,7 @@ pub(crate) fn spawn_execution(
 }
 
 /// Record a position in shared state.
-pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
+pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade_id: Option<i32>) {
     let position_legs: Vec<PositionLeg> = opportunity
         .legs()
         .iter()
@@ -131,7 +133,7 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
         .collect();
 
     let mut positions = state.positions_mut();
-    let position = Position::new(
+    let mut position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
         position_legs,
@@ -140,6 +142,11 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
         chrono::Utc::now(),
         PositionStatus::Open,
     );
+
+    if let Some(tid) = trade_id {
+        position = position.with_trade_id(tid);
+    }
+
     positions.add(position);
 }
 
@@ -149,6 +156,7 @@ pub(crate) fn record_partial_position(
     opportunity: &Opportunity,
     filled: &[FilledLeg],
     failed: &[FailedLeg],
+    trade_id: Option<i32>,
 ) {
     let filled_token_ids: Vec<TokenId> = filled.iter().map(|f| f.token_id.clone()).collect();
     let missing_token_ids: Vec<TokenId> = failed.iter().map(|f| f.token_id.clone()).collect();
@@ -173,7 +181,7 @@ pub(crate) fn record_partial_position(
         .sum();
 
     let mut positions = state.positions_mut();
-    let position = Position::new(
+    let mut position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
         position_legs,
@@ -185,5 +193,10 @@ pub(crate) fn record_partial_position(
             missing: missing_token_ids,
         },
     );
+
+    if let Some(tid) = trade_id {
+        position = position.with_trade_id(tid);
+    }
+
     positions.add(position);
 }

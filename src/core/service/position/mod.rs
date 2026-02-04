@@ -126,18 +126,18 @@ impl PositionManager {
     ) -> Price {
         let mut total_pnl = Decimal::ZERO;
 
-        // Find all open positions for this market
-        let position_ids: Vec<PositionId> = tracker
+        // Find all open positions for this market with their trade IDs
+        let position_info: Vec<(PositionId, Option<i32>)> = tracker
             .all()
             .filter(|p| p.market_id() == market_id && !p.status().is_closed())
-            .map(|p| p.id())
+            .map(|p| (p.id(), p.trade_id()))
             .collect();
 
-        for pos_id in position_ids {
+        for (pos_id, trade_id) in position_info {
             if let Some(position) = tracker.get(pos_id) {
                 let pnl = pnl_calculator(position);
                 if let Some(result) =
-                    self.close_position(tracker, pos_id, pnl, reason.clone(), None)
+                    self.close_position(tracker, pos_id, pnl, reason.clone(), trade_id)
                 {
                     total_pnl += result.realized_pnl;
                 }
