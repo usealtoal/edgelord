@@ -292,6 +292,7 @@ mod tests {
                 .map(|(token_id, name)| OutcomeInfo {
                     token_id: token_id.to_string(),
                     name: name.to_string(),
+                    price: None,
                 })
                 .collect(),
             active: true,

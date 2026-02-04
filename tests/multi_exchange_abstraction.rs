@@ -27,10 +27,12 @@ fn test_exchange_config_parses_binary_markets() {
             OutcomeInfo {
                 token_id: "yes-token".to_string(),
                 name: "Yes".to_string(),
+                price: None,
             },
             OutcomeInfo {
                 token_id: "no-token".to_string(),
                 name: "No".to_string(),
+                price: None,
             },
         ],
         active: true,

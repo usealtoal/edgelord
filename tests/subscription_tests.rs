@@ -18,6 +18,7 @@ fn make_market(id: &str, outcomes: usize) -> MarketInfo {
             } else {
                 "No".to_string()
             },
+            price: None,
         })
         .collect();
 
@@ -170,10 +171,12 @@ async fn test_filter_excludes_inactive_markets() {
                 OutcomeInfo {
                     token_id: "active-yes".to_string(),
                     name: "Yes".to_string(),
+                    price: None,
                 },
                 OutcomeInfo {
                     token_id: "active-no".to_string(),
                     name: "No".to_string(),
+                    price: None,
                 },
             ],
             active: true,
@@ -185,10 +188,12 @@ async fn test_filter_excludes_inactive_markets() {
                 OutcomeInfo {
                     token_id: "inactive-yes".to_string(),
                     name: "Yes".to_string(),
+                    price: None,
                 },
                 OutcomeInfo {
                     token_id: "inactive-no".to_string(),
                     name: "No".to_string(),
+                    price: None,
                 },
             ],
             active: false,

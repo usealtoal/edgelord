@@ -157,23 +157,23 @@ pub struct ScoringWeightsConfig {
 }
 
 fn default_weight_liquidity() -> f64 {
-    0.30
+    0.0 // Disabled until Phase 2 (needs order book data)
 }
 
 fn default_weight_spread() -> f64 {
-    0.20
+    0.0 // Disabled until Phase 2 (needs order book data)
 }
 
 fn default_weight_opportunity() -> f64 {
-    0.25
+    0.50 // Primary factor - calculated from price imbalance
 }
 
 fn default_weight_outcome_count() -> f64 {
-    0.15
+    0.40 // Secondary factor - more outcomes = more arbitrage potential
 }
 
 fn default_weight_activity() -> f64 {
-    0.10
+    0.10 // Placeholder until Phase 2 (needs trade data)
 }
 
 impl Default for ScoringWeightsConfig {

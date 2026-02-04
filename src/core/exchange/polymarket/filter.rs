@@ -85,6 +85,7 @@ mod tests {
             .map(|i| OutcomeInfo {
                 token_id: format!("token-{}", i),
                 name: format!("Outcome {}", i),
+                price: None,
             })
             .collect();
 
