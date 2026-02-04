@@ -168,13 +168,13 @@ impl RawRelation {
     fn markets_valid(&self, valid: &HashSet<&str>) -> bool {
         match self.kind.as_str() {
             "implies" => {
-                self.if_yes.as_ref().map_or(false, |a| valid.contains(a.as_str()))
-                    && self.then_yes.as_ref().map_or(false, |c| valid.contains(c.as_str()))
+                self.if_yes.as_ref().is_some_and(|a| valid.contains(a.as_str()))
+                    && self.then_yes.as_ref().is_some_and(|c| valid.contains(c.as_str()))
             }
             "mutually_exclusive" | "exactly_one" => {
                 self.markets
                     .as_ref()
-                    .map_or(false, |ms| ms.iter().all(|m| valid.contains(m.as_str())))
+                    .is_some_and(|ms| ms.iter().all(|m| valid.contains(m.as_str())))
             }
             _ => false,
         }

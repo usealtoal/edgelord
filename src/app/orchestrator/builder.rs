@@ -102,6 +102,9 @@ pub(crate) async fn init_executor(
 }
 
 /// Build LLM client from configuration.
+///
+/// TODO: Wire into Orchestrator::run() when inference integration is complete.
+#[allow(dead_code)]
 pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
     if !config.inference.enabled {
         return None;
@@ -145,12 +148,18 @@ pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
 }
 
 /// Build cluster cache for relation inference.
+///
+/// TODO: Wire into Orchestrator::run() when inference integration is complete.
+#[allow(dead_code)]
 pub(crate) fn build_cluster_cache(config: &Config) -> Arc<ClusterCache> {
     let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
     Arc::new(ClusterCache::new(ttl))
 }
 
 /// Build inference service components.
+///
+/// TODO: Wire into Orchestrator::run() when inference integration is complete.
+#[allow(dead_code)]
 pub(crate) fn build_inferrer(
     config: &Config,
     llm: Arc<dyn Llm>,

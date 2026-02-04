@@ -19,6 +19,8 @@ mod strategy;
 
 // Re-export all public types from submodules
 pub use inference::InferenceConfig;
+// Note: AnthropicConfig and OpenAiConfig are exported for programmatic config construction
+#[allow(unused_imports)]
 pub use llm::{AnthropicConfig, LlmConfig, LlmProvider, OpenAiConfig};
 pub use logging::LoggingConfig;
 pub use polymarket::{

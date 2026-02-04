@@ -3,7 +3,7 @@
 use serde::Deserialize;
 
 /// LLM configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct LlmConfig {
     /// Which provider to use.
     #[serde(default)]
@@ -14,16 +14,6 @@ pub struct LlmConfig {
     /// OpenAI-specific settings.
     #[serde(default)]
     pub openai: OpenAiConfig,
-}
-
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            provider: LlmProvider::default(),
-            anthropic: AnthropicConfig::default(),
-            openai: OpenAiConfig::default(),
-        }
-    }
 }
 
 /// LLM provider selection.
