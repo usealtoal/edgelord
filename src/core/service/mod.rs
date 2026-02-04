@@ -2,6 +2,7 @@
 
 mod governor;
 mod notifier;
+mod priority_subscription;
 mod risk;
 mod subscription;
 
@@ -15,6 +16,7 @@ pub use notifier::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
     RiskEvent, SummaryEvent,
 };
+pub use priority_subscription::PrioritySubscriptionManager;
 pub use risk::{RiskCheckResult, RiskManager};
 pub use subscription::{ConnectionEvent, SubscriptionManager};
 
