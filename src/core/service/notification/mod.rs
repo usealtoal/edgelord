@@ -3,6 +3,12 @@
 //! The `Notifier` trait defines the interface for notification handlers.
 //! Multiple notifiers can be registered with the `NotifierRegistry`.
 
+#[cfg(feature = "telegram")]
+mod telegram;
+
+#[cfg(feature = "telegram")]
+pub use telegram::{TelegramConfig, TelegramNotifier};
+
 use crate::core::domain::Opportunity;
 use crate::core::exchange::ArbitrageExecutionResult;
 use crate::error::RiskError;
