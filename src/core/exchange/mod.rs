@@ -23,12 +23,14 @@
 //! ```
 
 mod factory;
+mod filter;
 pub mod polymarket;
 mod reconnecting;
 mod scorer;
 mod traits;
 
 pub use factory::ExchangeFactory;
+pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
 pub use scorer::MarketScorer;
 pub use traits::ExchangeConfig;
