@@ -20,11 +20,11 @@ pub trait Llm: Send + Sync {
     async fn complete(&self, prompt: &str) -> Result<String>;
 }
 
+/// Mock LLM for testing.
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
-    /// Mock LLM for testing.
     pub struct MockLlm {
         response: String,
     }
@@ -45,6 +45,12 @@ mod tests {
             Ok(self.response.clone())
         }
     }
+}
+
+#[cfg(test)]
+mod internal_tests {
+    use super::tests::MockLlm;
+    use super::*;
 
     #[tokio::test]
     async fn mock_llm_returns_response() {
