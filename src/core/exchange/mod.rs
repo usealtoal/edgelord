@@ -194,6 +194,12 @@ pub enum MarketEvent {
     OrderBookSnapshot { token_id: TokenId, book: OrderBook },
     /// Incremental order book update (deltas).
     OrderBookDelta { token_id: TokenId, book: OrderBook },
+    /// Market has settled (prediction resolved).
+    MarketSettled {
+        market_id: crate::core::domain::MarketId,
+        winning_outcome: String,
+        payout_per_share: Decimal,
+    },
     /// Connection established.
     Connected,
     /// Connection lost (may reconnect).

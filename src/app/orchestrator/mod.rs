@@ -22,6 +22,7 @@ use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
 use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::position::PositionManager;
 use crate::core::service::stats;
 use crate::core::service::{Event, OpportunityEvent, RiskManager};
 use crate::error::Result;
@@ -48,6 +49,7 @@ impl Orchestrator {
         let db_pool = db::create_pool(&db_url)?;
         db::run_migrations(&db_pool)?;
         let stats_recorder = stats::create_recorder(db_pool);
+        let position_manager = Arc::new(PositionManager::new(Arc::clone(&stats_recorder)));
         info!(database = %config.database, "Database initialized");
 
         // Initialize risk manager
@@ -230,6 +232,7 @@ impl Orchestrator {
                 &notifiers,
                 &state,
                 &stats_recorder,
+                &position_manager,
                 dry_run,
             );
         }

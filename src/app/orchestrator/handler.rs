@@ -11,6 +11,7 @@ use crate::app::state::AppState;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
+use crate::core::service::position::{CloseReason, PositionManager};
 use crate::core::service::stats::{RecordedOpportunity, StatsRecorder};
 use crate::core::service::{
     Event, NotifierRegistry, OpportunityEvent, RiskCheckResult, RiskEvent, RiskManager,
@@ -19,6 +20,7 @@ use crate::core::strategy::{DetectionContext, StrategyRegistry};
 use crate::error::RiskError;
 
 /// Handle incoming market events from the data stream.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_market_event(
     event: MarketEvent,
     cache: &OrderBookCache,
@@ -29,6 +31,7 @@ pub(crate) fn handle_market_event(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
     stats: &Arc<StatsRecorder>,
+    position_manager: &Arc<PositionManager>,
     dry_run: bool,
 ) {
     let start = Instant::now();
@@ -84,6 +87,37 @@ pub(crate) fn handle_market_event(
             // Record processing latency
             let elapsed = start.elapsed();
             stats.record_latency(elapsed.as_millis() as u32);
+        }
+        MarketEvent::MarketSettled {
+            market_id,
+            winning_outcome,
+            payout_per_share,
+        } => {
+            info!(
+                market_id = %market_id,
+                winning_outcome = %winning_outcome,
+                payout = %payout_per_share,
+                "Market settled"
+            );
+
+            // Close all positions for this market
+            let mut tracker = state.positions_mut();
+            let total_pnl = position_manager.close_all_for_market(
+                &mut tracker,
+                &market_id,
+                |pos| PositionManager::calculate_arbitrage_pnl(pos, payout_per_share),
+                CloseReason::Settlement {
+                    winning_outcome: winning_outcome.clone(),
+                },
+            );
+
+            if total_pnl != Decimal::ZERO {
+                info!(
+                    market_id = %market_id,
+                    total_pnl = %total_pnl,
+                    "Positions settled"
+                );
+            }
         }
         MarketEvent::Connected => {
             info!("Data stream connected");

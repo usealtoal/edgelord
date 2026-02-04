@@ -75,8 +75,10 @@ impl PolymarketDeduplicator {
 
                 Some(key)
             }
-            // Connection events are not deduplicated
-            MarketEvent::Connected | MarketEvent::Disconnected { .. } => None,
+            // Connection and settlement events are not deduplicated
+            MarketEvent::Connected
+            | MarketEvent::Disconnected { .. }
+            | MarketEvent::MarketSettled { .. } => None,
         }
     }
 }
