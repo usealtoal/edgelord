@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 
 use crate::core::db::model::{DailyStatsRow, StrategyDailyStatsRow};
 use crate::core::db::schema::{daily_stats, strategy_daily_stats, trades};
-use crate::core::service::stats::StatsSummary;
+use crate::core::service::statistics::StatsSummary;
 use crate::error::Result;
 
 /// Execute `stats` (default: today).
@@ -270,7 +270,7 @@ pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Resul
     let today = Utc::now().date_naive();
     let start = today - Duration::days(i64::from(days));
 
-    let stats_recorder = crate::core::service::stats::StatsRecorder::new(pool);
+    let stats_recorder = crate::core::service::statistics::StatsRecorder::new(pool);
     let csv = stats_recorder.export_daily_csv(start, today);
 
     if let Some(path) = output {
@@ -286,7 +286,7 @@ pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Resul
 /// Execute `stats prune [--days N]`.
 pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
     let pool = connect(db_path)?;
-    let stats_recorder = crate::core::service::stats::StatsRecorder::new(pool);
+    let stats_recorder = crate::core::service::statistics::StatsRecorder::new(pool);
     stats_recorder.prune_old_records(retention_days);
     println!(
         "Pruned opportunities and trades older than {} days",

@@ -26,8 +26,8 @@
 //! the mathematical infrastructure enables more sophisticated strategies.
 
 
-pub use bregman::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
-pub use frank_wolfe::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};
+pub use crate::core::solver::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
+pub use crate::core::solver::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};
 
 use std::sync::Arc;
 

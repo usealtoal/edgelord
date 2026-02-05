@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use edgelord::core::db::run_migrations;
-use edgelord::core::service::stats::{RecordedOpportunity, StatsRecorder};
+use edgelord::core::service::statistics::{RecordedOpportunity, StatsRecorder};
 use rust_decimal_macros::dec;
 
 /// Guard to clean up temporary database file after test

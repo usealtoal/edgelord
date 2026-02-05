@@ -12,7 +12,7 @@ use crate::core::domain::{
     PositionStatus, TokenId,
 };
 use crate::core::exchange::ArbitrageExecutor;
-use crate::core::service::stats::{StatsRecorder, TradeLeg, TradeOpenEvent};
+use crate::core::service::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
 
 #[cfg(test)]
@@ -264,7 +264,7 @@ mod tests {
         OrderId, PositionStatus, TokenId,
     };
     use crate::core::exchange::ArbitrageExecutor;
-    use crate::core::service::{stats, NotifierRegistry};
+    use crate::core::service::{statistics, NotifierRegistry};
     use crate::error::{Error, ExecutionError};
 
     /// Mock executor that returns PartialFill and fails cancel on one leg.
@@ -350,7 +350,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = stats::create_recorder(db_pool);
+        let stats = statistics::create_recorder(db_pool);
 
         spawn_execution(
             executor,
@@ -434,7 +434,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = stats::create_recorder(db_pool);
+        let stats = statistics::create_recorder(db_pool);
 
         assert!(state.try_lock_execution("timeout-market"));
 

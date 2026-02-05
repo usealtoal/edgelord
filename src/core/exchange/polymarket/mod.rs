@@ -6,7 +6,7 @@ mod config;
 mod dedup;
 mod executor;
 mod filter;
-mod messages;
+mod message;
 mod scorer;
 mod types;
 mod websocket;

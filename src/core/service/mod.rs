@@ -5,7 +5,7 @@ mod governor;
 mod notification;
 pub mod position;
 mod risk;
-pub mod stats;
+pub mod statistics;
 mod subscription;
 
 pub use governor::{
@@ -17,7 +17,7 @@ pub use notification::{
 };
 pub use risk::{RiskCheckResult, RiskManager};
 pub use position::{CloseReason, CloseResult, MarketSettledEvent, PositionManager};
-pub use stats::{
+pub use statistics::{
     OpportunitySummary, RecordedOpportunity, StatsSummary, StatsRecorder, TradeCloseEvent,
     TradeOpenEvent, TradeLeg,
 };
