@@ -15,7 +15,7 @@ use crate::core::service::stats::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
 
 /// Spawn async execution without blocking message processing.
-pub(crate) fn spawn_execution(
+pub fn spawn_execution(
     executor: Arc<dyn ArbitrageExecutor + Send + Sync>,
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
@@ -80,7 +80,7 @@ pub(crate) fn spawn_execution(
 
                         // Try to cancel all filled orders
                         let mut cancel_failed = false;
-                        for fill in filled {
+                        for fill in filled.iter() {
                             let order_id = OrderId::new(fill.order_id.clone());
                             if let Err(cancel_err) =
                                 ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await

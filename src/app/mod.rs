@@ -5,6 +5,9 @@ mod orchestrator;
 mod state;
 pub mod wallet;
 
+// Export spawn_execution for testing
+pub use orchestrator::execution::spawn_execution;
+
 pub use config::{
     ClusterDetectionConfig, Config, ConnectionPoolConfig, DedupStrategyConfig, Environment,
     Exchange, ExchangeSpecificConfig, GovernorAppConfig, InferenceConfig, LatencyTargetsConfig,

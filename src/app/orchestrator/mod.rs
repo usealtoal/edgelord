@@ -7,7 +7,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod builder;
-mod execution;
+pub mod execution;
 mod handler;
 
 use std::sync::Arc;
