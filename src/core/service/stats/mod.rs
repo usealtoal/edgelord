@@ -7,13 +7,16 @@ use std::sync::Arc;
 
 use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
+use diesel::OptionalExtension;
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::SqliteConnection;
 use rust_decimal::Decimal;
 use tracing::{debug, warn};
 
 use crate::core::db::model::{
     DailyStatsRow, NewOpportunityRow, NewTradeRow, OpportunityRow, StrategyDailyStatsRow, TradeRow,
 };
+use crate::core::db;
 use crate::core::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
 
 /// Recorded opportunity for stats tracking.
@@ -94,6 +97,14 @@ pub struct StatsRecorder {
     pool: Pool<ConnectionManager<SqliteConnection>>,
 }
 
+/// Helper struct for querying last_insert_rowid().
+#[derive(QueryableByName)]
+struct LastInsertRowId {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    #[diesel(column_name = "id")]
+    id: i32,
+}
+
 impl StatsRecorder {
     /// Create a new stats recorder.
     #[must_use]
@@ -125,37 +136,61 @@ impl StatsRecorder {
             }
         };
 
-        // Insert opportunity
-        let result = diesel::insert_into(opportunities::table)
-            .values(&row)
-            .execute(&mut conn);
-
-        if let Err(e) = result {
-            warn!("Failed to record opportunity: {e}");
-            return None;
+        if let Err(e) = db::configure_sqlite_connection(&mut conn) {
+            warn!("Failed to configure SQLite connection: {e}");
         }
 
-        // Get the inserted ID
-        let id: Option<i32> = opportunities::table
-            .select(diesel::dsl::max(opportunities::id))
-            .first(&mut conn)
-            .ok()
-            .flatten();
+        // Execute insert and daily stats update in a transaction
+        let id = conn.transaction(|conn| {
+            // Insert opportunity
+            diesel::insert_into(opportunities::table)
+                .values(&row)
+                .execute(conn)
+                .map_err(|e| {
+                    warn!("Failed to record opportunity: {e}");
+                    e
+                })?;
 
-        // Update daily stats
-        self.update_daily_stats(&today, &event.strategy, |daily, strategy| {
-            daily.opportunities_detected += 1;
-            strategy.opportunities_detected += 1;
-            if event.executed {
-                daily.opportunities_executed += 1;
-                strategy.opportunities_executed += 1;
-            } else if event.rejected_reason.is_some() {
-                daily.opportunities_rejected += 1;
-            }
+            // Get the inserted ID using last_insert_rowid()
+            // Note: SQLite doesn't support RETURNING, so we use last_insert_rowid()
+            // Must be called immediately after INSERT and before any other operations
+            let id: i32 = diesel::sql_query("SELECT last_insert_rowid() AS id")
+                .get_result::<LastInsertRowId>(conn)
+                .map(|row| row.id)
+                .map_err(|e| {
+                    warn!("Failed to get inserted ID: {e}");
+                    e
+                })?;
+
+            // Update daily stats within the same transaction
+            self.update_daily_stats_with_conn(conn, &today, &event.strategy, |daily, strategy| {
+                daily.opportunities_detected += 1;
+                strategy.opportunities_detected += 1;
+                if event.executed {
+                    daily.opportunities_executed += 1;
+                    strategy.opportunities_executed += 1;
+                } else if event.rejected_reason.is_some() {
+                    daily.opportunities_rejected += 1;
+                }
+            })
+            .map_err(|e| {
+                warn!("Failed to update daily stats: {e}");
+                e
+            })?;
+
+            Ok::<i32, diesel::result::Error>(id)
         });
 
-        debug!(id = ?id, strategy = %event.strategy, "Recorded opportunity");
-        id
+        match id {
+            Ok(id) => {
+                debug!(id = id, strategy = %event.strategy, "Recorded opportunity");
+                Some(id)
+            }
+            Err(e) => {
+                warn!("Transaction failed: {e}");
+                None
+            }
+        }
     }
 
     /// Record a trade opening.
@@ -184,30 +219,50 @@ impl StatsRecorder {
             }
         };
 
-        let result = diesel::insert_into(trades::table)
-            .values(&row)
-            .execute(&mut conn);
-
-        if let Err(e) = result {
-            warn!("Failed to record trade open: {e}");
-            return None;
+        if let Err(e) = db::configure_sqlite_connection(&mut conn) {
+            warn!("Failed to configure SQLite connection: {e}");
         }
 
-        let id: Option<i32> = trades::table
-            .select(diesel::dsl::max(trades::id))
-            .first(&mut conn)
-            .ok()
-            .flatten();
+        let id = conn.transaction(|conn| {
+            diesel::insert_into(trades::table)
+                .values(&row)
+                .execute(conn)
+                .map_err(|e| {
+                    warn!("Failed to record trade open: {e}");
+                    e
+                })?;
 
-        // Update daily stats
-        self.update_daily_stats(&today, &event.strategy, |daily, strategy| {
-            daily.trades_opened += 1;
-            daily.total_volume += decimal_to_f32(event.size);
-            strategy.trades_opened += 1;
+            let id: i32 = diesel::sql_query("SELECT last_insert_rowid() AS id")
+                .get_result::<LastInsertRowId>(conn)
+                .map(|row| row.id)
+                .map_err(|e| {
+                    warn!("Failed to get trade ID: {e}");
+                    e
+                })?;
+
+            self.update_daily_stats_with_conn(conn, &today, &event.strategy, |daily, strategy| {
+                daily.trades_opened += 1;
+                daily.total_volume += decimal_to_f32(event.size);
+                strategy.trades_opened += 1;
+            })
+            .map_err(|e| {
+                warn!("Failed to update daily stats: {e}");
+                e
+            })?;
+
+            Ok::<i32, diesel::result::Error>(id)
         });
 
-        debug!(id = ?id, strategy = %event.strategy, "Recorded trade open");
-        id
+        match id {
+            Ok(id) => {
+                debug!(id = id, strategy = %event.strategy, "Recorded trade open");
+                Some(id)
+            }
+            Err(e) => {
+                warn!("Transaction failed: {e}");
+                None
+            }
+        }
     }
 
     /// Record a trade closing.
@@ -338,12 +393,26 @@ impl StatsRecorder {
                 return;
             }
         };
+        let _ = self.update_daily_stats_with_conn(&mut conn, date, strategy, updater);
+    }
 
+    /// Helper to update daily stats with an existing connection (for use in transactions).
+    fn update_daily_stats_with_conn<F>(
+        &self,
+        conn: &mut SqliteConnection,
+        date: &str,
+        strategy: &str,
+        updater: F,
+    ) -> Result<(), diesel::result::Error>
+    where
+        F: FnOnce(&mut DailyStatsRow, &mut StrategyDailyStatsRow),
+    {
         // Upsert daily stats
         let mut daily: DailyStatsRow = daily_stats::table
             .filter(daily_stats::date.eq(date))
-            .first(&mut conn)
-            .unwrap_or_else(|_| DailyStatsRow {
+            .first(conn)
+            .optional()?
+            .unwrap_or_else(|| DailyStatsRow {
                 date: date.to_string(),
                 ..Default::default()
             });
@@ -355,8 +424,9 @@ impl StatsRecorder {
             strategy_daily_stats::table
                 .filter(strategy_daily_stats::date.eq(date))
                 .filter(strategy_daily_stats::strategy.eq(strategy))
-                .first(&mut conn)
-                .unwrap_or_else(|_| StrategyDailyStatsRow {
+                .first(conn)
+                .optional()?
+                .unwrap_or_else(|| StrategyDailyStatsRow {
                     date: date.to_string(),
                     strategy: strategy.to_string(),
                     ..Default::default()
@@ -366,16 +436,18 @@ impl StatsRecorder {
         updater(&mut daily, &mut strat);
 
         // Save daily stats
-        let _ = diesel::replace_into(daily_stats::table)
+        diesel::replace_into(daily_stats::table)
             .values(&daily)
-            .execute(&mut conn);
+            .execute(conn)?;
 
         // Save strategy stats (if applicable)
         if !strategy.is_empty() {
-            let _ = diesel::replace_into(strategy_daily_stats::table)
+            diesel::replace_into(strategy_daily_stats::table)
                 .values(&strat)
-                .execute(&mut conn);
+                .execute(conn)?;
         }
+
+        Ok(())
     }
 
     /// Prune old raw records, keeping aggregated daily stats.

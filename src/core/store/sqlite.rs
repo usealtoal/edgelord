@@ -7,7 +7,7 @@ use super::RelationStore;
 use crate::core::db::model::RelationRow;
 use crate::core::db::schema::relations;
 use crate::core::db::DbPool;
-use crate::core::domain::{Relation, RelationId, RelationKind};
+use crate::core::domain::{MarketId, Relation, RelationId, RelationKind};
 use crate::error::{Error, Result};
 
 /// SQLite-backed relation store.
@@ -21,16 +21,35 @@ impl SqliteRelationStore {
         Self { pool }
     }
 
-    fn to_row(relation: &Relation) -> RelationRow {
-        RelationRow {
+    fn to_row(relation: &Relation) -> Result<RelationRow> {
+        Self::to_row_with(
+            relation,
+            |kind| serde_json::to_string(kind).map_err(|e| Error::Parse(e.to_string())),
+            |market_ids| {
+                serde_json::to_string(market_ids).map_err(|e| Error::Parse(e.to_string()))
+            },
+        )
+    }
+
+    fn to_row_with<F1, F2>(
+        relation: &Relation,
+        serialize_kind: F1,
+        serialize_market_ids: F2,
+    ) -> Result<RelationRow>
+    where
+        F1: FnOnce(&RelationKind) -> Result<String>,
+        F2: FnOnce(&[&MarketId]) -> Result<String>,
+    {
+        let market_ids = relation.market_ids();
+        Ok(RelationRow {
             id: relation.id.to_string(),
-            kind: serde_json::to_string(&relation.kind).unwrap_or_default(),
+            kind: serialize_kind(&relation.kind)?,
             confidence: relation.confidence as f32,
             reasoning: relation.reasoning.clone(),
             inferred_at: relation.inferred_at.to_rfc3339(),
             expires_at: relation.expires_at.to_rfc3339(),
-            market_ids: serde_json::to_string(&relation.market_ids()).unwrap_or_default(),
-        }
+            market_ids: serialize_market_ids(&market_ids)?,
+        })
     }
 
     fn from_row(row: RelationRow) -> Result<Relation> {
@@ -56,7 +75,7 @@ impl SqliteRelationStore {
 
 impl RelationStore for SqliteRelationStore {
     async fn save(&self, relation: &Relation) -> Result<()> {
-        let row = Self::to_row(relation);
+        let row = Self::to_row(relation)?;
         let mut conn = self
             .pool
             .get()
@@ -131,6 +150,33 @@ impl RelationStore for SqliteRelationStore {
             .map_err(|e| Error::Database(e.to_string()))?;
 
         Ok(deleted)
+    }
+}
+
+impl SqliteRelationStore {
+    #[cfg(test)]
+    async fn save_with_serializers<F1, F2>(
+        &self,
+        relation: &Relation,
+        serialize_kind: F1,
+        serialize_market_ids: F2,
+    ) -> Result<()>
+    where
+        F1: FnOnce(&RelationKind) -> Result<String>,
+        F2: FnOnce(&[&MarketId]) -> Result<String>,
+    {
+        let row = Self::to_row_with(relation, serialize_kind, serialize_market_ids)?;
+        let mut conn = self
+            .pool
+            .get()
+            .map_err(|e| Error::Connection(e.to_string()))?;
+
+        diesel::replace_into(relations::table)
+            .values(&row)
+            .execute(&mut conn)
+            .map_err(|e| Error::Database(e.to_string()))?;
+
+        Ok(())
     }
 }
 
@@ -225,5 +271,42 @@ mod tests {
 
         let remaining = store.list(true).await.unwrap();
         assert_eq!(remaining.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn save_returns_error_on_invalid_json() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m1"), MarketId::new("m2")] },
+            0.85,
+            "Test reasoning".to_string(),
+        );
+        let result = store
+            .save_with_serializers(
+                &relation,
+                |_| Err(Error::Parse("forced kind error".to_string())),
+                |_| Ok("[]".to_string()),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(Error::Parse(_))),
+            "Expected parse error when serialization fails"
+        );
+
+        let result = store
+            .save_with_serializers(
+                &relation,
+                |_| Ok("{\"ok\":true}".to_string()),
+                |_| Err(Error::Parse("forced market_ids error".to_string())),
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(Error::Parse(_))),
+            "Expected parse error when market_ids serialization fails"
+        );
     }
 }

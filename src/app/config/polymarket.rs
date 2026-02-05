@@ -64,6 +64,50 @@ impl Default for PolymarketConnectionConfig {
     }
 }
 
+/// Polymarket HTTP client configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PolymarketHttpConfig {
+    /// Request timeout in milliseconds.
+    #[serde(default = "default_http_timeout_ms")]
+    pub timeout_ms: u64,
+    /// Connect timeout in milliseconds.
+    #[serde(default = "default_http_connect_timeout_ms")]
+    pub connect_timeout_ms: u64,
+    /// Maximum number of retry attempts for transient failures.
+    #[serde(default = "default_http_retry_max_attempts")]
+    pub retry_max_attempts: u32,
+    /// Backoff between retries in milliseconds.
+    #[serde(default = "default_http_retry_backoff_ms")]
+    pub retry_backoff_ms: u64,
+}
+
+const fn default_http_timeout_ms() -> u64 {
+    5000
+}
+
+const fn default_http_connect_timeout_ms() -> u64 {
+    2000
+}
+
+const fn default_http_retry_max_attempts() -> u32 {
+    3
+}
+
+const fn default_http_retry_backoff_ms() -> u64 {
+    500
+}
+
+impl Default for PolymarketHttpConfig {
+    fn default() -> Self {
+        Self {
+            timeout_ms: default_http_timeout_ms(),
+            connect_timeout_ms: default_http_connect_timeout_ms(),
+            retry_max_attempts: default_http_retry_max_attempts(),
+            retry_backoff_ms: default_http_retry_backoff_ms(),
+        }
+    }
+}
+
 /// Polymarket market filter configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketFilterConfig {
@@ -310,6 +354,9 @@ pub struct PolymarketConfig {
     /// Connection management configuration.
     #[serde(default)]
     pub connections: PolymarketConnectionConfig,
+    /// HTTP client configuration for REST API calls.
+    #[serde(default)]
+    pub http: PolymarketHttpConfig,
     /// Market filter configuration.
     #[serde(default)]
     pub market_filter: PolymarketFilterConfig,
@@ -342,6 +389,7 @@ impl Default for PolymarketConfig {
             api_url: default_polymarket_api_url(),
             chain_id: default_polymarket_chain_id(),
             connections: PolymarketConnectionConfig::default(),
+            http: PolymarketHttpConfig::default(),
             market_filter: PolymarketFilterConfig::default(),
             scoring: PolymarketScoringConfig::default(),
             dedup: PolymarketDedupConfig::default(),

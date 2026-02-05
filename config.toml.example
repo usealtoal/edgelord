@@ -31,8 +31,9 @@ database = "edgelord.db"
 # Which exchange to connect to (currently only "polymarket")
 exchange = "polymarket"
 
-# Polymarket-specific configuration
-[polymarket]
+# Exchange-specific configuration
+[exchange_config]
+type = "polymarket"
 # Environment: "testnet" or "mainnet"
 # IMPORTANT: Use testnet for testing, mainnet for real trading
 environment = "testnet"
@@ -47,14 +48,21 @@ ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
 
 # Connection management
-[polymarket.connections]
+[exchange_config.connections]
 connection_ttl_secs = 120           # How long connections live
 preemptive_reconnect_secs = 30      # Reconnect this many secs before TTL
 max_connections = 10                # Max simultaneous connections
 subscriptions_per_connection = 500  # Max subscriptions per connection
 
+# HTTP client settings for REST calls
+[exchange_config.http]
+timeout_ms = 5000                    # Request timeout (ms)
+connect_timeout_ms = 2000            # Connect timeout (ms)
+retry_max_attempts = 3               # Retries on transient errors
+retry_backoff_ms = 500               # Backoff between retries (ms)
+
 # Market filtering - which markets to monitor
-[polymarket.market_filter]
+[exchange_config.market_filter]
 max_markets = 500                   # Maximum markets to track
 max_subscriptions = 2000            # Maximum token subscriptions
 min_volume_24h = 1000.0             # Minimum 24h volume ($)
@@ -65,7 +73,7 @@ include_multi_outcome = true        # Include 3+ outcome markets
 max_outcomes = 20                   # Skip markets with more outcomes
 
 # Scoring weights for market prioritization
-[polymarket.scoring.weights]
+[exchange_config.scoring.weights]
 liquidity = 0.0                     # Disabled until Phase 2
 spread = 0.0                        # Disabled until Phase 2
 opportunity = 0.50                  # Primary factor (price imbalance)
@@ -73,13 +81,13 @@ outcome_count = 0.40                # More outcomes = more potential
 activity = 0.10                     # Placeholder
 
 # Bonus multipliers for outcome counts
-[polymarket.scoring.outcome_bonus]
+[exchange_config.scoring.outcome_bonus]
 binary = 1.0                        # 2-outcome markets
 three_to_five = 1.5                 # 3-5 outcome markets
 six_plus = 2.0                      # 6+ outcome markets
 
 # Deduplication settings
-[polymarket.dedup]
+[exchange_config.dedup]
 enabled = true
 strategy = "hash"                   # "hash", "timestamp", or "content"
 fallback = "timestamp"

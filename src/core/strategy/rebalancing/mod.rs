@@ -212,6 +212,7 @@ pub fn detect_rebalancing(
     let mut total_cost = Decimal::ZERO;
     let mut min_volume = Decimal::MAX;
 
+    // Fail closed if any required order book is missing.
     for token_id in token_ids {
         let book = cache.get(token_id)?;
         let ask = book.best_ask()?;

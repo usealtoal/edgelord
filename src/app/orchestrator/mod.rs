@@ -12,6 +12,7 @@ mod handler;
 
 use std::sync::Arc;
 
+use tokio::sync::watch;
 use tracing::{debug, info, warn};
 
 use crate::app::config::Config;
@@ -36,9 +37,113 @@ use handler::handle_market_event;
 /// Main application orchestrator.
 pub(crate) struct Orchestrator;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HealthStatus {
+    Healthy,
+    Unhealthy(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct HealthCheck {
+    name: &'static str,
+    critical: bool,
+    status: HealthStatus,
+}
+
+impl HealthCheck {
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn critical(&self) -> bool {
+        self.critical
+    }
+
+    pub fn status(&self) -> &HealthStatus {
+        &self.status
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        matches!(self.status, HealthStatus::Healthy)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HealthReport {
+    checks: Vec<HealthCheck>,
+}
+
+impl HealthReport {
+    pub fn checks(&self) -> &[HealthCheck] {
+        &self.checks
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.checks
+            .iter()
+            .filter(|check| check.critical())
+            .all(HealthCheck::is_healthy)
+    }
+}
+
+pub fn health_check(config: &Config) -> HealthReport {
+    let network = config.network();
+    let mut checks = Vec::new();
+
+    checks.push(HealthCheck {
+        name: "database",
+        critical: true,
+        status: if config.database.trim().is_empty() {
+            HealthStatus::Unhealthy("database path is empty".to_string())
+        } else {
+            HealthStatus::Healthy
+        },
+    });
+
+    checks.push(HealthCheck {
+        name: "exchange_api",
+        critical: true,
+        status: if network.api_url.trim().is_empty() {
+            HealthStatus::Unhealthy("api_url is empty".to_string())
+        } else {
+            HealthStatus::Healthy
+        },
+    });
+
+    checks.push(HealthCheck {
+        name: "exchange_ws",
+        critical: true,
+        status: if network.ws_url.trim().is_empty() {
+            HealthStatus::Unhealthy("ws_url is empty".to_string())
+        } else {
+            HealthStatus::Healthy
+        },
+    });
+
+    checks.push(HealthCheck {
+        name: "strategies",
+        critical: true,
+        status: if config.strategies.enabled.is_empty() {
+            HealthStatus::Unhealthy("no strategies enabled".to_string())
+        } else {
+            HealthStatus::Healthy
+        },
+    });
+
+    HealthReport { checks }
+}
+
 impl Orchestrator {
     /// Run the main application loop.
     pub async fn run(config: Config) -> Result<()> {
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        Self::run_with_shutdown(config, shutdown_rx).await
+    }
+
+    pub async fn run_with_shutdown(
+        config: Config,
+        mut shutdown: watch::Receiver<bool>,
+    ) -> Result<()> {
         info!(exchange = ?config.exchange, dry_run = config.dry_run, "Starting edgelord");
 
         // Initialize shared state
@@ -206,8 +311,7 @@ impl Orchestrator {
             (Arc::new(OrderBookCache::new()), None)
         };
 
-        // Keep handle alive (drop on shutdown)
-        let _cluster_handle = cluster_handle;
+        let cluster_handle = cluster_handle;
 
         // Create data stream with reconnection support
         let inner_stream = ExchangeFactory::create_data_stream(&config);
@@ -221,20 +325,46 @@ impl Orchestrator {
         let dry_run = config.dry_run;
 
         // Event loop using trait-based stream
-        while let Some(event) = data_stream.next_event().await {
-            handle_market_event(
-                event,
-                &cache,
-                &registry,
-                &strategies,
-                executor.clone(),
-                &risk_manager,
-                &notifiers,
-                &state,
-                &stats_recorder,
-                &position_manager,
-                dry_run,
-            );
+        loop {
+            tokio::select! {
+                result = shutdown.changed() => {
+                    match result {
+                        Ok(_) => {
+                            if *shutdown.borrow() {
+                                info!("Shutdown signal received");
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            info!("Shutdown channel closed");
+                            break;
+                        }
+                    }
+                }
+                event = data_stream.next_event() => {
+                    let Some(event) = event else {
+                        warn!("Market data stream ended");
+                        break;
+                    };
+                    handle_market_event(
+                        event,
+                        &cache,
+                        &registry,
+                        &strategies,
+                        executor.clone(),
+                        &risk_manager,
+                        &notifiers,
+                        &state,
+                        &stats_recorder,
+                        &position_manager,
+                        dry_run,
+                    );
+                }
+            }
+        }
+
+        if let Some(handle) = cluster_handle {
+            handle.shutdown().await;
         }
 
         Ok(())

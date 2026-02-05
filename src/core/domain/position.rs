@@ -1,9 +1,11 @@
 //! Position types for exchange-agnostic position management.
 
 use std::fmt;
+use std::result::Result;
 
 use chrono::{DateTime, Utc};
 
+use crate::error::DomainError;
 use super::{MarketId, Price, TokenId, Volume};
 
 /// Unique position identifier.
@@ -154,6 +156,57 @@ impl Position {
     pub const fn with_trade_id(mut self, trade_id: i32) -> Self {
         self.trade_id = Some(trade_id);
         self
+    }
+
+    /// Create a new position with domain invariant validation.
+    ///
+    /// # Domain Invariants
+    ///
+    /// - `legs` must not be empty
+    /// - `guaranteed_payout` must be greater than `entry_cost`
+    ///
+    /// # Errors
+    ///
+    /// Returns `DomainError` if any invariant is violated.
+    pub fn try_new(
+        id: PositionId,
+        market_id: MarketId,
+        legs: Vec<PositionLeg>,
+        entry_cost: Price,
+        guaranteed_payout: Price,
+        opened_at: DateTime<Utc>,
+        status: PositionStatus,
+    ) -> Result<Self, DomainError> {
+        use std::cmp::Ordering;
+
+        // Validate legs is not empty
+        if legs.is_empty() {
+            return Err(DomainError::EmptyLegs);
+        }
+
+        // Validate guaranteed_payout is greater than entry_cost
+        match guaranteed_payout.partial_cmp(&entry_cost) {
+            Some(Ordering::Greater) => {
+                // Valid case
+            }
+            _ => {
+                return Err(DomainError::PayoutNotGreaterThanCost {
+                    payout: guaranteed_payout,
+                    cost: entry_cost,
+                });
+            }
+        }
+
+        Ok(Self {
+            id,
+            market_id,
+            legs,
+            entry_cost,
+            guaranteed_payout,
+            opened_at,
+            status,
+            trade_id: None,
+        })
     }
 
     /// Get the position ID.
@@ -379,5 +432,74 @@ mod tests {
         position.close(dec!(5));
         assert!(!position.is_open());
         assert!(position.status().is_closed());
+    }
+
+    #[test]
+    fn position_try_new_accepts_valid_inputs() {
+        let legs = vec![PositionLeg::new(
+            TokenId::new("token-1"),
+            dec!(100),
+            dec!(0.45),
+        )];
+
+        let result = Position::try_new(
+            PositionId::new(1),
+            MarketId::new("market-1"),
+            legs,
+            dec!(45),
+            dec!(100),
+            chrono::Utc::now(),
+            PositionStatus::Open,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn position_rejects_payout_not_greater_than_cost() {
+        let legs = vec![PositionLeg::new(
+            TokenId::new("token-1"),
+            dec!(100),
+            dec!(0.45),
+        )];
+
+        // Payout equal to cost should fail
+        let result = Position::try_new(
+            PositionId::new(1),
+            MarketId::new("market-1"),
+            legs.clone(),
+            dec!(45),
+            dec!(45),
+            chrono::Utc::now(),
+            PositionStatus::Open,
+        );
+        assert!(result.is_err());
+
+        // Payout less than cost should fail
+        let result = Position::try_new(
+            PositionId::new(1),
+            MarketId::new("market-1"),
+            legs,
+            dec!(50),
+            dec!(45),
+            chrono::Utc::now(),
+            PositionStatus::Open,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn position_rejects_empty_legs() {
+        // Empty legs should fail
+        let result = Position::try_new(
+            PositionId::new(1),
+            MarketId::new("market-1"),
+            vec![],
+            dec!(95),
+            dec!(100),
+            chrono::Utc::now(),
+            PositionStatus::Open,
+        );
+        assert!(result.is_err());
     }
 }

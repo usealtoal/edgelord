@@ -195,6 +195,9 @@ pub(crate) fn handle_opportunity(
                 rejected_reason: None,
             });
 
+            // Exposure was reserved by risk check, calculate amount for release
+            let reserved_exposure = opp.total_cost() * opp.volume();
+
             if dry_run {
                 info!(
                     market_id = %opp.market_id(),
@@ -202,6 +205,7 @@ pub(crate) fn handle_opportunity(
                     profit = %opp.expected_profit(),
                     "Dry-run: would execute trade"
                 );
+                state.release_exposure(reserved_exposure);
                 state.release_execution(opp.market_id().as_str());
             } else if let Some(exec) = executor {
                 spawn_execution(
@@ -212,8 +216,10 @@ pub(crate) fn handle_opportunity(
                     Arc::clone(stats),
                     opp_id,
                 );
+                // Exposure will be released when execution completes
             } else {
-                // No executor, release the lock
+                // No executor, release the reserved exposure and lock
+                state.release_exposure(reserved_exposure);
                 state.release_execution(opp.market_id().as_str());
             }
         }

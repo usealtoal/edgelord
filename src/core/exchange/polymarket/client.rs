@@ -3,11 +3,15 @@
 //! Provides HTTP client functionality for interacting with the Polymarket
 //! CLOB API to fetch market data and metadata.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
+use tokio::time::sleep;
 
 use super::types::{PolymarketMarket, PolymarketMarketsResponse};
+use crate::app::PolymarketConfig;
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 use crate::error::Result;
 
@@ -18,6 +22,8 @@ use crate::error::Result;
 pub struct PolymarketClient {
     http: HttpClient,
     base_url: String,
+    retry_max_attempts: u32,
+    retry_backoff_ms: u64,
 }
 
 impl PolymarketClient {
@@ -32,6 +38,82 @@ impl PolymarketClient {
         Self {
             http: HttpClient::new(),
             base_url,
+            retry_max_attempts: 1,
+            retry_backoff_ms: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn from_config(config: &PolymarketConfig) -> Self {
+        let http = HttpClient::builder()
+            .timeout(Duration::from_millis(config.http.timeout_ms))
+            .connect_timeout(Duration::from_millis(config.http.connect_timeout_ms))
+            .build()
+            .unwrap_or_else(|err| {
+                warn!(error = %err, "Failed to build HTTP client, using defaults");
+                HttpClient::new()
+            });
+
+        Self {
+            http,
+            base_url: config.api_url.clone(),
+            retry_max_attempts: config.http.retry_max_attempts,
+            retry_backoff_ms: config.http.retry_backoff_ms,
+        }
+    }
+
+    async fn get_with_retry<T>(&self, url: &str) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let mut attempt = 0;
+        let max_attempts = self.retry_max_attempts.max(1);
+
+        loop {
+            attempt += 1;
+            let response = self.http.get(url).send().await;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    if attempt >= max_attempts || !Self::should_retry(&err) {
+                        return Err(err.into());
+                    }
+                    self.backoff(attempt, max_attempts, &err).await;
+                    continue;
+                }
+            };
+
+            let response = match response.error_for_status() {
+                Ok(response) => response,
+                Err(err) => return Err(err.into()),
+            };
+
+            let parsed = response.json::<T>().await;
+            match parsed {
+                Ok(parsed) => return Ok(parsed),
+                Err(err) => {
+                    if attempt >= max_attempts || !Self::should_retry(&err) {
+                        return Err(err.into());
+                    }
+                    self.backoff(attempt, max_attempts, &err).await;
+                }
+            }
+        }
+    }
+
+    fn should_retry(err: &reqwest::Error) -> bool {
+        err.is_timeout() || err.is_connect()
+    }
+
+    async fn backoff(&self, attempt: u32, max_attempts: u32, err: &reqwest::Error) {
+        warn!(
+            attempt,
+            max_attempts,
+            error = %err,
+            "HTTP request failed, retrying"
+        );
+        if self.retry_backoff_ms > 0 {
+            sleep(Duration::from_millis(self.retry_backoff_ms)).await;
         }
     }
 
@@ -51,7 +133,7 @@ impl PolymarketClient {
 
         info!(url = %url, "Fetching active markets");
 
-        let response: PolymarketMarketsResponse = self.http.get(&url).send().await?.json().await?;
+        let response: PolymarketMarketsResponse = self.get_with_retry(&url).await?;
 
         let markets = response.data.unwrap_or_default();
         debug!(count = markets.len(), "Fetched markets");

@@ -1,6 +1,7 @@
 //! Handlers for `install` and `uninstall` commands.
 
 use crate::cli::InstallArgs;
+use crate::error::{Error, Result};
 use std::fs;
 use std::process::Command;
 
@@ -35,7 +36,7 @@ WantedBy=multi-user.target
 }
 
 /// Execute the install command.
-pub fn execute_install(args: &InstallArgs) {
+pub fn execute_install(args: &InstallArgs) -> Result<()> {
     // Get the path to the current binary
     let binary_path = std::env::current_exe()
         .map(|p| p.display().to_string())
@@ -45,34 +46,26 @@ pub fn execute_install(args: &InstallArgs) {
 
     // Check if running as root
     if !is_root() {
-        eprintln!("Error: This command must be run as root (use sudo)");
-        std::process::exit(1);
+        return Err(Error::Connection(
+            "this command must be run as root (use sudo)".to_string(),
+        ));
     }
 
     // Write service file
-    match fs::write(SERVICE_PATH, &service_content) {
-        Ok(()) => println!("✓ Created {SERVICE_PATH}"),
-        Err(e) => {
-            eprintln!("Failed to create service file: {e}");
-            std::process::exit(1);
-        }
-    }
+    fs::write(SERVICE_PATH, &service_content)?;
+    println!("✓ Created {SERVICE_PATH}");
 
     // Reload systemd
-    if run_systemctl(&["daemon-reload"]) {
-        println!("✓ Reloaded systemd daemon");
-    } else {
-        eprintln!("Failed to reload systemd daemon");
-        std::process::exit(1);
+    if !run_systemctl(&["daemon-reload"]) {
+        return Err(Error::Connection("failed to reload systemd daemon".to_string()));
     }
+    println!("✓ Reloaded systemd daemon");
 
     // Enable service
-    if run_systemctl(&["enable", "edgelord"]) {
-        println!("✓ Enabled edgelord service (starts on boot)");
-    } else {
-        eprintln!("Failed to enable service");
-        std::process::exit(1);
+    if !run_systemctl(&["enable", "edgelord"]) {
+        return Err(Error::Connection("failed to enable service".to_string()));
     }
+    println!("✓ Enabled edgelord service (starts on boot)");
 
     // Create status directory with correct ownership
     let status_dir = "/var/run/edgelord";
@@ -93,14 +86,16 @@ pub fn execute_install(args: &InstallArgs) {
     println!("Start with: sudo systemctl start edgelord");
     println!("View logs:  edgelord logs -f");
     println!();
+    Ok(())
 }
 
 /// Execute the uninstall command.
-pub fn execute_uninstall() {
+pub fn execute_uninstall() -> Result<()> {
     // Check if running as root
     if !is_root() {
-        eprintln!("Error: This command must be run as root (use sudo)");
-        std::process::exit(1);
+        return Err(Error::Connection(
+            "this command must be run as root (use sudo)".to_string(),
+        ));
     }
 
     // Stop service if running
@@ -115,13 +110,8 @@ pub fn execute_uninstall() {
 
     // Remove service file
     if std::path::Path::new(SERVICE_PATH).exists() {
-        match fs::remove_file(SERVICE_PATH) {
-            Ok(()) => println!("✓ Removed {SERVICE_PATH}"),
-            Err(e) => {
-                eprintln!("Failed to remove service file: {e}");
-                std::process::exit(1);
-            }
-        }
+        fs::remove_file(SERVICE_PATH)?;
+        println!("✓ Removed {SERVICE_PATH}");
     }
 
     // Reload systemd
@@ -132,6 +122,7 @@ pub fn execute_uninstall() {
     println!();
     println!("Edgelord service has been uninstalled.");
     println!();
+    Ok(())
 }
 
 fn run_systemctl(args: &[&str]) -> bool {

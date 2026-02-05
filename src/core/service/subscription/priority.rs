@@ -5,14 +5,14 @@
 //! priority when expanding subscriptions.
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::sync::RwLock;
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
 use super::{ConnectionEvent, SubscriptionManager};
 use crate::core::domain::{MarketId, MarketScore, TokenId};
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// A priority-based subscription manager that maintains subscriptions
 /// to the highest-scoring markets within resource constraints.
@@ -64,6 +64,24 @@ pub struct PrioritySubscriptionManager {
     max_subscriptions: usize,
 }
 
+fn read_lock<T>(lock: &RwLock<T>) -> Result<RwLockReadGuard<'_, T>> {
+    lock.read()
+        .map_err(|_| Error::Connection("lock poisoned".to_string()))
+}
+
+fn write_lock<T>(lock: &RwLock<T>) -> Result<RwLockWriteGuard<'_, T>> {
+    lock.write()
+        .map_err(|_| Error::Connection("lock poisoned".to_string()))
+}
+
+fn read_lock_or_recover<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(|err| err.into_inner())
+}
+
+fn write_lock_or_recover<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(|err| err.into_inner())
+}
+
 impl PrioritySubscriptionManager {
     /// Create a new priority subscription manager.
     ///
@@ -113,14 +131,14 @@ impl PrioritySubscriptionManager {
     /// manager.register_market_tokens(market_id.clone(), tokens);
     /// ```
     pub fn register_market_tokens(&self, market_id: MarketId, tokens: Vec<TokenId>) {
-        let mut market_tokens = self.market_tokens.write().expect("lock poisoned");
+        let mut market_tokens = write_lock_or_recover(&self.market_tokens);
         market_tokens.insert(market_id, tokens);
     }
 
     /// Get the tokens associated with a market.
     #[cfg(test)]
     fn get_market_tokens(&self, market_id: &MarketId) -> Option<Vec<TokenId>> {
-        let market_tokens = self.market_tokens.read().expect("lock poisoned");
+        let market_tokens = read_lock_or_recover(&self.market_tokens);
         market_tokens.get(market_id).cloned()
     }
 }
@@ -128,8 +146,8 @@ impl PrioritySubscriptionManager {
 #[async_trait]
 impl SubscriptionManager for PrioritySubscriptionManager {
     fn enqueue(&self, markets: Vec<MarketScore>) {
-        let mut pending = self.pending.write().expect("lock poisoned");
-        let active_markets = self.active_markets.read().expect("lock poisoned");
+        let mut pending = write_lock_or_recover(&self.pending);
+        let active_markets = read_lock_or_recover(&self.active_markets);
 
         for market in markets {
             // Skip markets that are already subscribed
@@ -151,25 +169,25 @@ impl SubscriptionManager for PrioritySubscriptionManager {
     }
 
     fn active_subscriptions(&self) -> Vec<TokenId> {
-        let active_tokens = self.active_tokens.read().expect("lock poisoned");
+        let active_tokens = read_lock_or_recover(&self.active_tokens);
         active_tokens.clone()
     }
 
     fn active_count(&self) -> usize {
-        let active_tokens = self.active_tokens.read().expect("lock poisoned");
+        let active_tokens = read_lock_or_recover(&self.active_tokens);
         active_tokens.len()
     }
 
     fn pending_count(&self) -> usize {
-        let pending = self.pending.read().expect("lock poisoned");
+        let pending = read_lock_or_recover(&self.pending);
         pending.len()
     }
 
     async fn expand(&self, count: usize) -> Result<Vec<TokenId>> {
-        let mut pending = self.pending.write().expect("lock poisoned");
-        let mut active_markets = self.active_markets.write().expect("lock poisoned");
-        let mut active_tokens = self.active_tokens.write().expect("lock poisoned");
-        let market_tokens = self.market_tokens.read().expect("lock poisoned");
+        let mut pending = write_lock(&self.pending)?;
+        let mut active_markets = write_lock(&self.active_markets)?;
+        let mut active_tokens = write_lock(&self.active_tokens)?;
+        let market_tokens = read_lock(&self.market_tokens)?;
 
         let mut newly_subscribed = Vec::new();
         let mut markets_added = 0;
@@ -231,9 +249,9 @@ impl SubscriptionManager for PrioritySubscriptionManager {
     }
 
     async fn contract(&self, count: usize) -> Result<Vec<TokenId>> {
-        let mut active_tokens = self.active_tokens.write().expect("lock poisoned");
-        let mut active_markets = self.active_markets.write().expect("lock poisoned");
-        let market_tokens = self.market_tokens.read().expect("lock poisoned");
+        let mut active_tokens = write_lock(&self.active_tokens)?;
+        let mut active_markets = write_lock(&self.active_markets)?;
+        let market_tokens = read_lock(&self.market_tokens)?;
 
         let mut removed_tokens = Vec::new();
         let mut tokens_to_remove = count.min(active_tokens.len());
@@ -301,7 +319,7 @@ impl SubscriptionManager for PrioritySubscriptionManager {
     }
 
     fn is_subscribed(&self, market_id: &MarketId) -> bool {
-        let active_markets = self.active_markets.read().expect("lock poisoned");
+        let active_markets = read_lock_or_recover(&self.active_markets);
         active_markets.contains(market_id)
     }
 
@@ -314,6 +332,7 @@ impl SubscriptionManager for PrioritySubscriptionManager {
 mod tests {
     use super::*;
     use crate::core::domain::ScoreFactors;
+    use crate::error::Error;
 
     fn make_market_id(name: &str) -> MarketId {
         MarketId::new(name)
@@ -710,6 +729,27 @@ mod tests {
 
         let result = manager.on_connection_event(event).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn lock_poisoning_does_not_panic() {
+        use std::sync::Arc;
+
+        let manager = Arc::new(PrioritySubscriptionManager::new(10));
+        let manager_clone = Arc::clone(&manager);
+
+        let handle = std::thread::spawn(move || {
+            let _guard = manager_clone.pending.write().unwrap();
+            panic!("poison lock");
+        });
+
+        assert!(handle.join().is_err());
+
+        let result = manager.expand(1).await;
+        assert!(
+            matches!(result, Err(Error::Connection(_))),
+            "Expected poisoned lock to return a connection error"
+        );
     }
 
     // --- Thread safety test ---
