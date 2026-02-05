@@ -2056,7 +2056,7 @@ git add -A && git commit -m "refactor: remove position ownership from executor"
 
 **Files:**
 - Modify: `config.toml`
-- Modify: `doc/architecture/system-design.md`
+- Modify: `docs/architecture/system-design.md`
 - Modify: `README.md`
 
 **Step 1: Update config.toml with new sections**
@@ -2155,7 +2155,7 @@ git add -A && git commit -m "chore: final cleanup for phase 4"
 - `src/error.rs`
 - `Cargo.toml`
 - `config.toml`
-- `doc/architecture/system-design.md`
+- `docs/architecture/system-design.md`
 - `README.md`
 
 **New Features:**

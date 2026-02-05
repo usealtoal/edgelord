@@ -3,7 +3,7 @@
 > Status: Historical
 > Superseded by: N/A
 > Summary:
-> - Goal: Create professional documentation with styled README and comprehensive docs in doc/.
+> - Goal: Create professional documentation with styled README and comprehensive docs in docs/.
 > - Scope: Getting Started
 > Planned Outcomes:
 > - Getting Started
@@ -12,9 +12,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Create professional documentation with styled README and comprehensive docs in doc/.
+**Goal:** Create professional documentation with styled README and comprehensive docs in docs/.
 
-**Architecture:** Plain markdown files with mermaid diagrams. README gets HTML/CSS header with banner and badges. Full docs live in doc/ with logical structure.
+**Architecture:** Plain markdown files with mermaid diagrams. README gets HTML/CSS header with banner and badges. Full docs live in docs/ with logical structure.
 
 **Tech Stack:** Markdown, Mermaid, HTML/CSS for README header
 
@@ -105,7 +105,7 @@ cp config.toml.example config.toml
 ./target/release/edgelord run
 ```
 
-See [Getting Started](doc/getting-started.md) for detailed setup including environment variables and configuration options.
+See [Getting Started](docs/getting-started.md) for detailed setup including environment variables and configuration options.
 
 ## How It Works
 
@@ -131,12 +131,12 @@ flowchart LR
 
 ## Documentation
 
-- **[Getting Started](doc/getting-started.md)** — Installation, configuration, first run
-- **[Architecture](doc/architecture/overview.md)** — System design and data flow
-- **[Strategies](doc/strategies/overview.md)** — How each detection algorithm works
-- **[Configuration](doc/configuration.md)** — All options explained
+- **[Getting Started](docs/getting-started.md)** — Installation, configuration, first run
+- **[Architecture](docs/architecture/overview.md)** — System design and data flow
+- **[Strategies](docs/strategies/overview.md)** — How each detection algorithm works
+- **[Configuration](docs/configuration.md)** — All options explained
 
-Implementation plans and research notes live in `doc/plans/` and `doc/research/`.
+Implementation plans and research notes live in `docs/plans/` and `docs/research/`.
 
 ## Status
 
@@ -156,10 +156,10 @@ MIT
 
 ---
 
-## Task 3: Create doc/README.md (Documentation Home)
+## Task 3: Create docs/README.md (Documentation Home)
 
 **Files:**
-- Create: `doc/README.md`
+- Create: `docs/README.md`
 
 **Changes:**
 
@@ -192,10 +192,10 @@ Welcome to the edgelord documentation.
 
 ---
 
-## Task 4: Create doc/getting-started.md
+## Task 4: Create docs/getting-started.md
 
 **Files:**
-- Create: `doc/getting-started.md`
+- Create: `docs/getting-started.md`
 
 **Changes:**
 
@@ -306,10 +306,10 @@ If using testnet, no real funds are at risk. Monitor the logs for a few minutes 
 
 ---
 
-## Task 5: Create doc/configuration.md
+## Task 5: Create docs/configuration.md
 
 **Files:**
-- Create: `doc/configuration.md`
+- Create: `docs/configuration.md`
 
 **Changes:**
 
@@ -414,11 +414,11 @@ Run `edgelord run --help` for all options.
 
 ---
 
-## Task 6: Create doc/architecture/overview.md
+## Task 6: Create docs/architecture/overview.md
 
 **Files:**
-- Create: `doc/architecture/overview.md`
-- Delete: `doc/architecture/system-design.md`
+- Create: `docs/architecture/overview.md`
+- Delete: `docs/architecture/system-design.md`
 
 **Changes:**
 
@@ -568,10 +568,10 @@ See [Configuration](../configuration.md) for tuning parameters.
 
 ---
 
-## Task 7: Create doc/strategies/overview.md
+## Task 7: Create docs/strategies/overview.md
 
 **Files:**
-- Create: `doc/strategies/overview.md`
+- Create: `docs/strategies/overview.md`
 
 **Changes:**
 
@@ -641,17 +641,17 @@ Each strategy has its own config section. See individual strategy docs for param
 2. Implement `Strategy` trait
 3. Add config struct with `#[derive(Deserialize)]`
 4. Register in strategy builder
-5. Document in `doc/strategies/`
+5. Document in `docs/strategies/`
 ```
 
 **Verification:** File exists
 
 ---
 
-## Task 8: Create doc/strategies/single-condition.md
+## Task 8: Create docs/strategies/single-condition.md
 
 **Files:**
-- Create: `doc/strategies/single-condition.md`
+- Create: `docs/strategies/single-condition.md`
 
 **Changes:**
 
@@ -759,10 +759,10 @@ min_profit = 0.50    # Minimum profit ($0.50)
 
 ---
 
-## Task 9: Create doc/strategies/market-rebalancing.md
+## Task 9: Create docs/strategies/market-rebalancing.md
 
 **Files:**
-- Create: `doc/strategies/market-rebalancing.md`
+- Create: `docs/strategies/market-rebalancing.md`
 
 **Changes:**
 
@@ -875,10 +875,10 @@ max_outcomes = 10    # Skip markets with more outcomes
 
 ---
 
-## Task 10: Create doc/strategies/combinatorial.md
+## Task 10: Create docs/strategies/combinatorial.md
 
 **Files:**
-- Create: `doc/strategies/combinatorial.md`
+- Create: `docs/strategies/combinatorial.md`
 
 **Changes:**
 
@@ -995,9 +995,9 @@ Disabled by default because it requires dependency configuration that doesn't ex
 ## Task 11: Clean Up Old Files
 
 **Files:**
-- Delete: `doc/architecture/system-design.md`
+- Delete: `docs/architecture/system-design.md`
 
-**Verification:** `ls doc/architecture/` shows only `overview.md`
+**Verification:** `ls docs/architecture/` shows only `overview.md`
 
 ---
 
@@ -1007,15 +1007,15 @@ After all tasks:
 
 ```bash
 # Check structure
-ls -la doc/
-ls -la doc/architecture/
-ls -la doc/strategies/
+ls -la docs/
+ls -la docs/architecture/
+ls -la docs/strategies/
 
 # Verify README renders (view on GitHub or use grip)
 cat README.md | head -60
 
 # Check all links work
-grep -r "\](.*\.md)" doc/ | head -20
+grep -r "\](.*\.md)" docs/ | head -20
 ```
 
 All new files should exist, old system-design.md deleted, README has styled header.

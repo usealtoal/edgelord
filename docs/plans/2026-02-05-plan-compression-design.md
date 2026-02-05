@@ -9,7 +9,7 @@ Compress older plan files by prepending a uniform, short header so readers can u
 
 ## Scope
 
-- Target: all files in `doc/plans/` dated before **2026-02-05**
+- Target: all files in `docs/plans/` dated before **2026-02-05**
 - Action: prepend a standardized “Historical Summary” header
 - No file moves, renames, or deletions
 - Exclude plans dated 2026-02-05 or later

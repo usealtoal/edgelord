@@ -44,7 +44,7 @@ export ANTHROPIC_API_KEY="..."         # For relation inference
 ./target/release/edgelord run
 ```
 
-See [Getting Started](doc/getting-started.md) for detailed setup.
+See [Getting Started](docs/getting-started.md) for detailed setup.
 
 ## How It Works
 
@@ -103,17 +103,17 @@ enabled = true              # Real-time cluster arbitrage detection
 provider = "anthropic"      # or "openai"
 ```
 
-See [Configuration](doc/configuration.md) for all options.
+See [Configuration](docs/configuration.md) for all options.
 
 ## Documentation
 
-- **[Getting Started](doc/getting-started.md)** — Installation, configuration, first run
-- **[Configuration](doc/configuration.md)** — All options explained
-- **[Strategies](doc/strategies/overview.md)** — How each detection algorithm works
-- **[Architecture](doc/architecture/overview.md)** — System design and data flow
-- **[Deployment](doc/deployment/)** — VPS, wallet, Telegram alerts, operations
+- **[Getting Started](docs/getting-started.md)** — Installation, configuration, first run
+- **[Configuration](docs/configuration.md)** — All options explained
+- **[Strategies](docs/strategies/overview.md)** — How each detection algorithm works
+- **[Architecture](docs/architecture/overview.md)** — System design and data flow
+- **[Deployment](docs/deployment/)** — VPS, wallet, Telegram alerts, operations
 
-Implementation plans and research notes live in `doc/plans/` and `doc/research/`.
+Implementation plans and research notes live in `docs/plans/` and `docs/research/`.
 
 ## Project Structure
 

@@ -1795,5 +1795,5 @@ pub(crate) fn build_strategy_registry(
 
 - [Arbitrage-Free Combinatorial Market Making (arXiv:1606.02825)](https://arxiv.org/abs/1606.02825)
 - [Unravelling the Probabilistic Forest (arXiv:2508.03474)](https://arxiv.org/abs/2508.03474)
-- Existing: `doc/research/combinatorial-future.md`
+- Existing: `docs/research/combinatorial-future.md`
 - Existing: `src/core/strategy/combinatorial/`

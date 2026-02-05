@@ -118,7 +118,7 @@ See individual strategy docs for all parameters.
 2. Implement `Strategy` trait
 3. Add config struct with `#[derive(Deserialize)]`
 4. Register in `StrategyRegistryBuilder`
-5. Document in `doc/strategies/`
+5. Document in `docs/strategies/`
 
 ## Testing Strategies
 

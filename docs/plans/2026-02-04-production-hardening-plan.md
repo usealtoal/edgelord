@@ -594,5 +594,5 @@ Expected: PASS
 ## Notes
 #
 - Breaking changes are acceptable. Remove or rename config/CLI fields without compatibility shims.
-- Document the final config schema and operational defaults in `doc/configuration.md`.
+- Document the final config schema and operational defaults in `docs/configuration.md`.
 - Use typed errors, avoid `unwrap()`/`expect()` in production paths.

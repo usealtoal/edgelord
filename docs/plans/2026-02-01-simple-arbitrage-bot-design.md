@@ -737,7 +737,7 @@ edgelord/
 │   └── integration/
 │       └── testnet.rs
 │
-└── doc/
+└── docs/
     ├── research/
     ├── architecture/
     └── plans/

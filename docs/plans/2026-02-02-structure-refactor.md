@@ -412,7 +412,7 @@ git commit -m "refactor: reorganize src/ into core/ and app/ hierarchy"
 ### Task 4.2: Update documentation
 
 **Files:**
-- Modify: `doc/architecture/system-design.md`
+- Modify: `docs/architecture/system-design.md`
 
 Update the module structure section to reflect new hierarchy.
 

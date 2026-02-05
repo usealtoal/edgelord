@@ -644,7 +644,7 @@ git commit -m "test(reconnecting): add unit tests for reconnection logic"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `doc/architecture/system-design.md`
+- Modify: `docs/architecture/system-design.md`
 
 **Step 1: Add reconnection section to README.md Configuration**
 
@@ -714,7 +714,7 @@ circuit_breaker_cooldown_ms = 300000  # 5 minute cooldown
 **Step 3: Commit**
 
 ```bash
-git add README.md doc/architecture/system-design.md
+git add README.md docs/architecture/system-design.md
 git commit -m "docs: add reconnection configuration and architecture"
 ```
 
