@@ -21,7 +21,7 @@ database = "edgelord.db"
 
 # Raw data retention (days). Older opportunities/trades are pruned.
 # Aggregated daily_stats are kept forever for historical analysis.
-# Use `edgelord stats prune --days N` to manually prune.
+# Use `edgelord statistics prune --days N` to manually prune.
 # retention_days = 30
 
 # =============================================================================
