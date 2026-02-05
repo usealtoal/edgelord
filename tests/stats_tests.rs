@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use edgelord::core::db::{create_pool, run_migrations};
+use edgelord::core::db::run_migrations;
 use edgelord::core::service::stats::{RecordedOpportunity, StatsRecorder};
 use rust_decimal_macros::dec;
 
@@ -87,8 +87,6 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         .collect();
 
     // Verify we got IDs for all inserts
-    // Note: SQLite may serialize writes, so some concurrent inserts may fail
-    // The important thing is that returned IDs are correct and unique
     assert!(
         returned_ids.len() > 0,
         "At least some inserts should return IDs"
@@ -104,10 +102,10 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         "All returned IDs should be unique"
     );
     
-    // Verify we got at least some successful inserts (allowing for SQLite concurrency limits)
-    assert!(
-        returned_ids.len() >= NUM_THREADS / 2,
-        "At least half of the inserts should succeed (got {} unique IDs)", 
+    assert_eq!(
+        returned_ids.len(),
+        NUM_THREADS,
+        "All inserts should return IDs (got {} unique IDs)",
         returned_ids.len()
     );
 

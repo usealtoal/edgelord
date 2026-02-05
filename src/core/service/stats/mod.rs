@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
+use diesel::OptionalExtension;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::SqliteConnection;
 use rust_decimal::Decimal;
@@ -15,6 +16,7 @@ use tracing::{debug, warn};
 use crate::core::db::model::{
     DailyStatsRow, NewOpportunityRow, NewTradeRow, OpportunityRow, StrategyDailyStatsRow, TradeRow,
 };
+use crate::core::db;
 use crate::core::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
 
 /// Recorded opportunity for stats tracking.
@@ -134,10 +136,9 @@ impl StatsRecorder {
             }
         };
 
-        // Configure SQLite busy timeout for this connection
-        // WAL mode is database-level and set elsewhere
-        let _ = diesel::sql_query("PRAGMA busy_timeout=5000")
-            .execute(&mut conn);
+        if let Err(e) = db::configure_sqlite_connection(&mut conn) {
+            warn!("Failed to configure SQLite connection: {e}");
+        }
 
         // Execute insert and daily stats update in a transaction
         let id = conn.transaction(|conn| {
@@ -218,30 +219,50 @@ impl StatsRecorder {
             }
         };
 
-        let result = diesel::insert_into(trades::table)
-            .values(&row)
-            .execute(&mut conn);
-
-        if let Err(e) = result {
-            warn!("Failed to record trade open: {e}");
-            return None;
+        if let Err(e) = db::configure_sqlite_connection(&mut conn) {
+            warn!("Failed to configure SQLite connection: {e}");
         }
 
-        let id: Option<i32> = trades::table
-            .select(diesel::dsl::max(trades::id))
-            .first(&mut conn)
-            .ok()
-            .flatten();
+        let id = conn.transaction(|conn| {
+            diesel::insert_into(trades::table)
+                .values(&row)
+                .execute(conn)
+                .map_err(|e| {
+                    warn!("Failed to record trade open: {e}");
+                    e
+                })?;
 
-        // Update daily stats
-        self.update_daily_stats(&today, &event.strategy, |daily, strategy| {
-            daily.trades_opened += 1;
-            daily.total_volume += decimal_to_f32(event.size);
-            strategy.trades_opened += 1;
+            let id: i32 = diesel::sql_query("SELECT last_insert_rowid() AS id")
+                .get_result::<LastInsertRowId>(conn)
+                .map(|row| row.id)
+                .map_err(|e| {
+                    warn!("Failed to get trade ID: {e}");
+                    e
+                })?;
+
+            self.update_daily_stats_with_conn(conn, &today, &event.strategy, |daily, strategy| {
+                daily.trades_opened += 1;
+                daily.total_volume += decimal_to_f32(event.size);
+                strategy.trades_opened += 1;
+            })
+            .map_err(|e| {
+                warn!("Failed to update daily stats: {e}");
+                e
+            })?;
+
+            Ok::<i32, diesel::result::Error>(id)
         });
 
-        debug!(id = ?id, strategy = %event.strategy, "Recorded trade open");
-        id
+        match id {
+            Ok(id) => {
+                debug!(id = id, strategy = %event.strategy, "Recorded trade open");
+                Some(id)
+            }
+            Err(e) => {
+                warn!("Transaction failed: {e}");
+                None
+            }
+        }
     }
 
     /// Record a trade closing.
@@ -390,7 +411,8 @@ impl StatsRecorder {
         let mut daily: DailyStatsRow = daily_stats::table
             .filter(daily_stats::date.eq(date))
             .first(conn)
-            .unwrap_or_else(|_| DailyStatsRow {
+            .optional()?
+            .unwrap_or_else(|| DailyStatsRow {
                 date: date.to_string(),
                 ..Default::default()
             });
@@ -403,7 +425,8 @@ impl StatsRecorder {
                 .filter(strategy_daily_stats::date.eq(date))
                 .filter(strategy_daily_stats::strategy.eq(strategy))
                 .first(conn)
-                .unwrap_or_else(|_| StrategyDailyStatsRow {
+                .optional()?
+                .unwrap_or_else(|| StrategyDailyStatsRow {
                     date: date.to_string(),
                     strategy: strategy.to_string(),
                     ..Default::default()

@@ -4,6 +4,7 @@ pub mod model;
 pub mod schema;
 
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::prelude::*;
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
@@ -35,6 +36,17 @@ pub fn run_migrations(pool: &DbPool) -> Result<()> {
     let mut conn = pool.get().map_err(|e| crate::error::Error::Connection(e.to_string()))?;
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| crate::error::Error::Connection(e.to_string()))?;
+    Ok(())
+}
+
+/// Configure SQLite connection pragmas used for stats writes.
+///
+/// # Errors
+/// Returns an error if a pragma fails to apply.
+pub fn configure_sqlite_connection(conn: &mut SqliteConnection) -> Result<()> {
+    diesel::sql_query("PRAGMA busy_timeout=5000")
+        .execute(conn)
+        .map_err(|e| crate::error::Error::Database(e.to_string()))?;
     Ok(())
 }
 
