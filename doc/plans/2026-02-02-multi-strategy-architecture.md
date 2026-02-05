@@ -1,5 +1,15 @@
 # Multi-Strategy Architecture with Frank-Wolfe + ILP
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Transform edgelord into a modular, multi-strategy arbitrage system supporting single-condition, market rebalancing, and combinatorial (Frank-Wolfe + ILP) detection strategies with configurable solver backends.
+> - Scope: Target Structure
+> Planned Outcomes:
+> - Target Structure
+> - Task 1: Add Solver Dependencies
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Transform edgelord into a modular, multi-strategy arbitrage system supporting single-condition, market rebalancing, and combinatorial (Frank-Wolfe + ILP) detection strategies with configurable solver backends.

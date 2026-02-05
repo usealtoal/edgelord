@@ -3,6 +3,9 @@
 mod config;
 mod orchestrator;
 mod state;
+
+pub mod statistics;
+pub mod status;
 pub mod wallet;
 
 pub use config::{

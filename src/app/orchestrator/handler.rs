@@ -12,7 +12,7 @@ use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
 use crate::core::service::position::{CloseReason, PositionManager};
-use crate::core::service::stats::{RecordedOpportunity, StatsRecorder};
+use crate::core::service::statistics::{RecordedOpportunity, StatsRecorder};
 use crate::core::service::{
     Event, NotifierRegistry, OpportunityEvent, RiskCheckResult, RiskEvent, RiskManager,
 };

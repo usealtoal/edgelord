@@ -11,6 +11,11 @@
 - **Singular nouns** for modules: `domain/`, `exchange/`, `service/`
 - **Underscores** for compound words: `order_book.rs` not `orderbook.rs`
 
+### Exceptions
+
+- `types.rs` is allowed where `type.rs` would conflict with Rust keywords.
+- `statistics/` is allowed as a singular service name for aggregated stats.
+
 ### Types
 
 | Suffix | Purpose | Example |
@@ -28,8 +33,8 @@
 
 ## File Size Limits
 
-- **Hard limit: 400 lines of implementation code**
-- Tests colocated with implementation are encouraged and **do not count** toward the limit
+- **Hard limit: 400 SLOC (source lines of code)**
+- Tests (including `#[cfg(test)]` modules) **do not count** toward the limit
 - Approaching limit? Split into submodule
 - Prefer many small files over few large ones
 - Exception: Generated code, test fixtures
@@ -44,6 +49,7 @@
 
 ```
 cli → app → {exchange, strategy, service} → domain
+strategy → solver
 ```
 
 ### Layer Responsibilities
@@ -52,7 +58,7 @@ cli → app → {exchange, strategy, service} → domain
 |-------|---------------|----------------|
 | `domain` | Nothing | Pure data types, no I/O |
 | `exchange` | `domain` | Exchange abstraction & implementations |
-| `strategy` | `domain`, `cache` | Detection algorithms |
+| `strategy` | `domain`, `cache`, `solver` | Detection algorithms |
 | `service` | `domain`, `cache`, `solver` | Runtime services (cluster detection, governor) |
 | `solver` | `domain` | LP/ILP solver abstraction |
 | `cache` | `domain` | Stateful caches (order books, clusters) |
@@ -160,10 +166,14 @@ src/
 │
 ├── app/                        # Application layer
 │   ├── mod.rs
-│   ├── orchestrator.rs         # Main event loop
+│   ├── orchestrator/           # Main event loop
+│   │   ├── mod.rs
+│   │   ├── handler.rs
+│   │   └── execution.rs
 │   ├── builder.rs              # AppBuilder
 │   ├── state.rs
 │   ├── status.rs
+│   ├── statistics.rs
 │   └── config/                 # Configuration
 │       ├── mod.rs              # Main Config + load()
 │       ├── profile.rs          # Profile, ResourceConfig

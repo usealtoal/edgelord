@@ -1,8 +1,8 @@
 //! Integration tests for multi-exchange abstraction.
 
-use edgelord::core::domain::{
-    Market, MarketId, MarketRegistry, Opportunity, OpportunityLeg, Outcome, TokenId,
-};
+mod support;
+
+use edgelord::core::domain::{MarketId, Opportunity, OpportunityLeg, TokenId};
 use edgelord::core::exchange::polymarket::PolymarketExchangeConfig;
 use edgelord::core::exchange::{ExchangeConfig, MarketInfo, OutcomeInfo};
 use rust_decimal_macros::dec;
@@ -47,32 +47,20 @@ fn test_exchange_config_parses_binary_markets() {
 
 #[test]
 fn test_generic_market_registry_workflow() {
-    let mut registry = MarketRegistry::new();
-
-    // Add binary market
-    let binary = Market::new(
-        MarketId::from("m1"),
+    let binary = support::market::make_binary_market(
+        "m1",
         "Will it rain?",
-        vec![
-            Outcome::new(TokenId::from("yes-1"), "Yes"),
-            Outcome::new(TokenId::from("no-1"), "No"),
-        ],
+        "yes-1",
+        "no-1",
         dec!(1.00),
     );
-    registry.add(binary);
-
-    // Add multi-outcome market
-    let multi = Market::new(
-        MarketId::from("m2"),
+    let multi = support::market::make_multi_market(
+        "m2",
         "Who wins?",
-        vec![
-            Outcome::new(TokenId::from("trump"), "Trump"),
-            Outcome::new(TokenId::from("biden"), "Biden"),
-            Outcome::new(TokenId::from("other"), "Other"),
-        ],
+        &[("trump", "Trump"), ("biden", "Biden"), ("other", "Other")],
         dec!(1.00),
     );
-    registry.add(multi);
+    let registry = support::registry::make_registry(vec![binary, multi]);
 
     // Verify lookups work
     assert_eq!(registry.len(), 2);
@@ -121,22 +109,19 @@ fn test_opportunity_with_configurable_payout() {
 #[test]
 fn test_market_payout_flows_through() {
     // Create market with specific payout
-    let market = Market::new(
-        MarketId::from("m1"),
+    let market = support::market::make_binary_market(
+        "m1",
         "Test?",
-        vec![
-            Outcome::new(TokenId::from("yes"), "Yes"),
-            Outcome::new(TokenId::from("no"), "No"),
-        ],
-        dec!(5.00), // Custom payout
+        "yes",
+        "no",
+        dec!(5.00),
     );
 
     // Payout is accessible
     assert_eq!(market.payout(), dec!(5.00));
 
     // Registry preserves payout
-    let mut registry = MarketRegistry::new();
-    registry.add(market);
+    let registry = support::registry::make_registry(vec![market]);
 
     let retrieved = registry.get_by_token(&TokenId::from("yes")).unwrap();
     assert_eq!(retrieved.payout(), dec!(5.00));

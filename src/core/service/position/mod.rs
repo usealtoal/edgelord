@@ -10,7 +10,7 @@ use tracing::{debug, info};
 
 use crate::core::cache::PositionTracker;
 use crate::core::domain::{MarketId, Position, PositionId, Price};
-use crate::core::service::stats::{StatsRecorder, TradeCloseEvent};
+use crate::core::service::statistics::{StatsRecorder, TradeCloseEvent};
 
 /// Reason for closing a position.
 #[derive(Debug, Clone, PartialEq, Eq)]

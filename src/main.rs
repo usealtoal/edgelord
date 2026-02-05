@@ -1,6 +1,6 @@
 use clap::Parser;
 use edgelord::cli::{
-    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatsCommand, WalletCommand,
+    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand, WalletCommand,
 };
 
 #[tokio::main]
@@ -15,17 +15,21 @@ async fn main() {
             edgelord::cli::status::execute(&args.db);
             Ok(())
         }
-        Commands::Stats(cmd) => match cmd {
-            StatsCommand::Today(args) => edgelord::cli::stats::execute_today(&args.db),
-            StatsCommand::Week(args) => edgelord::cli::stats::execute_week(&args.db),
-            StatsCommand::History(args) => {
-                edgelord::cli::stats::execute_history(&args.db, args.days)
+        Commands::Statistics(cmd) => match cmd {
+            StatisticsCommand::Today(args) => edgelord::cli::statistics::execute_today(&args.db),
+            StatisticsCommand::Week(args) => edgelord::cli::statistics::execute_week(&args.db),
+            StatisticsCommand::History(args) => {
+                edgelord::cli::statistics::execute_history(&args.db, args.days)
             }
-            StatsCommand::Export(args) => {
-                edgelord::cli::stats::execute_export(&args.db, args.days, args.output.as_deref())
+            StatisticsCommand::Export(args) => {
+                edgelord::cli::statistics::execute_export(
+                    &args.db,
+                    args.days,
+                    args.output.as_deref(),
+                )
             }
-            StatsCommand::Prune(args) => {
-                edgelord::cli::stats::execute_prune(&args.db, args.days)
+            StatisticsCommand::Prune(args) => {
+                edgelord::cli::statistics::execute_prune(&args.db, args.days)
             }
         },
         Commands::Config(cmd) => match cmd {

@@ -5,8 +5,9 @@ use tracing::{info, trace};
 
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
-use crate::core::solver::{HiGHSSolver, IlpProblem, LpProblem, VariableBounds};
-use crate::core::strategy::combinatorial::{FrankWolfe, FrankWolfeConfig};
+use crate::core::solver::{
+    FrankWolfe, FrankWolfeConfig, HiGHSSolver, IlpProblem, LpProblem, VariableBounds,
+};
 use crate::error::{Error, Result};
 
 use super::{ClusterDetectionConfig, ClusterOpportunity};

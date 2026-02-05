@@ -6,7 +6,7 @@ pub mod config;
 pub mod logs;
 pub mod run;
 pub mod service;
-pub mod stats;
+pub mod statistics;
 pub mod status;
 pub mod wallet;
 
@@ -33,7 +33,7 @@ pub enum Commands {
 
     /// View trading statistics
     #[command(subcommand)]
-    Stats(StatsCommand),
+    Statistics(StatisticsCommand),
 
     /// Manage configuration
     #[command(subcommand)]
@@ -55,19 +55,19 @@ pub enum Commands {
     Wallet(WalletCommand),
 }
 
-/// Subcommands for `edgelord stats`
+/// Subcommands for `edgelord statistics`
 #[derive(Subcommand, Debug)]
-pub enum StatsCommand {
+pub enum StatisticsCommand {
     /// Today's statistics (default)
-    Today(StatsArgs),
+    Today(StatisticsArgs),
     /// Last 7 days
-    Week(StatsArgs),
+    Week(StatisticsArgs),
     /// Historical view
-    History(StatsHistoryArgs),
+    History(StatisticsHistoryArgs),
     /// Export stats to CSV
-    Export(StatsExportArgs),
+    Export(StatisticsExportArgs),
     /// Prune old records (keeps daily aggregates)
-    Prune(StatsPruneArgs),
+    Prune(StatisticsPruneArgs),
 }
 
 /// Subcommands for `edgelord config`
@@ -126,17 +126,17 @@ pub struct StatusArgs {
     pub db: PathBuf,
 }
 
-/// Arguments for the `stats` subcommand.
+/// Arguments for the `statistics` subcommand.
 #[derive(Parser, Debug)]
-pub struct StatsArgs {
+pub struct StatisticsArgs {
     /// Path to database file
     #[arg(long, default_value = "edgelord.db")]
     pub db: PathBuf,
 }
 
-/// Arguments for `stats history`.
+/// Arguments for `statistics history`.
 #[derive(Parser, Debug)]
-pub struct StatsHistoryArgs {
+pub struct StatisticsHistoryArgs {
     /// Number of days to show
     #[arg(default_value = "30")]
     pub days: u32,
@@ -145,9 +145,9 @@ pub struct StatsHistoryArgs {
     pub db: PathBuf,
 }
 
-/// Arguments for `stats export`.
+/// Arguments for `statistics export`.
 #[derive(Parser, Debug)]
-pub struct StatsExportArgs {
+pub struct StatisticsExportArgs {
     /// Number of days to export
     #[arg(long, default_value = "30")]
     pub days: u32,
@@ -159,9 +159,9 @@ pub struct StatsExportArgs {
     pub db: PathBuf,
 }
 
-/// Arguments for `stats prune`.
+/// Arguments for `statistics prune`.
 #[derive(Parser, Debug)]
-pub struct StatsPruneArgs {
+pub struct StatisticsPruneArgs {
     /// Keep records newer than this many days
     #[arg(long, default_value = "30")]
     pub days: u32,

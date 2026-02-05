@@ -1,5 +1,15 @@
 # Simple Arbitrage Bot Design
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Connect to Polymarket and see live data.
+> - Scope: Single-Condition Arbitrage
+> Planned Outcomes:
+> - Single-Condition Arbitrage
+> - Market Rebalancing
+
+
 > Design document for edgelord v1 — a Polymarket arbitrage bot focused on simple, high-volume opportunities.
 
 ## Scope

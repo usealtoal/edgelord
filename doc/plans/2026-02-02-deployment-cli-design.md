@@ -1,5 +1,14 @@
 # Deployment & CLI Design
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Scope: Global Flags
+> Planned Outcomes:
+> - Global Flags
+> - `run` Subcommand Flags
+
+
 ## Overview
 
 Operational infrastructure for running edgelord locally and on a European VPS, with a polished CLI interface and GitHub Actions deployment pipeline.
