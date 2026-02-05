@@ -1,4 +1,14 @@
 # Production Hardening Implementation Plan
+
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Make edgelord production-ready with strict invariants, typed errors, and reliable execution under failure.
+> - Scope: Task 0.1: Partial-fill recovery policy in executor + orchestrator
+> Planned Outcomes:
+> - Task 0.1: Partial-fill recovery policy in executor + orchestrator
+> - Task 0.2: Execution timeouts and lock release on panic
+
 #
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 #

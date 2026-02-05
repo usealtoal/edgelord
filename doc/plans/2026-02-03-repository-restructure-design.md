@@ -1,5 +1,14 @@
 # Repository Restructure Design
 
+> Status: Historical (superseded)
+> Superseded by: 2026-02-03-repository-restructure-impl.md
+> Summary:
+> - Scope: Megalithic Files
+> Planned Outcomes:
+> - Megalithic Files
+> - Structural Issues
+
+
 ## Goal
 
 Establish a durable, well-organized folder/file structure that:

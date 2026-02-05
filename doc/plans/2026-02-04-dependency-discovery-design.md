@@ -1,5 +1,15 @@
 # Relation Inference Service Design
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Build a service that automatically infers market constraints, caches them, and feeds constraint matrices to the solver.
+> - Scope: Relations
+> Planned Outcomes:
+> - Relations
+> - Newtype IDs
+
+
 > **Date:** 2026-02-04
 > **Status:** Draft
 > **Author:** Subagent (constraint-inference-design)

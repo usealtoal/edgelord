@@ -1,5 +1,15 @@
 # Phase 4: Risk Management + Telegram + Repository Restructure
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Restructure src/ for clean layering, add risk management with position limits and circuit breakers, and implement Telegram notifications for alerts and daily summaries.
+> - Scope: Task 1: Create adapter/polymarket directory structure
+> Planned Outcomes:
+> - Task 1: Create adapter/polymarket directory structure
+> - Task 2: Create app module from app.rs
+
+
 > **Status:** ✅ COMPLETE — Merged in PR #7 on 2026-02-02
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

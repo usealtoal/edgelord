@@ -1,5 +1,14 @@
 # Status File Design
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Scope: Task 1: Add StatusFile struct and writer
+> Planned Outcomes:
+> - Task 1: Add StatusFile struct and writer
+> - Task 2: Wire StatusWriter into orchestrator
+
+
 ## Goal
 
 Enable `edgelord status` to show runtime stats (network, strategies, positions, exposure, today's activity) by having the running app write a JSON status file.

@@ -1,5 +1,14 @@
 # Deployment CLI Implementation Plan
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Add a polished CLI with `run`, `status`, `logs`, `install`, `uninstall` commands, plus GitHub Actions deployment pipeline.
+> - Scope: Configuration Priority
+> Planned Outcomes:
+> - Configuration Priority
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 >
 > **IMPORTANT:** Use one-line commits with NO Claude authorship (no Co-Authored-By lines).

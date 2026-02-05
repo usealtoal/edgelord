@@ -1,5 +1,15 @@
 # CLI, Config & Stats Improvements
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Make edgelord feel like a polished, idiomatic Rust CLI with proper observability.
+> - Scope: CLI Structure
+> Planned Outcomes:
+> - CLI Structure
+> - Config
+
+
 **Goal:** Make edgelord feel like a polished, idiomatic Rust CLI with proper observability.
 
 ## Current State

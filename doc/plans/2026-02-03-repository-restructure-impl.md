@@ -1,5 +1,15 @@
 # Repository Restructure Implementation Plan
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Restructure the edgelord repository to enforce the architecture principles in ARCHITECTURE.md, splitting megalithic files and organizing modules consistently.
+> - Scope: Task 1.1: Rename domain/orderbook.rs to domain/order_book.rs
+> Planned Outcomes:
+> - Task 1.1: Rename domain/orderbook.rs to domain/order_book.rs
+> - Task 1.2: Rename cache/orderbook.rs to cache/order_book.rs
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Restructure the edgelord repository to enforce the architecture principles in ARCHITECTURE.md, splitting megalithic files and organizing modules consistently.

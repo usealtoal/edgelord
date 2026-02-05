@@ -1,5 +1,14 @@
 # Adaptive Subscription Management
 
+> Status: Historical (superseded)
+> Superseded by: 2026-02-03-adaptive-subscription-management-impl.md
+> Summary:
+> - Scope: Goals
+> Planned Outcomes:
+> - Goals
+> - High-Level Components
+
+
 **Date:** 2026-02-03
 **Status:** Proposed
 **Author:** Claude + Ryan

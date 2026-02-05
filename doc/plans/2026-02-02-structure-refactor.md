@@ -1,5 +1,15 @@
 # Structure Refactor Implementation Plan
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Reorganize src/ into a cleaner hierarchy with `core/` containing all library code and `app/` containing application orchestration.
+> - Scope: Task 1.1: Create core/domain/ (move pure types)
+> Planned Outcomes:
+> - Task 1.1: Create core/domain/ (move pure types)
+> - Task 1.2: Move strategy/ to core/
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Reorganize src/ into a cleaner hierarchy with `core/` containing all library code and `app/` containing application orchestration.

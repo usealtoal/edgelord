@@ -1,5 +1,15 @@
 # Codebase Cleanup Implementation Plan
 
+> Status: Historical
+> Superseded by: N/A
+> Summary:
+> - Goal: Address all audit findings - dead code removal/implementation, pattern consistency, documentation gaps, test coverage, and clippy pedantic/nursery warnings.
+> - Scope: Task 1.1: Remove Deprecated detector.rs Module
+> Planned Outcomes:
+> - Task 1.1: Remove Deprecated detector.rs Module
+> - Task 1.2: Remove Unused money::constants Module
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Address all audit findings - dead code removal/implementation, pattern consistency, documentation gaps, test coverage, and clippy pedantic/nursery warnings.

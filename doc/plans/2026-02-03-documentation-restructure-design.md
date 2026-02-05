@@ -1,5 +1,14 @@
 # Documentation Restructure Design
 
+> Status: Historical (superseded)
+> Superseded by: 2026-02-03-documentation-restructure-impl.md
+> Summary:
+> - Scope: Goal
+> Planned Outcomes:
+> - Goal
+> - Design Decisions
+
+
 > **Date:** 2026-02-03
 > **Status:** Approved
 
