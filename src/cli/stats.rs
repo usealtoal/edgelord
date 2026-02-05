@@ -2,75 +2,51 @@
 
 use std::path::Path;
 
-use chrono::{Duration, NaiveDate, Utc};
-use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, Pool};
 use rust_decimal::Decimal;
 
-use crate::core::db::model::{DailyStatsRow, StrategyDailyStatsRow};
-use crate::core::db::schema::{daily_stats, strategy_daily_stats, trades};
-use crate::core::service::statistics::StatsSummary;
+use crate::app::stats;
 use crate::error::Result;
 
 /// Execute `stats` (default: today).
 pub fn execute_today(db_path: &Path) -> Result<()> {
-    let pool = connect(db_path)?;
-    let today = Utc::now().date_naive();
-    print_summary(&pool, today, today, "Today")?;
-    print_strategy_breakdown(&pool, today, today)?;
-    print_open_positions(&pool)?;
+    let (from, to, label) = stats::date_range_today();
+    let summary = stats::load_summary(db_path, from, to)?;
+    print_summary(&summary, &label)?;
+
+    let rows = stats::load_strategy_breakdown(db_path, from, to)?;
+    print_strategy_breakdown(&rows)?;
+
+    let open_positions = stats::load_open_positions(db_path)?;
+    print_open_positions(open_positions);
+
     Ok(())
 }
 
 /// Execute `stats week`.
 pub fn execute_week(db_path: &Path) -> Result<()> {
-    let pool = connect(db_path)?;
-    let today = Utc::now().date_naive();
-    let week_ago = today - Duration::days(7);
-    print_summary(&pool, week_ago, today, "Last 7 Days")?;
-    print_strategy_breakdown(&pool, week_ago, today)?;
+    let (from, to, label) = stats::date_range_week();
+    let summary = stats::load_summary(db_path, from, to)?;
+    print_summary(&summary, &label)?;
+
+    let rows = stats::load_strategy_breakdown(db_path, from, to)?;
+    print_strategy_breakdown(&rows)?;
+
     Ok(())
 }
 
 /// Execute `stats history [days]`.
 pub fn execute_history(db_path: &Path, days: u32) -> Result<()> {
-    let pool = connect(db_path)?;
-    let today = Utc::now().date_naive();
-    let start = today - Duration::days(i64::from(days));
-    let label = format!("Last {days} Days");
-    print_summary(&pool, start, today, &label)?;
-    print_daily_breakdown(&pool, start, today)?;
+    let (from, to, label) = stats::date_range_history(days);
+    let summary = stats::load_summary(db_path, from, to)?;
+    print_summary(&summary, &label)?;
+
+    let rows = stats::load_daily_rows(db_path, from, to)?;
+    print_daily_breakdown(&rows)?;
+
     Ok(())
 }
 
-fn connect(db_path: &Path) -> Result<Pool<ConnectionManager<SqliteConnection>>> {
-    let db_url = format!("sqlite://{}", db_path.display());
-    let manager = ConnectionManager::<SqliteConnection>::new(&db_url);
-    let pool = Pool::builder()
-        .max_size(1)
-        .build(manager)
-        .map_err(|e| crate::error::Error::Config(crate::error::ConfigError::Other(e.to_string())))?;
-    Ok(pool)
-}
-
-fn print_summary(
-    pool: &Pool<ConnectionManager<SqliteConnection>>,
-    from: NaiveDate,
-    to: NaiveDate,
-    label: &str,
-) -> Result<()> {
-    let mut conn = pool.get().map_err(|e| {
-        crate::error::Error::Config(crate::error::ConfigError::Other(e.to_string()))
-    })?;
-
-    let rows: Vec<DailyStatsRow> = daily_stats::table
-        .filter(daily_stats::date.ge(from.to_string()))
-        .filter(daily_stats::date.le(to.to_string()))
-        .load(&mut conn)
-        .unwrap_or_default();
-
-    let summary = aggregate_rows(&rows);
-
+fn print_summary(summary: &stats::StatsSummary, label: &str) -> Result<()> {
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!("  {label}");
@@ -78,10 +54,7 @@ fn print_summary(
     println!();
     println!("  Opportunities");
     println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    Detected:     {:>8}",
-        summary.opportunities_detected
-    );
+    println!("    Detected:     {:>8}", summary.opportunities_detected);
     println!(
         "    Executed:     {:>8}    ({:.1}%)",
         summary.opportunities_executed,
@@ -91,10 +64,7 @@ fn print_summary(
             0.0
         }
     );
-    println!(
-        "    Rejected:     {:>8}",
-        summary.opportunities_rejected
-    );
+    println!("    Rejected:     {:>8}", summary.opportunities_rejected);
     println!();
     println!("  Trades");
     println!("  ─────────────────────────────────────────────────────────");
@@ -128,32 +98,17 @@ fn print_summary(
     Ok(())
 }
 
-fn print_strategy_breakdown(
-    pool: &Pool<ConnectionManager<SqliteConnection>>,
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Result<()> {
-    let mut conn = pool.get().map_err(|e| {
-        crate::error::Error::Config(crate::error::ConfigError::Other(e.to_string()))
-    })?;
-
-    let rows: Vec<StrategyDailyStatsRow> = strategy_daily_stats::table
-        .filter(strategy_daily_stats::date.ge(from.to_string()))
-        .filter(strategy_daily_stats::date.le(to.to_string()))
-        .load(&mut conn)
-        .unwrap_or_default();
-
+fn print_strategy_breakdown(rows: &[stats::StrategyDailyStatsRow]) -> Result<()> {
     if rows.is_empty() {
         return Ok(());
     }
 
-    // Group by strategy
-    let mut by_strategy: std::collections::HashMap<String, StrategyDailyStatsRow> =
+    let mut by_strategy: std::collections::HashMap<String, stats::StrategyDailyStatsRow> =
         std::collections::HashMap::new();
 
     for row in rows {
         let entry = by_strategy.entry(row.strategy.clone()).or_insert_with(|| {
-            StrategyDailyStatsRow {
+            stats::StrategyDailyStatsRow {
                 date: String::new(),
                 strategy: row.strategy.clone(),
                 ..Default::default()
@@ -176,19 +131,19 @@ fn print_strategy_breakdown(
     );
     println!("    {:─<20} {:─>8} {:─>8} {:─>10} {:─>8}", "", "", "", "", "");
 
-    for (name, stats) in &by_strategy {
-        let total = stats.win_count + stats.loss_count;
+    for (name, stats_row) in &by_strategy {
+        let total = stats_row.win_count + stats_row.loss_count;
         let win_rate = if total > 0 {
-            format!("{:.1}%", stats.win_count as f64 / total as f64 * 100.0)
+            format!("{:.1}%", stats_row.win_count as f64 / total as f64 * 100.0)
         } else {
             "N/A".to_string()
         };
         println!(
             "    {:20} {:>8} {:>8} ${:>9.2} {:>8}",
             name,
-            stats.opportunities_detected,
-            stats.trades_closed,
-            stats.profit_realized,
+            stats_row.opportunities_detected,
+            stats_row.trades_closed,
+            stats_row.profit_realized,
             win_rate
         );
     }
@@ -197,22 +152,7 @@ fn print_strategy_breakdown(
     Ok(())
 }
 
-fn print_daily_breakdown(
-    pool: &Pool<ConnectionManager<SqliteConnection>>,
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Result<()> {
-    let mut conn = pool.get().map_err(|e| {
-        crate::error::Error::Config(crate::error::ConfigError::Other(e.to_string()))
-    })?;
-
-    let rows: Vec<DailyStatsRow> = daily_stats::table
-        .filter(daily_stats::date.ge(from.to_string()))
-        .filter(daily_stats::date.le(to.to_string()))
-        .order(daily_stats::date.desc())
-        .load(&mut conn)
-        .unwrap_or_default();
-
+fn print_daily_breakdown(rows: &[stats::DailyStatsRow]) -> Result<()> {
     if rows.is_empty() {
         println!("  No data for this period.");
         println!();
@@ -245,33 +185,17 @@ fn print_daily_breakdown(
     Ok(())
 }
 
-fn print_open_positions(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Result<()> {
-    let mut conn = pool.get().map_err(|e| {
-        crate::error::Error::Config(crate::error::ConfigError::Other(e.to_string()))
-    })?;
-
-    let open_count: i64 = trades::table
-        .filter(trades::status.eq("open"))
-        .count()
-        .get_result(&mut conn)
-        .unwrap_or(0);
-
+fn print_open_positions(open_count: i64) {
     if open_count > 0 {
         println!("  Open Positions: {open_count}");
-        println!();
     }
-
-    Ok(())
 }
+
 
 /// Execute `stats export [--days N] [--output FILE]`.
 pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Result<()> {
-    let pool = connect(db_path)?;
-    let today = Utc::now().date_naive();
-    let start = today - Duration::days(i64::from(days));
-
-    let stats_recorder = crate::core::service::statistics::StatsRecorder::new(pool);
-    let csv = stats_recorder.export_daily_csv(start, today);
+    let (from, to, _) = stats::date_range_history(days);
+    let csv = stats::export_daily_csv(db_path, from, to)?;
 
     if let Some(path) = output {
         std::fs::write(path, &csv)?;
@@ -285,32 +209,11 @@ pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Resul
 
 /// Execute `stats prune [--days N]`.
 pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
-    let pool = connect(db_path)?;
-    let stats_recorder = crate::core::service::statistics::StatsRecorder::new(pool);
-    stats_recorder.prune_old_records(retention_days);
+    stats::prune_old_records(db_path, retention_days)?;
     println!(
         "Pruned opportunities and trades older than {} days",
         retention_days
     );
     println!("Note: Aggregated daily stats are preserved.");
     Ok(())
-}
-
-fn aggregate_rows(rows: &[DailyStatsRow]) -> StatsSummary {
-    use rust_decimal::prelude::FromPrimitive;
-
-    let mut summary = StatsSummary::default();
-    for row in rows {
-        summary.opportunities_detected += i64::from(row.opportunities_detected);
-        summary.opportunities_executed += i64::from(row.opportunities_executed);
-        summary.opportunities_rejected += i64::from(row.opportunities_rejected);
-        summary.trades_opened += i64::from(row.trades_opened);
-        summary.trades_closed += i64::from(row.trades_closed);
-        summary.profit_realized += Decimal::from_f32(row.profit_realized).unwrap_or_default();
-        summary.loss_realized += Decimal::from_f32(row.loss_realized).unwrap_or_default();
-        summary.win_count += i64::from(row.win_count);
-        summary.loss_count += i64::from(row.loss_count);
-        summary.total_volume += Decimal::from_f32(row.total_volume).unwrap_or_default();
-    }
-    summary
 }
