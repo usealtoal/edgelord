@@ -16,12 +16,14 @@ use tracing::{debug, info, warn};
 
 use crate::app::config::Config;
 use crate::app::state::AppState;
-use crate::app::status::{StatusConfig, StatusWriter};
 use crate::core::cache::OrderBookCache;
+use crate::core::db;
 use crate::core::domain::{MarketRegistry, TokenId};
 use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
 use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::position::PositionManager;
+use crate::core::service::stats;
 use crate::core::service::{Event, OpportunityEvent, RiskManager};
 use crate::error::Result;
 
@@ -42,36 +44,20 @@ impl Orchestrator {
         // Initialize shared state
         let state = Arc::new(AppState::new(config.risk.clone().into()));
 
+        // Initialize database and run migrations
+        let db_url = format!("sqlite://{}", config.database);
+        let db_pool = db::create_pool(&db_url)?;
+        db::run_migrations(&db_pool)?;
+        let stats_recorder = stats::create_recorder(db_pool);
+        let position_manager = Arc::new(PositionManager::new(Arc::clone(&stats_recorder)));
+        info!(database = %config.database, "Database initialized");
+
         // Initialize risk manager
         let risk_manager = Arc::new(RiskManager::new(state.clone()));
 
         // Initialize notifiers
         let notifiers = Arc::new(build_notifier_registry(&config));
         info!(notifiers = notifiers.len(), "Notifiers initialized");
-
-        // Initialize status writer if configured
-        let status_writer = config.status_file.as_ref().map(|path| {
-            let network = config.network();
-            let status_config = StatusConfig {
-                exchange: format!("{:?}", config.exchange).to_lowercase(),
-                environment: network.environment.to_string(),
-                chain_id: if network.chain_id > 0 {
-                    Some(network.chain_id)
-                } else {
-                    None
-                },
-                strategies: config.strategies.enabled.clone(),
-                dry_run: config.dry_run,
-            };
-            Arc::new(StatusWriter::new(path.clone(), status_config))
-        });
-        if let Some(ref writer) = status_writer {
-            // Write initial status file at startup
-            if let Err(e) = writer.write() {
-                warn!(error = %e, "Failed to write initial status file");
-            }
-            info!(path = ?config.status_file, "Status file writer initialized");
-        }
 
         // Initialize executor (optional)
         let executor = init_executor(&config).await;
@@ -245,8 +231,9 @@ impl Orchestrator {
                 &risk_manager,
                 &notifiers,
                 &state,
+                &stats_recorder,
+                &position_manager,
                 dry_run,
-                status_writer.clone(),
             );
         }
 

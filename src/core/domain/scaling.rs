@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn scaling_recommendation_clone() {
         let original = ScalingRecommendation::contract(50);
-        let cloned = original.clone();
+        let cloned = original;
 
         assert_eq!(cloned, original);
     }

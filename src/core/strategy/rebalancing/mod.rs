@@ -114,12 +114,13 @@ impl Strategy for MarketRebalancingStrategy {
                 .map(|leg| OpportunityLeg::new(leg.token_id.clone(), leg.price))
                 .collect();
 
-            let opp = Opportunity::new(
+            let opp = Opportunity::with_strategy(
                 rebal_opp.market_id.clone(),
                 &rebal_opp.question,
                 legs,
                 rebal_opp.volume,
                 payout,
+                "market_rebalancing",
             );
             return vec![opp];
         }
@@ -482,11 +483,9 @@ mod tests {
             max_outcomes: 10,
         });
 
-        let tokens = vec![
-            TokenId::from("candidate-a"),
+        let tokens = [TokenId::from("candidate-a"),
             TokenId::from("candidate-b"),
-            TokenId::from("candidate-c"),
-        ];
+            TokenId::from("candidate-c")];
 
         // Create market with $1 payout
         let outcomes_1 = vec![

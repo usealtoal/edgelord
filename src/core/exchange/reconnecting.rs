@@ -246,6 +246,7 @@ mod tests {
             }
         }
 
+        #[allow(dead_code)]
         fn with_connect_results(mut self, results: Vec<Result<(), Error>>) -> Self {
             self.connect_results = results.into();
             self

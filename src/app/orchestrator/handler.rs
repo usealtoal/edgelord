@@ -1,23 +1,26 @@
 //! Event and opportunity handling.
 
 use std::sync::Arc;
+use std::time::Instant;
 
+use rust_decimal::Decimal;
 use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
 use crate::app::state::AppState;
-use crate::app::status::StatusWriter;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
+use crate::core::service::position::{CloseReason, PositionManager};
+use crate::core::service::stats::{RecordedOpportunity, StatsRecorder};
 use crate::core::service::{
     Event, NotifierRegistry, OpportunityEvent, RiskCheckResult, RiskEvent, RiskManager,
 };
 use crate::core::strategy::{DetectionContext, StrategyRegistry};
 use crate::error::RiskError;
-use rust_decimal::Decimal;
 
 /// Handle incoming market events from the data stream.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_market_event(
     event: MarketEvent,
     cache: &OrderBookCache,
@@ -27,9 +30,12 @@ pub(crate) fn handle_market_event(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    stats: &Arc<StatsRecorder>,
+    position_manager: &Arc<PositionManager>,
     dry_run: bool,
-    status_writer: Option<Arc<StatusWriter>>,
 ) {
+    let start = Instant::now();
+
     match event {
         MarketEvent::OrderBookSnapshot { token_id, book } => {
             cache.update(book);
@@ -45,12 +51,16 @@ pub(crate) fn handle_market_event(
                         risk_manager,
                         notifiers,
                         state,
+                        stats,
                         cache,
                         dry_run,
-                        status_writer.clone(),
                     );
                 }
             }
+
+            // Record processing latency
+            let elapsed = start.elapsed();
+            stats.record_latency(elapsed.as_millis() as u32);
         }
         MarketEvent::OrderBookDelta { token_id, book } => {
             // For now, treat deltas as snapshots (simple approach)
@@ -67,11 +77,46 @@ pub(crate) fn handle_market_event(
                         risk_manager,
                         notifiers,
                         state,
+                        stats,
                         cache,
                         dry_run,
-                        status_writer.clone(),
                     );
                 }
+            }
+
+            // Record processing latency
+            let elapsed = start.elapsed();
+            stats.record_latency(elapsed.as_millis() as u32);
+        }
+        MarketEvent::MarketSettled {
+            market_id,
+            winning_outcome,
+            payout_per_share,
+        } => {
+            info!(
+                market_id = %market_id,
+                winning_outcome = %winning_outcome,
+                payout = %payout_per_share,
+                "Market settled"
+            );
+
+            // Close all positions for this market
+            let mut tracker = state.positions_mut();
+            let total_pnl = position_manager.close_all_for_market(
+                &mut tracker,
+                &market_id,
+                |pos| PositionManager::calculate_arbitrage_pnl(pos, payout_per_share),
+                CloseReason::Settlement {
+                    winning_outcome: winning_outcome.clone(),
+                },
+            );
+
+            if total_pnl != Decimal::ZERO {
+                info!(
+                    market_id = %market_id,
+                    total_pnl = %total_pnl,
+                    "Positions settled"
+                );
             }
         }
         MarketEvent::Connected => {
@@ -90,9 +135,9 @@ pub(crate) fn handle_opportunity(
     risk_manager: &RiskManager,
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
+    stats: &Arc<StatsRecorder>,
     cache: &OrderBookCache,
     dry_run: bool,
-    status_writer: Option<Arc<StatusWriter>>,
 ) {
     // Check for duplicate execution
     if !state.try_lock_execution(opp.market_id().as_str()) {
@@ -111,6 +156,17 @@ pub(crate) fn handle_opportunity(
                 "Slippage check failed, rejecting opportunity"
             );
             state.release_execution(opp.market_id().as_str());
+
+            // Record rejected opportunity
+            stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: false,
+                rejected_reason: Some("slippage_too_high".to_string()),
+            });
+
             let error = RiskError::SlippageTooHigh {
                 actual: slippage,
                 max: max_slippage,
@@ -123,20 +179,22 @@ pub(crate) fn handle_opportunity(
         }
     }
 
-    // Record opportunity in status file
-    if let Some(ref writer) = status_writer {
-        writer.record_opportunity();
-        if let Err(e) = writer.write() {
-            warn!(error = %e, "Failed to write status file");
-        }
-    }
-
     // Notify opportunity detected
     notifiers.notify_all(Event::OpportunityDetected(OpportunityEvent::from(&opp)));
 
     // Check risk
     match risk_manager.check(&opp) {
         RiskCheckResult::Approved => {
+            // Record approved opportunity
+            let opp_id = stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: !dry_run,
+                rejected_reason: None,
+            });
+
             if dry_run {
                 info!(
                     market_id = %opp.market_id(),
@@ -146,13 +204,30 @@ pub(crate) fn handle_opportunity(
                 );
                 state.release_execution(opp.market_id().as_str());
             } else if let Some(exec) = executor {
-                spawn_execution(exec, opp, notifiers.clone(), state.clone(), status_writer);
+                spawn_execution(
+                    exec,
+                    opp,
+                    notifiers.clone(),
+                    state.clone(),
+                    Arc::clone(stats),
+                    opp_id,
+                );
             } else {
                 // No executor, release the lock
                 state.release_execution(opp.market_id().as_str());
             }
         }
         RiskCheckResult::Rejected(error) => {
+            // Record rejected opportunity
+            stats.record_opportunity(&RecordedOpportunity {
+                strategy: opp.strategy().to_string(),
+                market_ids: vec![opp.market_id().to_string()],
+                edge: opp.edge(),
+                expected_profit: opp.expected_profit(),
+                executed: false,
+                rejected_reason: Some(format!("{error}")),
+            });
+
             // Release the lock on rejection
             state.release_execution(opp.market_id().as_str());
             notifiers.notify_all(Event::RiskRejected(RiskEvent::new(

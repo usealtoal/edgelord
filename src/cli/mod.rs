@@ -2,9 +2,11 @@
 
 pub mod banner;
 pub mod check;
+pub mod config;
 pub mod logs;
 pub mod run;
 pub mod service;
+pub mod stats;
 pub mod status;
 pub mod wallet;
 
@@ -27,7 +29,15 @@ pub enum Commands {
     Run(RunArgs),
 
     /// Show service status
-    Status,
+    Status(StatusArgs),
+
+    /// View trading statistics
+    #[command(subcommand)]
+    Stats(StatsCommand),
+
+    /// Manage configuration
+    #[command(subcommand)]
+    Config(ConfigCommand),
 
     /// Tail service logs
     Logs(LogsArgs),
@@ -43,6 +53,32 @@ pub enum Commands {
     /// Manage wallet approvals
     #[command(subcommand)]
     Wallet(WalletCommand),
+}
+
+/// Subcommands for `edgelord stats`
+#[derive(Subcommand, Debug)]
+pub enum StatsCommand {
+    /// Today's statistics (default)
+    Today(StatsArgs),
+    /// Last 7 days
+    Week(StatsArgs),
+    /// Historical view
+    History(StatsHistoryArgs),
+    /// Export stats to CSV
+    Export(StatsExportArgs),
+    /// Prune old records (keeps daily aggregates)
+    Prune(StatsPruneArgs),
+}
+
+/// Subcommands for `edgelord config`
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommand {
+    /// Generate a new config file from template
+    Init(ConfigInitArgs),
+    /// Show effective configuration (with defaults)
+    Show(ConfigPathArg),
+    /// Validate configuration file
+    Validate(ConfigPathArg),
 }
 
 /// Subcommands for `edgelord service`
@@ -80,6 +116,69 @@ pub struct ConfigPathArg {
     /// Path to configuration file
     #[arg(short, long, default_value = "config.toml")]
     pub config: PathBuf,
+}
+
+/// Arguments for the `status` subcommand.
+#[derive(Parser, Debug)]
+pub struct StatusArgs {
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for the `stats` subcommand.
+#[derive(Parser, Debug)]
+pub struct StatsArgs {
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `stats history`.
+#[derive(Parser, Debug)]
+pub struct StatsHistoryArgs {
+    /// Number of days to show
+    #[arg(default_value = "30")]
+    pub days: u32,
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `stats export`.
+#[derive(Parser, Debug)]
+pub struct StatsExportArgs {
+    /// Number of days to export
+    #[arg(long, default_value = "30")]
+    pub days: u32,
+    /// Output file (stdout if not specified)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `stats prune`.
+#[derive(Parser, Debug)]
+pub struct StatsPruneArgs {
+    /// Keep records newer than this many days
+    #[arg(long, default_value = "30")]
+    pub days: u32,
+    /// Path to database file
+    #[arg(long, default_value = "edgelord.db")]
+    pub db: PathBuf,
+}
+
+/// Arguments for `config init`.
+#[derive(Parser, Debug)]
+pub struct ConfigInitArgs {
+    /// Output path for config file
+    #[arg(default_value = "config.toml")]
+    pub path: PathBuf,
+    /// Overwrite if file exists
+    #[arg(long)]
+    pub force: bool,
 }
 
 /// Arguments for the `run` subcommand.

@@ -83,10 +83,10 @@ async fn test_subscription_limits_respected() {
     // Register 3 markets with 2 tokens each
     for i in 0..3 {
         manager.register_market_tokens(
-            MarketId::new(&format!("m{i}")),
+            MarketId::new(format!("m{i}")),
             vec![
-                TokenId::new(&format!("m{i}-yes")),
-                TokenId::new(&format!("m{i}-no")),
+                TokenId::new(format!("m{i}-yes")),
+                TokenId::new(format!("m{i}-no")),
             ],
         );
     }
@@ -94,7 +94,7 @@ async fn test_subscription_limits_respected() {
     let scores: Vec<_> = (0..3)
         .map(|i| {
             MarketScore::new(
-                MarketId::new(&format!("m{i}")),
+                MarketId::new(format!("m{i}")),
                 ScoreFactors::default(),
                 1.0 - (i as f64 * 0.1), // Decreasing priority
             )
@@ -116,8 +116,8 @@ async fn test_priority_ordering() {
     // Register 3 markets with different priorities
     for i in 0..3 {
         manager.register_market_tokens(
-            MarketId::new(&format!("priority-{i}")),
-            vec![TokenId::new(&format!("priority-{i}-token"))],
+            MarketId::new(format!("priority-{i}")),
+            vec![TokenId::new(format!("priority-{i}-token"))],
         );
     }
 
@@ -233,15 +233,15 @@ async fn test_contract_removes_subscriptions() {
     // Register and subscribe to markets
     for i in 0..3 {
         manager.register_market_tokens(
-            MarketId::new(&format!("market-{i}")),
-            vec![TokenId::new(&format!("market-{i}-token"))],
+            MarketId::new(format!("market-{i}")),
+            vec![TokenId::new(format!("market-{i}-token"))],
         );
     }
 
     let scores: Vec<_> = (0..3)
         .map(|i| {
             MarketScore::new(
-                MarketId::new(&format!("market-{i}")),
+                MarketId::new(format!("market-{i}")),
                 ScoreFactors::default(),
                 0.5,
             )

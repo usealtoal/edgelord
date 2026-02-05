@@ -5,8 +5,12 @@ pub mod schema;
 
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::SqliteConnection;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
 use crate::error::Result;
+
+/// Embedded migrations from the migrations/ directory.
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Database connection pool type alias.
 pub type DbPool = Pool<ConnectionManager<SqliteConnection>>;
@@ -21,6 +25,17 @@ pub fn create_pool(database_url: &str) -> Result<DbPool> {
         .max_size(5)
         .build(manager)
         .map_err(|e| crate::error::Error::Connection(e.to_string()))
+}
+
+/// Run all pending database migrations.
+///
+/// # Errors
+/// Returns an error if migrations fail.
+pub fn run_migrations(pool: &DbPool) -> Result<()> {
+    let mut conn = pool.get().map_err(|e| crate::error::Error::Connection(e.to_string()))?;
+    conn.run_pending_migrations(MIGRATIONS)
+        .map_err(|e| crate::error::Error::Connection(e.to_string()))?;
+    Ok(())
 }
 
 #[cfg(test)]

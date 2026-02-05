@@ -225,8 +225,10 @@ mod tests {
 
     #[test]
     fn test_applies_only_with_dependencies() {
-        let mut config = CombinatorialConfig::default();
-        config.enabled = true;
+        let config = CombinatorialConfig {
+            enabled: true,
+            ..Default::default()
+        };
 
         let strategy = CombinatorialStrategy::new(config);
 

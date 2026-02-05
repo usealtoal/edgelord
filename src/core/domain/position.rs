@@ -121,6 +121,8 @@ pub struct Position {
     guaranteed_payout: Price,
     opened_at: DateTime<Utc>,
     status: PositionStatus,
+    /// Associated trade ID for stats tracking.
+    trade_id: Option<i32>,
 }
 
 impl Position {
@@ -143,7 +145,15 @@ impl Position {
             guaranteed_payout,
             opened_at,
             status,
+            trade_id: None,
         }
+    }
+
+    /// Create a new position with an associated trade ID.
+    #[must_use]
+    pub const fn with_trade_id(mut self, trade_id: i32) -> Self {
+        self.trade_id = Some(trade_id);
+        self
     }
 
     /// Get the position ID.
@@ -186,6 +196,12 @@ impl Position {
     #[must_use]
     pub const fn status(&self) -> &PositionStatus {
         &self.status
+    }
+
+    /// Get the associated trade ID (for stats tracking).
+    #[must_use]
+    pub const fn trade_id(&self) -> Option<i32> {
+        self.trade_id
     }
 
     /// Calculate the expected profit (`guaranteed_payout` - `entry_cost`).

@@ -54,6 +54,7 @@ pub struct Opportunity {
     legs: Vec<OpportunityLeg>,
     volume: Decimal,
     payout: Decimal,
+    strategy: String,
 }
 
 impl Opportunity {
@@ -72,7 +73,34 @@ impl Opportunity {
             legs,
             volume,
             payout,
+            strategy: String::new(),
         }
+    }
+
+    /// Create a new opportunity with strategy name.
+    #[must_use]
+    pub fn with_strategy(
+        market_id: MarketId,
+        question: impl Into<String>,
+        legs: Vec<OpportunityLeg>,
+        volume: Decimal,
+        payout: Decimal,
+        strategy: impl Into<String>,
+    ) -> Self {
+        Self {
+            market_id,
+            question: question.into(),
+            legs,
+            volume,
+            payout,
+            strategy: strategy.into(),
+        }
+    }
+
+    /// Get the strategy name.
+    #[must_use]
+    pub fn strategy(&self) -> &str {
+        &self.strategy
     }
 
     /// Get the market ID.

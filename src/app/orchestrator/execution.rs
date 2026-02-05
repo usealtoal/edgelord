@@ -2,17 +2,17 @@
 
 use std::sync::Arc;
 
+use rust_decimal::Decimal;
 use tracing::{error, info, warn};
 
 use crate::app::state::AppState;
-use crate::app::status::StatusWriter;
 use crate::core::domain::{
     ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
     PositionStatus, TokenId,
 };
 use crate::core::exchange::ArbitrageExecutor;
+use crate::core::service::stats::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
-use rust_decimal::Decimal;
 
 /// Spawn async execution without blocking message processing.
 pub(crate) fn spawn_execution(
@@ -20,10 +20,10 @@ pub(crate) fn spawn_execution(
     opportunity: Opportunity,
     notifiers: Arc<NotifierRegistry>,
     state: Arc<AppState>,
-    status_writer: Option<Arc<StatusWriter>>,
+    stats: Arc<StatsRecorder>,
+    opportunity_id: Option<i32>,
 ) {
     let market_id = opportunity.market_id().to_string();
-    let expected_profit = opportunity.expected_profit();
 
     tokio::spawn(async move {
         let result = executor.execute_arbitrage(&opportunity).await;
@@ -34,21 +34,38 @@ pub(crate) fn spawn_execution(
         match result {
             Ok(exec_result) => {
                 match &exec_result {
-                    ArbitrageExecutionResult::Success { .. } => {
-                        record_position(&state, &opportunity);
-                        // Record execution with profit in status file
-                        if let Some(ref writer) = status_writer {
-                            writer.record_execution(expected_profit);
-                            // Update runtime stats
-                            let positions = state.positions();
-                            let open_count = positions.open_positions().count();
-                            let exposure = positions.total_exposure();
-                            let max_exposure = state.risk_limits().max_total_exposure;
-                            writer.update_runtime(open_count, exposure, max_exposure);
-                            if let Err(e) = writer.write() {
-                                warn!(error = %e, "Failed to write status file");
-                            }
-                        }
+                    ArbitrageExecutionResult::Success { filled: _ } => {
+                        // Record trade open first to get trade_id
+                        let trade_id = if let Some(opp_id) = opportunity_id {
+                            let legs: Vec<TradeLeg> = opportunity
+                                .legs()
+                                .iter()
+                                .map(|leg| TradeLeg {
+                                    token_id: leg.token_id().to_string(),
+                                    side: "buy".to_string(),
+                                    price: leg.ask_price(),
+                                    size: opportunity.volume(),
+                                })
+                                .collect();
+
+                            stats.record_trade_open(&TradeOpenEvent {
+                                opportunity_id: opp_id,
+                                strategy: opportunity.strategy().to_string(),
+                                market_ids: vec![market_id.clone()],
+                                legs,
+                                size: opportunity.volume(),
+                                expected_profit: opportunity.expected_profit(),
+                            })
+                        } else {
+                            None
+                        };
+
+                        // Record position with trade_id for close tracking
+                        record_position(&state, &opportunity, trade_id);
+
+                        // Track peak exposure
+                        let exposure = state.total_exposure();
+                        stats.update_peak_exposure(exposure);
                     }
                     ArbitrageExecutionResult::PartialFill { filled, failed } => {
                         let filled_ids: Vec<_> =
@@ -75,17 +92,7 @@ pub(crate) fn spawn_execution(
 
                         if cancel_failed {
                             warn!("Some cancellations failed, recording partial position");
-                            record_partial_position(&state, &opportunity, filled, failed);
-                            if let Some(ref writer) = status_writer {
-                                let positions = state.positions();
-                                let open_count = positions.open_positions().count();
-                                let exposure = positions.total_exposure();
-                                let max_exposure = state.risk_limits().max_total_exposure;
-                                writer.update_runtime(open_count, exposure, max_exposure);
-                                if let Err(e) = writer.write() {
-                                    warn!(error = %e, "Failed to write status file");
-                                }
-                            }
+                            record_partial_position(&state, &opportunity, filled, failed, None);
                         } else {
                             info!("Successfully cancelled all filled legs, no position recorded");
                         }
@@ -112,7 +119,7 @@ pub(crate) fn spawn_execution(
 }
 
 /// Record a position in shared state.
-pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
+pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade_id: Option<i32>) {
     let position_legs: Vec<PositionLeg> = opportunity
         .legs()
         .iter()
@@ -126,7 +133,7 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
         .collect();
 
     let mut positions = state.positions_mut();
-    let position = Position::new(
+    let mut position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
         position_legs,
@@ -135,6 +142,11 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity) {
         chrono::Utc::now(),
         PositionStatus::Open,
     );
+
+    if let Some(tid) = trade_id {
+        position = position.with_trade_id(tid);
+    }
+
     positions.add(position);
 }
 
@@ -144,6 +156,7 @@ pub(crate) fn record_partial_position(
     opportunity: &Opportunity,
     filled: &[FilledLeg],
     failed: &[FailedLeg],
+    trade_id: Option<i32>,
 ) {
     let filled_token_ids: Vec<TokenId> = filled.iter().map(|f| f.token_id.clone()).collect();
     let missing_token_ids: Vec<TokenId> = failed.iter().map(|f| f.token_id.clone()).collect();
@@ -168,7 +181,7 @@ pub(crate) fn record_partial_position(
         .sum();
 
     let mut positions = state.positions_mut();
-    let position = Position::new(
+    let mut position = Position::new(
         positions.next_id(),
         opportunity.market_id().clone(),
         position_legs,
@@ -180,5 +193,10 @@ pub(crate) fn record_partial_position(
             missing: missing_token_ids,
         },
     );
+
+    if let Some(tid) = trade_id {
+        position = position.with_trade_id(tid);
+    }
+
     positions.add(position);
 }

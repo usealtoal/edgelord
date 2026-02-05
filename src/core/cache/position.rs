@@ -62,6 +62,28 @@ impl PositionTracker {
     pub fn get_mut(&mut self, id: PositionId) -> Option<&mut Position> {
         self.positions.iter_mut().find(|p| p.id() == id)
     }
+
+    /// Close a position and return the realized PnL.
+    ///
+    /// Returns None if position not found or already closed.
+    pub fn close(&mut self, id: PositionId, pnl: Price) -> Option<Price> {
+        let position = self.get_mut(id)?;
+        if position.status().is_closed() {
+            return None;
+        }
+        position.close(pnl);
+        Some(pnl)
+    }
+
+    /// Get all positions (open and closed).
+    pub fn all(&self) -> impl Iterator<Item = &Position> {
+        self.positions.iter()
+    }
+
+    /// Get all closed positions.
+    pub fn closed_positions(&self) -> impl Iterator<Item = &Position> {
+        self.positions.iter().filter(|p| p.status().is_closed())
+    }
 }
 
 #[cfg(test)]
