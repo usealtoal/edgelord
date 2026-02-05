@@ -28,7 +28,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
-use super::messages::{PolymarketSubscribeMessage, PolymarketWsMessage};
+use super::message::{PolymarketSubscribeMessage, PolymarketWsMessage};
 use crate::core::domain::TokenId;
 use crate::core::exchange::{MarketDataStream, MarketEvent};
 use crate::error::Result;
