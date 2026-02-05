@@ -6,7 +6,7 @@ use std::path::Path;
 use rust_decimal::prelude::ToPrimitive;
 
 use crate::app::{Config, Environment};
-use crate::error::Result;
+use crate::error::{ConfigError, Result};
 
 /// Default config template with documentation.
 const CONFIG_TEMPLATE: &str = include_str!("../../config.toml.example");
@@ -14,9 +14,11 @@ const CONFIG_TEMPLATE: &str = include_str!("../../config.toml.example");
 /// Execute `config init`.
 pub fn execute_init(path: &Path, force: bool) -> Result<()> {
     if path.exists() && !force {
-        eprintln!("Config file already exists: {}", path.display());
-        eprintln!("Use --force to overwrite.");
-        std::process::exit(1);
+        return Err(ConfigError::InvalidValue {
+            field: "config",
+            reason: "file already exists (use --force to overwrite)".to_string(),
+        }
+        .into());
     }
 
     fs::write(path, CONFIG_TEMPLATE)?;
@@ -172,10 +174,7 @@ pub fn execute_validate(path: &Path) -> Result<()> {
             println!("Run 'edgelord config show -c {}' to see resolved values", path.display());
         }
         Err(e) => {
-            println!("✗ Config file is invalid");
-            println!();
-            println!("Error: {e}");
-            std::process::exit(1);
+            return Err(e);
         }
     }
 

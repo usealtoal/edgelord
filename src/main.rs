@@ -31,29 +31,18 @@ async fn main() {
         Commands::Config(cmd) => match cmd {
             ConfigCommand::Init(args) => edgelord::cli::config::execute_init(&args.path, args.force),
             ConfigCommand::Show(args) => edgelord::cli::config::execute_show(&args.config),
-            ConfigCommand::Validate(args) => {
-                edgelord::cli::config::execute_validate(&args.config)
-            }
+            ConfigCommand::Validate(args) => edgelord::cli::config::execute_validate(&args.config),
         },
         Commands::Logs(args) => {
             edgelord::cli::logs::execute(&args);
             Ok(())
         }
         Commands::Service(cmd) => match cmd {
-            ServiceCommand::Install(args) => {
-                edgelord::cli::service::execute_install(&args);
-                Ok(())
-            }
-            ServiceCommand::Uninstall => {
-                edgelord::cli::service::execute_uninstall();
-                Ok(())
-            }
+            ServiceCommand::Install(args) => edgelord::cli::service::execute_install(&args),
+            ServiceCommand::Uninstall => edgelord::cli::service::execute_uninstall(),
         },
         Commands::Check(cmd) => match cmd {
-            CheckCommand::Config(args) => {
-                edgelord::cli::check::execute_config(&args.config);
-                Ok(())
-            }
+            CheckCommand::Config(args) => edgelord::cli::check::execute_config(&args.config),
             CheckCommand::Connection(args) => {
                 edgelord::cli::check::execute_connection(&args.config).await
             }

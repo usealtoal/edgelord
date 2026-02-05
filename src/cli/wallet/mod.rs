@@ -10,7 +10,7 @@ use std::path::Path;
 use rust_decimal::Decimal;
 
 use crate::app::{ApprovalOutcome, Config, WalletService};
-use crate::error::Result;
+use crate::error::{ExecutionError, Result};
 
 /// Display current wallet approval status.
 ///
@@ -128,7 +128,7 @@ pub async fn execute_approve(config_path: &Path, amount: Decimal, skip_confirm: 
             println!();
             eprintln!("\u{2717} Approval failed: {reason}");
             println!();
-            std::process::exit(1);
+            return Err(ExecutionError::OrderRejected(reason).into());
         }
     }
 
