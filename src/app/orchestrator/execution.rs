@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use rust_decimal::Decimal;
+use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
 use crate::app::state::AppState;
@@ -13,6 +14,28 @@ use crate::core::domain::{
 use crate::core::exchange::ArbitrageExecutor;
 use crate::core::service::stats::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
+
+#[cfg(test)]
+const EXECUTION_TIMEOUT: Duration = Duration::from_millis(100);
+#[cfg(not(test))]
+const EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
+
+struct ExecutionLockGuard {
+    state: Arc<AppState>,
+    market_id: String,
+}
+
+impl ExecutionLockGuard {
+    fn new(state: Arc<AppState>, market_id: String) -> Self {
+        Self { state, market_id }
+    }
+}
+
+impl Drop for ExecutionLockGuard {
+    fn drop(&mut self) {
+        self.state.release_execution(&self.market_id);
+    }
+}
 
 /// Spawn async execution without blocking message processing.
 pub(crate) fn spawn_execution(
@@ -26,14 +49,13 @@ pub(crate) fn spawn_execution(
     let market_id = opportunity.market_id().to_string();
 
     tokio::spawn(async move {
-        let result = executor.execute_arbitrage(&opportunity).await;
-
-        // Always release the execution lock
-        state.release_execution(&market_id);
+        let _lock_guard = ExecutionLockGuard::new(Arc::clone(&state), market_id.clone());
+        let result = timeout(EXECUTION_TIMEOUT, executor.execute_arbitrage(&opportunity)).await;
 
         match result {
-            Ok(exec_result) => {
-                match &exec_result {
+            Ok(exec_result) => match exec_result {
+                Ok(exec_result) => {
+                    match &exec_result {
                     ArbitrageExecutionResult::Success { filled: _ } => {
                         // Record trade open first to get trade_id
                         let trade_id = if let Some(opp_id) = opportunity_id {
@@ -97,21 +119,30 @@ pub(crate) fn spawn_execution(
                             info!("Successfully cancelled all filled legs, no position recorded");
                         }
                     }
-                    ArbitrageExecutionResult::Failed { .. } => {}
-                }
+                        ArbitrageExecutionResult::Failed { .. } => {}
+                    }
 
-                // Notify execution result
-                notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
-                    &market_id,
-                    &exec_result,
-                )));
-            }
-            Err(e) => {
-                error!(error = %e, "Execution failed");
+                    // Notify execution result
+                    notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent::from_result(
+                        &market_id,
+                        &exec_result,
+                    )));
+                }
+                Err(e) => {
+                    error!(error = %e, "Execution failed");
+                    notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent {
+                        market_id,
+                        success: false,
+                        details: e.to_string(),
+                    }));
+                }
+            },
+            Err(_) => {
+                error!(market_id = %market_id, "Execution timed out");
                 notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent {
                     market_id,
                     success: false,
-                    details: e.to_string(),
+                    details: "execution_timeout".to_string(),
                 }));
             }
         }
@@ -204,6 +235,7 @@ pub(crate) fn record_partial_position(
 #[cfg(test)]
 mod tests {
     use super::spawn_execution;
+    use std::future::pending;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -251,6 +283,28 @@ mod tests {
             } else {
                 Ok(())
             }
+        }
+
+        fn exchange_name(&self) -> &'static str {
+            "mock"
+        }
+    }
+
+    /// Mock executor that never returns to simulate a hang.
+    struct MockHangingExecutor;
+
+    #[async_trait]
+    impl ArbitrageExecutor for MockHangingExecutor {
+        async fn execute_arbitrage(
+            &self,
+            _opportunity: &Opportunity,
+        ) -> Result<ArbitrageExecutionResult, Error> {
+            pending::<()>().await;
+            unreachable!("pending should never resolve");
+        }
+
+        async fn cancel(&self, _order_id: &OrderId) -> Result<(), Error> {
+            Ok(())
         }
 
         fn exchange_name(&self) -> &'static str {
@@ -343,6 +397,51 @@ mod tests {
                 "Position should have PartialFill status, got {:?}",
                 position.status()
             ),
+        }
+    }
+
+    #[tokio::test]
+    async fn execution_timeout_releases_lock() {
+        let executor = Arc::new(MockHangingExecutor);
+        let opportunity = Opportunity::with_strategy(
+            MarketId::from("timeout-market"),
+            "Timeout test?",
+            vec![
+                OpportunityLeg::new(TokenId::from("token-1"), dec!(0.40)),
+                OpportunityLeg::new(TokenId::from("token-2"), dec!(0.50)),
+            ],
+            dec!(100),
+            dec!(1.00),
+            "test-strategy",
+        );
+
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = stats::create_recorder(db_pool);
+
+        assert!(state.try_lock_execution("timeout-market"));
+
+        spawn_execution(
+            executor,
+            opportunity,
+            notifiers,
+            state.clone(),
+            stats,
+            None,
+        );
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(1);
+        loop {
+            if state.try_lock_execution("timeout-market") {
+                state.release_execution("timeout-market");
+                break;
+            }
+            if start.elapsed() > timeout {
+                panic!("Execution lock was not released after timeout");
+            }
+            sleep(Duration::from_millis(10)).await;
         }
     }
 }
