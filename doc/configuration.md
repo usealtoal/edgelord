@@ -14,12 +14,27 @@ All configuration lives in `config.toml`. Settings can be overridden via CLI fla
 ```toml
 exchange = "polymarket"
 
-[polymarket]
+[exchange_config]
+type = "polymarket"
 environment = "testnet"        # "testnet" or "mainnet"
 chain_id = 80002               # 80002 (Amoy testnet) or 137 (Polygon mainnet)
 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 api_url = "https://clob.polymarket.com"
+
+[exchange_config.http]
+timeout_ms = 5000         # Request timeout in ms
+connect_timeout_ms = 2000 # Connect timeout in ms
+retry_max_attempts = 3    # Retries on transient errors
+retry_backoff_ms = 500    # Backoff between retries in ms
+
+[exchange_config.connections]
+connection_ttl_secs = 120
+preemptive_reconnect_secs = 30
+max_connections = 10
+subscriptions_per_connection = 500
 ```
+
+For full `market_filter`, `scoring`, and `dedup` defaults, see `config.toml.example`.
 
 ## Strategies
 
@@ -104,7 +119,7 @@ channel_capacity = 1024   # Order book update channel size
 max_position_per_market = 1000   # Max exposure per market ($)
 max_total_exposure = 10000       # Max total portfolio exposure ($)
 min_profit_threshold = 0.05      # Skip opportunities below this ($)
-max_slippage = 0.02              # Reject if slippage exceeds 2%
+max_slippage = 0.02              # Must be between 0 and 1
 ```
 
 ## Reconnection
