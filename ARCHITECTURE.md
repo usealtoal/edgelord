@@ -28,8 +28,8 @@
 
 ## File Size Limits
 
-- **Hard limit: 400 lines of implementation code**
-- Tests colocated with implementation are encouraged and **do not count** toward the limit
+- **Hard limit: 400 SLOC (source lines of code)**
+- Tests (including `#[cfg(test)]` modules) **do not count** toward the limit
 - Approaching limit? Split into submodule
 - Prefer many small files over few large ones
 - Exception: Generated code, test fixtures
@@ -160,7 +160,10 @@ src/
 │
 ├── app/                        # Application layer
 │   ├── mod.rs
-│   ├── orchestrator.rs         # Main event loop
+│   ├── orchestrator/           # Main event loop
+│   │   ├── mod.rs
+│   │   ├── handler.rs
+│   │   └── execution.rs
 │   ├── builder.rs              # AppBuilder
 │   ├── state.rs
 │   ├── status.rs
