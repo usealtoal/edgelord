@@ -50,6 +50,8 @@ pub(crate) fn spawn_execution(
 
     tokio::spawn(async move {
         let _lock_guard = ExecutionLockGuard::new(Arc::clone(&state), market_id.clone());
+        // Calculate reserved exposure for release
+        let reserved_exposure = opportunity.total_cost() * opportunity.volume();
         let result = timeout(EXECUTION_TIMEOUT, executor.execute_arbitrage(&opportunity)).await;
 
         match result {
@@ -85,6 +87,9 @@ pub(crate) fn spawn_execution(
                         // Record position with trade_id for close tracking
                         record_position(&state, &opportunity, trade_id);
 
+                        // Release reserved exposure (now converted to actual position exposure)
+                        state.release_exposure(reserved_exposure);
+
                         // Track peak exposure
                         let exposure = state.total_exposure();
                         stats.update_peak_exposure(exposure);
@@ -115,11 +120,18 @@ pub(crate) fn spawn_execution(
                         if cancel_failed {
                             warn!("Some cancellations failed, recording partial position");
                             record_partial_position(&state, &opportunity, filled, failed, None);
+                            // Release reserved exposure (partial position recorded)
+                            state.release_exposure(reserved_exposure);
                         } else {
                             info!("Successfully cancelled all filled legs, no position recorded");
+                            // Release reserved exposure (no position recorded)
+                            state.release_exposure(reserved_exposure);
                         }
                     }
-                        ArbitrageExecutionResult::Failed { .. } => {}
+                        ArbitrageExecutionResult::Failed { .. } => {
+                            // Release reserved exposure on failure
+                            state.release_exposure(reserved_exposure);
+                        }
                     }
 
                     // Notify execution result
@@ -130,6 +142,8 @@ pub(crate) fn spawn_execution(
                 }
                 Err(e) => {
                     error!(error = %e, "Execution failed");
+                    // Release reserved exposure on error
+                    state.release_exposure(reserved_exposure);
                     notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent {
                         market_id,
                         success: false,
@@ -139,6 +153,8 @@ pub(crate) fn spawn_execution(
             },
             Err(_) => {
                 error!(market_id = %market_id, "Execution timed out");
+                // Release reserved exposure on timeout
+                state.release_exposure(reserved_exposure);
                 notifiers.notify_all(Event::ExecutionCompleted(ExecutionEvent {
                     market_id,
                     success: false,

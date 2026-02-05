@@ -50,6 +50,8 @@ impl RiskManager {
     }
 
     /// Check if an opportunity passes all risk checks.
+    /// On approval, atomically reserves exposure to prevent concurrent opportunities
+    /// from exceeding the limit.
     #[must_use]
     pub fn check(&self, opportunity: &Opportunity) -> RiskCheckResult {
         // Check circuit breaker first
@@ -62,14 +64,29 @@ impl RiskManager {
             return RiskCheckResult::Rejected(e);
         }
 
-        // Check exposure limits
-        if let Err(e) = self.check_exposure_limit(opportunity) {
+        // Check position limit for this market (before reserving exposure)
+        if let Err(e) = self.check_position_limit(opportunity) {
             return RiskCheckResult::Rejected(e);
         }
 
-        // Check position limit for this market
-        if let Err(e) = self.check_position_limit(opportunity) {
-            return RiskCheckResult::Rejected(e);
+        // Atomically check and reserve exposure
+        let additional_exposure = opportunity.total_cost() * opportunity.volume();
+        if !self.state.try_reserve_exposure(additional_exposure) {
+            let current = self.state.total_exposure();
+            let pending = self.state.pending_exposure();
+            let limit = self.state.risk_limits().max_total_exposure;
+            warn!(
+                current = %current,
+                pending = %pending,
+                additional = %additional_exposure,
+                limit = %limit,
+                "Exposure limit would be exceeded"
+            );
+            return RiskCheckResult::Rejected(RiskError::ExposureLimitExceeded {
+                current,
+                additional: additional_exposure,
+                limit,
+            });
         }
 
         RiskCheckResult::Approved
@@ -102,27 +119,6 @@ impl RiskManager {
         Ok(())
     }
 
-    /// Check if total exposure would exceed limit.
-    fn check_exposure_limit(&self, opportunity: &Opportunity) -> Result<(), RiskError> {
-        let current = self.state.total_exposure();
-        let additional = opportunity.total_cost() * opportunity.volume();
-        let limit = self.state.risk_limits().max_total_exposure;
-
-        if current + additional > limit {
-            warn!(
-                current = %current,
-                additional = %additional,
-                limit = %limit,
-                "Exposure limit would be exceeded"
-            );
-            return Err(RiskError::ExposureLimitExceeded {
-                current,
-                additional,
-                limit,
-            });
-        }
-        Ok(())
-    }
 
     /// Check if position in this market would exceed limit.
     fn check_position_limit(&self, opportunity: &Opportunity) -> Result<(), RiskError> {

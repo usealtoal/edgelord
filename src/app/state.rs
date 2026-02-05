@@ -45,6 +45,8 @@ pub struct AppState {
     circuit_breaker_reason: RwLock<Option<String>>,
     /// Markets with in-flight executions (prevents duplicate trades).
     pending_executions: Mutex<HashSet<String>>,
+    /// Pending exposure from approved opportunities not yet executed.
+    pending_exposure: Mutex<Decimal>,
 }
 
 impl AppState {
@@ -57,6 +59,7 @@ impl AppState {
             circuit_breaker: AtomicBool::new(false),
             circuit_breaker_reason: RwLock::new(None),
             pending_executions: Mutex::new(HashSet::new()),
+            pending_exposure: Mutex::new(Decimal::ZERO),
         }
     }
 
@@ -111,6 +114,36 @@ impl AppState {
     /// Release execution lock for a market.
     pub fn release_execution(&self, market_id: &str) {
         self.pending_executions.lock().remove(market_id);
+    }
+
+    /// Get current pending exposure.
+    pub fn pending_exposure(&self) -> Price {
+        *self.pending_exposure.lock()
+    }
+
+    /// Try to reserve exposure atomically.
+    /// Returns `true` if reservation succeeded, `false` if it would exceed limit.
+    pub fn try_reserve_exposure(&self, amount: Price) -> bool {
+        let mut pending = self.pending_exposure.lock();
+        let current = self.total_exposure();
+        let limit = self.risk_limits.max_total_exposure;
+
+        if current + *pending + amount > limit {
+            return false;
+        }
+
+        *pending += amount;
+        true
+    }
+
+    /// Release reserved exposure.
+    pub fn release_exposure(&self, amount: Price) {
+        let mut pending = self.pending_exposure.lock();
+        *pending -= amount;
+        // Ensure we don't go negative (shouldn't happen, but safety check)
+        if *pending < Decimal::ZERO {
+            *pending = Decimal::ZERO;
+        }
     }
 }
 
