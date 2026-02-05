@@ -4,7 +4,7 @@ use std::path::Path;
 
 use rust_decimal::Decimal;
 
-use crate::app::stats;
+use crate::app::statistics as stats;
 use crate::error::Result;
 
 /// Execute `stats` (default: today).
