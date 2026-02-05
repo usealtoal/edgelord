@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::app::{Config, Exchange};
+use crate::app::{Config, Exchange, PolymarketConfig};
+use crate::error::ConfigError;
 use crate::error::Result;
 
 use super::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
@@ -17,12 +18,35 @@ use super::{
 pub struct ExchangeFactory;
 
 impl ExchangeFactory {
+    fn require_polymarket_config(config: &Config) -> Result<&PolymarketConfig> {
+        let poly_config = config
+            .polymarket_config()
+            .ok_or(ConfigError::MissingField {
+                field: "polymarket_config",
+            })?;
+
+        if poly_config.ws_url.is_empty() {
+            return Err(ConfigError::MissingField { field: "ws_url" }.into());
+        }
+        if poly_config.api_url.is_empty() {
+            return Err(ConfigError::MissingField { field: "api_url" }.into());
+        }
+
+        Ok(poly_config)
+    }
+
     /// Create a market fetcher for the configured exchange.
     pub fn create_market_fetcher(config: &Config) -> Box<dyn MarketFetcher> {
         match config.exchange {
-            Exchange::Polymarket => Box::new(super::polymarket::PolymarketClient::new(
-                config.network().api_url.clone(),
-            )),
+            Exchange::Polymarket => {
+                let client = config
+                    .polymarket_config()
+                    .map(super::polymarket::PolymarketClient::from_config)
+                    .unwrap_or_else(|| {
+                        super::polymarket::PolymarketClient::new(config.network().api_url.clone())
+                    });
+                Box::new(client)
+            }
         }
     }
 
@@ -83,9 +107,7 @@ impl ExchangeFactory {
     pub fn create_scorer(config: &Config) -> Result<Box<dyn MarketScorer>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
-                    field: "polymarket_config",
-                })?;
+                let poly_config = Self::require_polymarket_config(config)?;
                 Ok(Box::new(PolymarketScorer::new(&poly_config.scoring)))
             }
         }
@@ -95,9 +117,7 @@ impl ExchangeFactory {
     pub fn create_filter(config: &Config) -> Result<Box<dyn MarketFilter>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
-                    field: "polymarket_config",
-                })?;
+                let poly_config = Self::require_polymarket_config(config)?;
                 Ok(Box::new(PolymarketFilter::new(&poly_config.market_filter)))
             }
         }
@@ -107,9 +127,7 @@ impl ExchangeFactory {
     pub fn create_deduplicator(config: &Config) -> Result<Box<dyn MessageDeduplicator>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
-                    field: "polymarket_config",
-                })?;
+                let poly_config = Self::require_polymarket_config(config)?;
                 Ok(Box::new(PolymarketDeduplicator::new(&poly_config.dedup)))
             }
         }

@@ -3,6 +3,7 @@
 //! Configuration is loaded from a TOML file with environment variable overrides
 //! for sensitive values like `WALLET_PRIVATE_KEY`.
 
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -28,7 +29,7 @@ pub use logging::LoggingConfig;
 pub use polymarket::{
     DedupStrategyConfig, Environment, OutcomeBonusConfig, PolymarketConfig,
     PolymarketConnectionConfig, PolymarketDedupConfig, PolymarketFilterConfig,
-    PolymarketScoringConfig, ScoringWeightsConfig,
+    PolymarketHttpConfig, PolymarketScoringConfig, ScoringWeightsConfig,
 };
 pub use profile::{Profile, ResourceConfig};
 pub use service::{
@@ -143,6 +144,13 @@ impl Config {
         }
         if network.api_url.is_empty() {
             return Err(ConfigError::MissingField { field: "api_url" }.into());
+        }
+        if self.risk.max_slippage < Decimal::ZERO || self.risk.max_slippage > Decimal::ONE {
+            return Err(ConfigError::InvalidValue {
+                field: "max_slippage",
+                reason: "must be between 0 and 1".to_string(),
+            }
+            .into());
         }
         Ok(())
     }
