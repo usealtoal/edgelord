@@ -86,11 +86,11 @@ edgelord config init              # Generate config.toml with comments
 edgelord config show              # Show resolved config (with defaults)
 edgelord config validate [path]   # Detailed validation
 
-edgelord stats                    # Today's summary (default)
-edgelord stats today              # Today's detailed breakdown
-edgelord stats week               # Last 7 days
-edgelord stats history [days]     # Historical view
-edgelord stats export [--csv]     # Export for analysis
+edgelord statistics                    # Today's summary (default)
+edgelord statistics today              # Today's detailed breakdown
+edgelord statistics week               # Last 7 days
+edgelord statistics history [days]     # Historical view
+edgelord statistics export [--csv]     # Export for analysis
 
 edgelord db status                # Show DB path, table counts, size
 edgelord db migrate               # Run pending migrations

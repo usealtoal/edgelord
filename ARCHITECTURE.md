@@ -173,7 +173,7 @@ src/
 │   ├── builder.rs              # AppBuilder
 │   ├── state.rs
 │   ├── status.rs
-│   ├── stats.rs
+│   ├── statistics.rs
 │   └── config/                 # Configuration
 │       ├── mod.rs              # Main Config + load()
 │       ├── profile.rs          # Profile, ResourceConfig
