@@ -83,21 +83,33 @@ impl PolymarketApproval {
     }
 
     /// Get the USDC contract address for the current environment.
-    fn usdc_address(&self) -> Address {
+    fn usdc_address(&self) -> Result<Address> {
         let addr = match self.environment {
             Environment::Mainnet => USDC_NATIVE_MAINNET,
             Environment::Testnet => USDC_TESTNET,
         };
-        Address::from_str(addr).expect("valid address")
+        Address::from_str(addr).map_err(|e| {
+            ConfigError::InvalidValue {
+                field: "usdc_address",
+                reason: e.to_string(),
+            }
+            .into()
+        })
     }
 
     /// Get the CTF Exchange (spender) address.
-    fn spender_address(&self) -> Address {
+    fn spender_address(&self) -> Result<Address> {
         let addr = match self.environment {
             Environment::Mainnet => CTF_EXCHANGE_MAINNET,
             Environment::Testnet => CTF_EXCHANGE_TESTNET,
         };
-        Address::from_str(addr).expect("valid address")
+        Address::from_str(addr).map_err(|e| {
+            ConfigError::InvalidValue {
+                field: "spender_address",
+                reason: e.to_string(),
+            }
+            .into()
+        })
     }
 
     /// Convert decimal dollars to USDC units (6 decimals).
@@ -122,12 +134,17 @@ impl PolymarketApproval {
 #[async_trait]
 impl TokenApproval for PolymarketApproval {
     async fn get_approval_status(&self) -> Result<ApprovalStatus> {
-        let rpc_url: url::Url = self.rpc_url().parse().expect("valid RPC URL");
+        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
+            ConfigError::InvalidValue {
+                field: "rpc_url",
+                reason: e.to_string(),
+            }
+        })?;
         let provider = ProviderBuilder::new().connect_http(rpc_url);
 
-        let usdc = IERC20::new(self.usdc_address(), &provider);
+        let usdc = IERC20::new(self.usdc_address()?, &provider);
         let owner = self.signer.address();
-        let spender = self.spender_address();
+        let spender = self.spender_address()?;
 
         // Get current allowance
         let allowance: U256 = usdc
@@ -164,11 +181,16 @@ impl TokenApproval for PolymarketApproval {
 
         // Build provider with signer for transactions
         let wallet = alloy_provider::network::EthereumWallet::from(self.signer.clone());
-        let rpc_url: url::Url = self.rpc_url().parse().expect("valid RPC URL");
+        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
+            ConfigError::InvalidValue {
+                field: "rpc_url",
+                reason: e.to_string(),
+            }
+        })?;
         let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
-        let usdc = IERC20::new(self.usdc_address(), &provider);
-        let spender = self.spender_address();
+        let usdc = IERC20::new(self.usdc_address()?, &provider);
+        let spender = self.spender_address()?;
         let amount_units = Self::to_usdc_units(amount);
 
         // Submit approval transaction

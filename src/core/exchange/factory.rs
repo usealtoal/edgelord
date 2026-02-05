@@ -80,31 +80,37 @@ impl ExchangeFactory {
     }
 
     /// Create a market scorer for the configured exchange.
-    pub fn create_scorer(config: &Config) -> Box<dyn MarketScorer> {
+    pub fn create_scorer(config: &Config) -> Result<Box<dyn MarketScorer>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().unwrap();
-                Box::new(PolymarketScorer::new(&poly_config.scoring))
+                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
+                    field: "polymarket_config",
+                })?;
+                Ok(Box::new(PolymarketScorer::new(&poly_config.scoring)))
             }
         }
     }
 
     /// Create a market filter for the configured exchange.
-    pub fn create_filter(config: &Config) -> Box<dyn MarketFilter> {
+    pub fn create_filter(config: &Config) -> Result<Box<dyn MarketFilter>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().unwrap();
-                Box::new(PolymarketFilter::new(&poly_config.market_filter))
+                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
+                    field: "polymarket_config",
+                })?;
+                Ok(Box::new(PolymarketFilter::new(&poly_config.market_filter)))
             }
         }
     }
 
     /// Create a message deduplicator for the configured exchange.
-    pub fn create_deduplicator(config: &Config) -> Box<dyn MessageDeduplicator> {
+    pub fn create_deduplicator(config: &Config) -> Result<Box<dyn MessageDeduplicator>> {
         match config.exchange {
             Exchange::Polymarket => {
-                let poly_config = config.polymarket_config().unwrap();
-                Box::new(PolymarketDeduplicator::new(&poly_config.dedup))
+                let poly_config = config.polymarket_config().ok_or(crate::error::ConfigError::MissingField {
+                    field: "polymarket_config",
+                })?;
+                Ok(Box::new(PolymarketDeduplicator::new(&poly_config.dedup)))
             }
         }
     }
