@@ -435,6 +435,27 @@ mod tests {
     }
 
     #[test]
+    fn position_try_new_accepts_valid_inputs() {
+        let legs = vec![PositionLeg::new(
+            TokenId::new("token-1"),
+            dec!(100),
+            dec!(0.45),
+        )];
+
+        let result = Position::try_new(
+            PositionId::new(1),
+            MarketId::new("market-1"),
+            legs,
+            dec!(45),
+            dec!(100),
+            chrono::Utc::now(),
+            PositionStatus::Open,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn position_rejects_payout_not_greater_than_cost() {
         let legs = vec![PositionLeg::new(
             TokenId::new("token-1"),

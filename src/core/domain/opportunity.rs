@@ -116,8 +116,9 @@ impl Opportunity {
         volume: Decimal,
         payout: Decimal,
     ) -> Result<Self, DomainError> {
-        use rust_decimal::Decimal;
-        use std::cmp::Ordering;
+        if legs.is_empty() {
+            return Err(DomainError::EmptyLegs);
+        }
 
         // Validate volume is positive
         if volume <= Decimal::ZERO {
@@ -128,16 +129,11 @@ impl Opportunity {
         let total_cost: Decimal = legs.iter().map(|leg| leg.ask_price).sum();
 
         // Validate payout is greater than cost
-        match payout.partial_cmp(&total_cost) {
-            Some(Ordering::Greater) => {
-                // Valid case
-            }
-            _ => {
-                return Err(DomainError::PayoutNotGreaterThanCost {
-                    payout,
-                    cost: total_cost,
-                });
-            }
+        if payout <= total_cost {
+            return Err(DomainError::PayoutNotGreaterThanCost {
+                payout,
+                cost: total_cost,
+            });
         }
 
         Ok(Self {
@@ -355,6 +351,23 @@ mod tests {
         assert_eq!(opp.legs().len(), 2);
         assert_eq!(opp.volume(), dec!(100));
         assert_eq!(opp.payout(), dec!(1.0));
+    }
+
+    #[test]
+    fn opportunity_try_new_accepts_valid_inputs() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::try_new(make_market_id(), "Valid", legs, dec!(100), dec!(1.00));
+        assert!(opp.is_ok());
+    }
+
+    #[test]
+    fn opportunity_rejects_empty_legs() {
+        let result = Opportunity::try_new(make_market_id(), "Test", vec![], dec!(100), dec!(1.0));
+        assert!(matches!(result, Err(DomainError::EmptyLegs)));
     }
 
     #[test]

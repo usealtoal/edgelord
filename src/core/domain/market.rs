@@ -307,6 +307,23 @@ mod tests {
     }
 
     #[test]
+    fn market_try_new_accepts_valid_inputs() {
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes-token"), "Yes"),
+            Outcome::new(TokenId::from("no-token"), "No"),
+        ];
+
+        let result = Market::try_new(
+            MarketId::from("market-1"),
+            "Test question",
+            outcomes,
+            dec!(1.00),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn market_rejects_empty_outcomes() {
         // Empty outcomes should fail
         let result = Market::try_new(
