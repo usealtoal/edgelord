@@ -4,8 +4,9 @@
 use crate::app::App;
 use crate::app::{Config, ExchangeSpecificConfig};
 use crate::cli::{banner, RunArgs};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use tokio::signal;
+use tokio::sync::watch;
 use tracing::{error, info};
 
 /// Execute the run command.
@@ -71,15 +72,40 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     // Run the main application
     #[cfg(feature = "polymarket")]
     {
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let mut app_handle = tokio::spawn(async move { App::run_with_shutdown(config, shutdown_rx).await });
+
         tokio::select! {
-            result = App::run(config) => {
-                if let Err(e) = result {
-                    error!(error = %e, "Fatal error");
-                    std::process::exit(1);
+            result = &mut app_handle => {
+                match result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => {
+                        error!(error = %e, "Fatal error");
+                        return Err(e);
+                    }
+                    Err(e) => {
+                        error!(error = %e, "Application task failed");
+                        return Err(Error::Connection(e.to_string()));
+                    }
                 }
+                info!("edgelord stopped");
+                return Ok(());
             }
             _ = signal::ctrl_c() => {
                 info!("Shutdown signal received");
+                let _ = shutdown_tx.send(true);
+            }
+        }
+
+        match app_handle.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                error!(error = %e, "Fatal error");
+                return Err(e);
+            }
+            Err(e) => {
+                error!(error = %e, "Application task failed");
+                return Err(Error::Connection(e.to_string()));
             }
         }
     }

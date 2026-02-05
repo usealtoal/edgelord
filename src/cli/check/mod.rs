@@ -2,23 +2,14 @@
 
 use std::path::Path;
 
-use crate::app::Config;
-use crate::error::Result;
+use crate::app::{health_check, Config, HealthStatus};
+use crate::error::{Error, Result};
 
 /// Validate configuration file without starting the bot.
-pub fn execute_config<P: AsRef<Path>>(config_path: P) {
+pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let path = config_path.as_ref();
     println!("Checking configuration: {}", path.display());
     println!();
-
-    // Check file exists
-    if !path.exists() {
-        eprintln!("Error: Configuration file not found: {}", path.display());
-        eprintln!();
-        eprintln!("Create one by copying the example:");
-        eprintln!("  cp config.toml.example config.toml");
-        std::process::exit(1);
-    }
 
     // Try to load and validate
     match Config::load(path) {
@@ -65,10 +56,37 @@ pub fn execute_config<P: AsRef<Path>>(config_path: P) {
             println!("Configuration is ready to use.");
         }
         Err(e) => {
-            eprintln!("✗ Configuration error: {e}");
-            std::process::exit(1);
+            return Err(e);
         }
     }
+
+    Ok(())
+}
+
+/// Run a local health check using configuration.
+pub fn execute_health<P: AsRef<Path>>(config_path: P) -> Result<()> {
+    let config = Config::load(config_path.as_ref())?;
+
+    let report = health_check(&config);
+
+    println!("Health check:");
+    for check in report.checks() {
+        let status = match check.status() {
+            HealthStatus::Healthy => "✓",
+            HealthStatus::Unhealthy(_) => "✗",
+        };
+        println!(
+            "  {status} {}{}",
+            check.name(),
+            if check.critical() { " (critical)" } else { "" }
+        );
+    }
+
+    if !report.is_healthy() {
+        return Err(Error::Connection("health check failed".to_string()));
+    }
+    println!("✓ Health check passed");
+    Ok(())
 }
 
 /// Test Telegram notification by sending a test message.
@@ -134,9 +152,9 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        eprintln!("✗ Failed to send message: {status}");
-        eprintln!("  {body}");
-        std::process::exit(1);
+        return Err(Error::Connection(format!(
+            "failed to send telegram message: {status} {body}"
+        )));
     }
 
     Ok(())
@@ -164,13 +182,11 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
         }
         Ok(response) => {
             println!("✗ HTTP {}", response.status());
-            eprintln!("API returned non-success status");
-            std::process::exit(1);
+            return Err(Error::Connection("API returned non-success status".to_string()));
         }
         Err(e) => {
             println!("✗ Failed");
-            eprintln!("Error: {e}");
-            std::process::exit(1);
+            return Err(Error::Connection(e.to_string()));
         }
     }
 
@@ -182,8 +198,7 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
         }
         Err(e) => {
             println!("✗ Failed");
-            eprintln!("Error: {e}");
-            std::process::exit(1);
+            return Err(Error::Connection(e.to_string()));
         }
     }
 
