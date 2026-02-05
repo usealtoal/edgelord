@@ -9,7 +9,9 @@
 //! details (like payout amounts) configured at market creation time.
 
 use rust_decimal::Decimal;
+use std::result::Result;
 
+use crate::error::DomainError;
 use super::id::{MarketId, TokenId};
 
 /// A single outcome within a market.
@@ -92,6 +94,40 @@ impl Market {
             outcomes,
             payout,
         }
+    }
+
+    /// Create a new market with domain invariant validation.
+    ///
+    /// # Domain Invariants
+    ///
+    /// - `outcomes` must not be empty
+    /// - `payout` must be positive (> 0)
+    ///
+    /// # Errors
+    ///
+    /// Returns `DomainError` if any invariant is violated.
+    pub fn try_new(
+        market_id: MarketId,
+        question: impl Into<String>,
+        outcomes: Vec<Outcome>,
+        payout: Decimal,
+    ) -> Result<Self, DomainError> {
+        // Validate outcomes is not empty
+        if outcomes.is_empty() {
+            return Err(DomainError::EmptyOutcomes);
+        }
+
+        // Validate payout is positive
+        if payout <= Decimal::ZERO {
+            return Err(DomainError::NonPositivePayout { payout });
+        }
+
+        Ok(Self {
+            market_id,
+            question: question.into(),
+            outcomes,
+            payout,
+        })
     }
 
     /// Get the market ID.
@@ -268,5 +304,43 @@ mod tests {
         assert_eq!(ids[0].as_str(), "red-token");
         assert_eq!(ids[1].as_str(), "blue-token");
         assert_eq!(ids[2].as_str(), "green-token");
+    }
+
+    #[test]
+    fn market_rejects_empty_outcomes() {
+        // Empty outcomes should fail
+        let result = Market::try_new(
+            MarketId::from("market-1"),
+            "Test question",
+            vec![],
+            dec!(1.00),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn market_rejects_non_positive_payout() {
+        let outcomes = vec![
+            Outcome::new(TokenId::from("yes-token"), "Yes"),
+            Outcome::new(TokenId::from("no-token"), "No"),
+        ];
+
+        // Zero payout should fail
+        let result = Market::try_new(
+            MarketId::from("market-1"),
+            "Test question",
+            outcomes.clone(),
+            dec!(0),
+        );
+        assert!(result.is_err());
+
+        // Negative payout should fail
+        let result = Market::try_new(
+            MarketId::from("market-1"),
+            "Test question",
+            outcomes,
+            dec!(-1),
+        );
+        assert!(result.is_err());
     }
 }

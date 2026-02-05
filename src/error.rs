@@ -41,6 +41,28 @@ pub enum ExecutionError {
     SubmissionFailed(String),
 }
 
+/// Domain validation errors for domain types.
+#[derive(Error, Debug, Clone)]
+pub enum DomainError {
+    #[error("volume must be positive, got {volume}")]
+    NonPositiveVolume { volume: rust_decimal::Decimal },
+
+    #[error("payout {payout} must be greater than cost {cost}")]
+    PayoutNotGreaterThanCost {
+        payout: rust_decimal::Decimal,
+        cost: rust_decimal::Decimal,
+    },
+
+    #[error("outcomes cannot be empty")]
+    EmptyOutcomes,
+
+    #[error("payout must be positive, got {payout}")]
+    NonPositivePayout { payout: rust_decimal::Decimal },
+
+    #[error("legs cannot be empty")]
+    EmptyLegs,
+}
+
 /// Risk management errors.
 #[derive(Error, Debug, Clone)]
 pub enum RiskError {
@@ -78,6 +100,9 @@ pub enum RiskError {
 pub enum Error {
     #[error(transparent)]
     Config(#[from] ConfigError),
+
+    #[error(transparent)]
+    Domain(#[from] DomainError),
 
     #[error(transparent)]
     Execution(#[from] ExecutionError),

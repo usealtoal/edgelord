@@ -5,7 +5,9 @@
 //! multiple [`OpportunityLeg`]s representing the individual purchases needed.
 
 use rust_decimal::Decimal;
+use std::result::Result;
 
+use crate::error::DomainError;
 use super::id::{MarketId, TokenId};
 use super::money::Price;
 
@@ -95,6 +97,57 @@ impl Opportunity {
             payout,
             strategy: strategy.into(),
         }
+    }
+
+    /// Create a new opportunity with domain invariant validation.
+    ///
+    /// # Domain Invariants
+    ///
+    /// - `volume` must be positive (> 0)
+    /// - `payout` must be greater than the total cost of all legs
+    ///
+    /// # Errors
+    ///
+    /// Returns `DomainError` if any invariant is violated.
+    pub fn try_new(
+        market_id: MarketId,
+        question: impl Into<String>,
+        legs: Vec<OpportunityLeg>,
+        volume: Decimal,
+        payout: Decimal,
+    ) -> Result<Self, DomainError> {
+        use rust_decimal::Decimal;
+        use std::cmp::Ordering;
+
+        // Validate volume is positive
+        if volume <= Decimal::ZERO {
+            return Err(DomainError::NonPositiveVolume { volume });
+        }
+
+        // Calculate total cost
+        let total_cost: Decimal = legs.iter().map(|leg| leg.ask_price).sum();
+
+        // Validate payout is greater than cost
+        match payout.partial_cmp(&total_cost) {
+            Some(Ordering::Greater) => {
+                // Valid case
+            }
+            _ => {
+                return Err(DomainError::PayoutNotGreaterThanCost {
+                    payout,
+                    cost: total_cost,
+                });
+            }
+        }
+
+        Ok(Self {
+            market_id,
+            question: question.into(),
+            legs,
+            volume,
+            payout,
+            strategy: String::new(),
+        })
     }
 
     /// Get the strategy name.
@@ -302,5 +355,62 @@ mod tests {
         assert_eq!(opp.legs().len(), 2);
         assert_eq!(opp.volume(), dec!(100));
         assert_eq!(opp.payout(), dec!(1.0));
+    }
+
+    #[test]
+    fn opportunity_rejects_non_positive_volume() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+
+        // Zero volume should fail
+        let result = Opportunity::try_new(
+            make_market_id(),
+            "Test",
+            legs.clone(),
+            dec!(0),
+            dec!(1.0),
+        );
+        assert!(result.is_err());
+
+        // Negative volume should fail
+        let result = Opportunity::try_new(
+            make_market_id(),
+            "Test",
+            legs,
+            dec!(-10),
+            dec!(1.0),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn opportunity_rejects_payout_not_greater_than_cost() {
+        let legs = vec![
+            OpportunityLeg::new(make_token_id("yes"), dec!(0.40)),
+            OpportunityLeg::new(make_token_id("no"), dec!(0.50)),
+        ];
+        // Total cost is 0.90, payout must be > 0.90
+
+        // Payout equal to cost should fail
+        let result = Opportunity::try_new(
+            make_market_id(),
+            "Test",
+            legs.clone(),
+            dec!(100),
+            dec!(0.90),
+        );
+        assert!(result.is_err());
+
+        // Payout less than cost should fail
+        let result = Opportunity::try_new(
+            make_market_id(),
+            "Test",
+            legs,
+            dec!(100),
+            dec!(0.80),
+        );
+        assert!(result.is_err());
     }
 }
