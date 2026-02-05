@@ -1,12 +1,14 @@
 //! Tests for exchange factory and approval components.
 
+mod support;
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use edgelord::app::{
-    Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig, ReconnectionConfig,
+    Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig,
 };
 use edgelord::core::domain::OrderBook;
 use edgelord::core::exchange::polymarket::PolymarketClient;
@@ -114,16 +116,6 @@ impl MarketDataStream for MockDataStream {
     }
 }
 
-fn test_reconnect_config() -> ReconnectionConfig {
-    ReconnectionConfig {
-        initial_delay_ms: 0,
-        max_delay_ms: 0,
-        backoff_multiplier: 1.0,
-        max_consecutive_failures: 3,
-        circuit_breaker_cooldown_ms: 0,
-    }
-}
-
 #[tokio::test]
 async fn reconnect_retries_on_subscribe_failure() {
     let mock = MockDataStream::new()
@@ -144,7 +136,7 @@ async fn reconnect_retries_on_subscribe_failure() {
         ]);
     let (connect_count, subscribe_count) = mock.counts();
 
-    let mut stream = ReconnectingDataStream::new(mock, test_reconnect_config());
+    let mut stream = ReconnectingDataStream::new(mock, support::config::test_reconnection_config());
     stream.connect().await.unwrap();
     stream
         .subscribe(&[TokenId::from("token-1".to_string())])

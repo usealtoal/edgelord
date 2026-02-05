@@ -1,57 +1,34 @@
 //! Integration tests for the cluster detection service.
 
+mod support;
+
 use std::sync::Arc;
 
 use chrono::Duration;
-use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
 use edgelord::core::cache::{ClusterCache, OrderBookCache};
-use edgelord::core::domain::{
-    Market, MarketId, MarketRegistry, OrderBook, Outcome, PriceLevel, Relation,
-    RelationKind, TokenId,
-};
+use edgelord::core::domain::{MarketId, MarketRegistry, Relation, RelationKind};
 use edgelord::core::service::cluster::{ClusterDetectionConfig, ClusterDetectionService, ClusterDetector};
 
-fn create_test_market(id: &str, yes_token: &str, no_token: &str) -> Market {
-    let outcomes = vec![
-        Outcome::new(TokenId::from(yes_token), "Yes"),
-        Outcome::new(TokenId::from(no_token), "No"),
-    ];
-    Market::new(
-        MarketId::from(id),
-        format!("Will {id} happen?"),
-        outcomes,
-        dec!(1.00),
-    )
-}
-
-fn create_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> OrderBook {
-    OrderBook::with_levels(
-        TokenId::from(token_id),
-        vec![PriceLevel::new(bid, dec!(100))],
-        vec![PriceLevel::new(ask, dec!(100))],
-    )
-}
-
 fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
-    let mut registry = MarketRegistry::new();
-    registry.add(create_test_market("market-a", "yes-a", "no-a"));
-    registry.add(create_test_market("market-b", "yes-b", "no-b"));
-    registry.add(create_test_market("market-c", "yes-c", "no-c"));
+    let markets = vec![
+        support::market::make_binary_market("market-a", "Will market-a happen?", "yes-a", "no-a", dec!(1.00)),
+        support::market::make_binary_market("market-b", "Will market-b happen?", "yes-b", "no-b", dec!(1.00)),
+        support::market::make_binary_market("market-c", "Will market-c happen?", "yes-c", "no-c", dec!(1.00)),
+    ];
+
+    let registry = support::registry::make_registry(markets);
 
     let cache = OrderBookCache::new();
-    cache.update(create_order_book("yes-a", dec!(0.40), dec!(0.42)));
-    cache.update(create_order_book("yes-b", dec!(0.55), dec!(0.57)));
-    cache.update(create_order_book("yes-c", dec!(0.30), dec!(0.32)));
+    support::order_book::set_order_book(&cache, "yes-a", dec!(0.40), dec!(0.42));
+    support::order_book::set_order_book(&cache, "yes-b", dec!(0.55), dec!(0.57));
+    support::order_book::set_order_book(&cache, "yes-c", dec!(0.30), dec!(0.32));
 
     let cluster_cache = ClusterCache::new(Duration::hours(1));
 
-    // Create a mutual exclusion relation between market-a and market-b
-    let relation = Relation::new(
-        RelationKind::MutuallyExclusive {
-            markets: vec![MarketId::from("market-a"), MarketId::from("market-b")],
-        },
+    let relation = support::relation::mutually_exclusive(
+        &["market-a", "market-b"],
         0.95,
         "Test relation",
     );
@@ -86,22 +63,17 @@ fn test_detector_with_valid_cluster() {
 
 #[test]
 fn test_detector_missing_price_data() {
-    let mut registry = MarketRegistry::new();
-    registry.add(create_test_market("market-x", "yes-x", "no-x"));
-    registry.add(create_test_market("market-y", "yes-y", "no-y"));
-    let registry = Arc::new(registry);
+    let markets = vec![
+        support::market::make_binary_market("market-x", "Will market-x happen?", "yes-x", "no-x", dec!(1.00)),
+        support::market::make_binary_market("market-y", "Will market-y happen?", "yes-y", "no-y", dec!(1.00)),
+    ];
+    let registry = Arc::new(support::registry::make_registry(markets));
 
     // Empty cache - no price data
     let cache = Arc::new(OrderBookCache::new());
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
-    let relation = Relation::new(
-        RelationKind::MutuallyExclusive {
-            markets: vec![MarketId::from("market-x"), MarketId::from("market-y")],
-        },
-        0.95,
-        "Test",
-    );
+    let relation = support::relation::mutually_exclusive(&["market-x", "market-y"], 0.95, "Test");
     cluster_cache.put_relations(vec![relation]);
 
     let detector = ClusterDetector::new(ClusterDetectionConfig::default());
@@ -143,19 +115,14 @@ async fn test_service_with_notifications() {
     let (order_cache, update_rx) = OrderBookCache::with_notifications(16);
     let order_cache = Arc::new(order_cache);
 
-    let mut registry = MarketRegistry::new();
-    registry.add(create_test_market("m1", "yes-1", "no-1"));
-    registry.add(create_test_market("m2", "yes-2", "no-2"));
-    let registry = Arc::new(registry);
+    let markets = vec![
+        support::market::make_binary_market("m1", "Will m1 happen?", "yes-1", "no-1", dec!(1.00)),
+        support::market::make_binary_market("m2", "Will m2 happen?", "yes-2", "no-2", dec!(1.00)),
+    ];
+    let registry = Arc::new(support::registry::make_registry(markets));
 
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
-    let relation = Relation::new(
-        RelationKind::MutuallyExclusive {
-            markets: vec![MarketId::from("m1"), MarketId::from("m2")],
-        },
-        0.95,
-        "Test",
-    );
+    let relation = support::relation::mutually_exclusive(&["m1", "m2"], 0.95, "Test");
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig::default();
@@ -169,7 +136,7 @@ async fn test_service_with_notifications() {
     let (handle, _opp_rx) = service.start(update_rx);
 
     // Update order book - should trigger notification
-    order_cache.update(create_order_book("yes-1", dec!(0.45), dec!(0.47)));
+    support::order_book::set_order_book(&order_cache, "yes-1", dec!(0.45), dec!(0.47));
 
     // Give the service time to process
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -180,32 +147,23 @@ async fn test_service_with_notifications() {
 
 #[test]
 fn test_cluster_with_three_markets() {
-    let mut registry = MarketRegistry::new();
-    registry.add(create_test_market("trump", "yes-trump", "no-trump"));
-    registry.add(create_test_market("biden", "yes-biden", "no-biden"));
-    registry.add(create_test_market("other", "yes-other", "no-other"));
-    let registry = Arc::new(registry);
+    let markets = vec![
+        support::market::make_binary_market("trump", "Will trump happen?", "yes-trump", "no-trump", dec!(1.00)),
+        support::market::make_binary_market("biden", "Will biden happen?", "yes-biden", "no-biden", dec!(1.00)),
+        support::market::make_binary_market("other", "Will other happen?", "yes-other", "no-other", dec!(1.00)),
+    ];
+    let registry = Arc::new(support::registry::make_registry(markets));
 
     let cache = OrderBookCache::new();
-    cache.update(create_order_book("yes-trump", dec!(0.40), dec!(0.42)));
-    cache.update(create_order_book("yes-biden", dec!(0.35), dec!(0.37)));
-    cache.update(create_order_book("yes-other", dec!(0.20), dec!(0.22)));
+    support::order_book::set_order_book(&cache, "yes-trump", dec!(0.40), dec!(0.42));
+    support::order_book::set_order_book(&cache, "yes-biden", dec!(0.35), dec!(0.37));
+    support::order_book::set_order_book(&cache, "yes-other", dec!(0.20), dec!(0.22));
     let cache = Arc::new(cache);
 
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
     // Exactly one must win (should sum to 1)
-    let relation = Relation::new(
-        RelationKind::ExactlyOne {
-            markets: vec![
-                MarketId::from("trump"),
-                MarketId::from("biden"),
-                MarketId::from("other"),
-            ],
-        },
-        0.98,
-        "Presidential election",
-    );
+    let relation = support::relation::exactly_one(&["trump", "biden", "other"], 0.98, "Presidential election");
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig {
@@ -223,15 +181,16 @@ fn test_cluster_with_three_markets() {
 
 #[test]
 fn test_implies_relation() {
-    let mut registry = MarketRegistry::new();
-    registry.add(create_test_market("pa-win", "yes-pa", "no-pa"));
-    registry.add(create_test_market("swing-win", "yes-swing", "no-swing"));
-    let registry = Arc::new(registry);
+    let markets = vec![
+        support::market::make_binary_market("pa-win", "Will PA win?", "yes-pa", "no-pa", dec!(1.00)),
+        support::market::make_binary_market("swing-win", "Will swing win?", "yes-swing", "no-swing", dec!(1.00)),
+    ];
+    let registry = Arc::new(support::registry::make_registry(markets));
 
     let cache = OrderBookCache::new();
     // PA win at 0.45, swing win at 0.40 - violation! (PA implies swing)
-    cache.update(create_order_book("yes-pa", dec!(0.43), dec!(0.45)));
-    cache.update(create_order_book("yes-swing", dec!(0.38), dec!(0.40)));
+    support::order_book::set_order_book(&cache, "yes-pa", dec!(0.43), dec!(0.45));
+    support::order_book::set_order_book(&cache, "yes-swing", dec!(0.38), dec!(0.40));
     let cache = Arc::new(cache);
 
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
