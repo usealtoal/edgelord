@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use edgelord::app::Config;
 use edgelord::error::{ConfigError, Error};
+
+static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn write_temp_config(contents: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -11,7 +14,8 @@ fn write_temp_config(contents: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    path.push(format!("edgelord-config-test-{nanos}.toml"));
+    let suffix = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.push(format!("edgelord-config-test-{nanos}-{suffix}.toml"));
     fs::write(&path, contents).expect("write temp config");
     path
 }
