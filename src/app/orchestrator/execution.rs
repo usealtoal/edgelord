@@ -185,7 +185,7 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade
         opportunity.market_id().clone(),
         position_legs,
         opportunity.total_cost() * opportunity.volume(),
-        opportunity.volume(),
+        opportunity.payout() * opportunity.volume(),
         chrono::Utc::now(),
         PositionStatus::Open,
     );
@@ -233,7 +233,7 @@ pub(crate) fn record_partial_position(
         opportunity.market_id().clone(),
         position_legs,
         entry_cost,
-        opportunity.volume(),
+        opportunity.payout() * opportunity.volume(),
         chrono::Utc::now(),
         PositionStatus::PartialFill {
             filled: filled_token_ids,
