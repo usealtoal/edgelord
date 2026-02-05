@@ -103,6 +103,7 @@ pub fn detect_single_condition(
     let positive_outcome = &outcomes[0];
     let negative_outcome = &outcomes[1];
 
+    // Fail closed if any required order book is missing.
     let positive_book = cache.get(positive_outcome.token_id())?;
     let negative_book = cache.get(negative_outcome.token_id())?;
 

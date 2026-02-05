@@ -73,6 +73,9 @@ impl Default for MarketContext {
 /// Full context for detection including market data.
 ///
 /// This is passed to strategies' `detect()` method.
+///
+/// Strategies should fail closed when required order books are missing
+/// (return no opportunities).
 pub struct DetectionContext<'a> {
     /// The market being analyzed.
     pub market: &'a Market,
