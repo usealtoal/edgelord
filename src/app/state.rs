@@ -124,8 +124,9 @@ impl AppState {
     /// Try to reserve exposure atomically.
     /// Returns `true` if reservation succeeded, `false` if it would exceed limit.
     pub fn try_reserve_exposure(&self, amount: Price) -> bool {
+        let positions = self.positions.read();
         let mut pending = self.pending_exposure.lock();
-        let current = self.total_exposure();
+        let current = positions.total_exposure();
         let limit = self.risk_limits.max_total_exposure;
 
         if current + *pending + amount > limit {

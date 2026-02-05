@@ -77,7 +77,7 @@ async fn concurrent_opportunities_cannot_exceed_total_exposure() {
     let (approved2, _state2) = handle2.await.unwrap();
 
     // At most one should be approved
-    let approved_count = if approved1 { 1 } else { 0 } + if approved2 { 1 } else { 0 };
+    let approved_count = (if approved1 { 1 } else { 0 }) + (if approved2 { 1 } else { 0 });
     assert!(
         approved_count <= 1,
         "Expected at most 1 approval, got {} (opp1: {}, opp2: {})",
