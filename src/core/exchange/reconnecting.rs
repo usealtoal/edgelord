@@ -3,7 +3,7 @@
 //! Provides automatic reconnection with exponential backoff and circuit breaker
 //! for any MarketDataStream implementation.
 
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use tokio::time::sleep;
@@ -65,13 +65,28 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
 
     /// Calculate next backoff delay using exponential backoff.
     fn next_delay(&mut self) -> Duration {
-        let delay = Duration::from_millis(self.current_delay_ms);
+        let base_delay = Duration::from_millis(self.current_delay_ms);
+        let jitter_ms = self.jitter_ms(base_delay);
+        let delay = base_delay + Duration::from_millis(jitter_ms);
 
         // Increase delay for next attempt
         let next_delay = (self.current_delay_ms as f64 * self.config.backoff_multiplier) as u64;
         self.current_delay_ms = next_delay.min(self.config.max_delay_ms);
 
         delay
+    }
+
+    fn jitter_ms(&self, base_delay: Duration) -> u64 {
+        let jitter_range_ms = (base_delay.as_millis() as u64) / 5;
+        if jitter_range_ms == 0 {
+            return 0;
+        }
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        (nanos as u64) % (jitter_range_ms + 1)
     }
 
     /// Check if circuit breaker allows connection attempts.
@@ -144,7 +159,12 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
                         tokens = self.subscribed_tokens.len(),
                         "Resubscribing to tokens"
                     );
-                    self.inner.subscribe(&self.subscribed_tokens).await?;
+                    if let Err(err) = self.inner.subscribe(&self.subscribed_tokens).await {
+                        error!(error = %err, "Resubscribe failed after reconnect");
+                        self.connected = false;
+                        self.record_failure();
+                        return Err(err);
+                    }
                 }
 
                 self.reset_backoff();
@@ -344,24 +364,32 @@ mod tests {
     async fn test_exponential_backoff() {
         let mut stream = ReconnectingDataStream::new(MockDataStream::new(), test_config());
 
+        let assert_delay_in_range = |delay: Duration, base_ms: u64| {
+            let max_ms = base_ms + (base_ms / 5);
+            assert!(
+                (base_ms..=max_ms).contains(&(delay.as_millis() as u64)),
+                "delay {delay:?} not within {base_ms}..={max_ms} ms"
+            );
+        };
+
         // Initial delay
         let delay1 = stream.next_delay();
-        assert_eq!(delay1.as_millis(), 10);
+        assert_delay_in_range(delay1, 10);
 
         // After one failure, delay doubles
         let delay2 = stream.next_delay();
-        assert_eq!(delay2.as_millis(), 20);
+        assert_delay_in_range(delay2, 20);
 
         // After two failures, delay doubles again
         let delay3 = stream.next_delay();
-        assert_eq!(delay3.as_millis(), 40);
+        assert_delay_in_range(delay3, 40);
 
         // Should cap at max_delay_ms
         let delay4 = stream.next_delay();
-        assert_eq!(delay4.as_millis(), 80);
+        assert_delay_in_range(delay4, 80);
 
         let delay5 = stream.next_delay();
-        assert_eq!(delay5.as_millis(), 100); // Capped at max
+        assert_delay_in_range(delay5, 100); // Capped at max
     }
 
     #[tokio::test]
