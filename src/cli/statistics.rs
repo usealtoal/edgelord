@@ -1,52 +1,52 @@
-//! Handler for the `stats` command group.
+//! Handler for the `statistics` command group.
 
 use std::path::Path;
 
 use rust_decimal::Decimal;
 
-use crate::app::statistics as stats;
+use crate::app::statistics;
 use crate::error::Result;
 
-/// Execute `stats` (default: today).
+/// Execute `statistics` (default: today).
 pub fn execute_today(db_path: &Path) -> Result<()> {
-    let (from, to, label) = stats::date_range_today();
-    let summary = stats::load_summary(db_path, from, to)?;
+    let (from, to, label) = statistics::date_range_today();
+    let summary = statistics::load_summary(db_path, from, to)?;
     print_summary(&summary, &label)?;
 
-    let rows = stats::load_strategy_breakdown(db_path, from, to)?;
+    let rows = statistics::load_strategy_breakdown(db_path, from, to)?;
     print_strategy_breakdown(&rows)?;
 
-    let open_positions = stats::load_open_positions(db_path)?;
+    let open_positions = statistics::load_open_positions(db_path)?;
     print_open_positions(open_positions);
 
     Ok(())
 }
 
-/// Execute `stats week`.
+/// Execute `statistics week`.
 pub fn execute_week(db_path: &Path) -> Result<()> {
-    let (from, to, label) = stats::date_range_week();
-    let summary = stats::load_summary(db_path, from, to)?;
+    let (from, to, label) = statistics::date_range_week();
+    let summary = statistics::load_summary(db_path, from, to)?;
     print_summary(&summary, &label)?;
 
-    let rows = stats::load_strategy_breakdown(db_path, from, to)?;
+    let rows = statistics::load_strategy_breakdown(db_path, from, to)?;
     print_strategy_breakdown(&rows)?;
 
     Ok(())
 }
 
-/// Execute `stats history [days]`.
+/// Execute `statistics history [days]`.
 pub fn execute_history(db_path: &Path, days: u32) -> Result<()> {
-    let (from, to, label) = stats::date_range_history(days);
-    let summary = stats::load_summary(db_path, from, to)?;
+    let (from, to, label) = statistics::date_range_history(days);
+    let summary = statistics::load_summary(db_path, from, to)?;
     print_summary(&summary, &label)?;
 
-    let rows = stats::load_daily_rows(db_path, from, to)?;
+    let rows = statistics::load_daily_rows(db_path, from, to)?;
     print_daily_breakdown(&rows)?;
 
     Ok(())
 }
 
-fn print_summary(summary: &stats::StatsSummary, label: &str) -> Result<()> {
+fn print_summary(summary: &statistics::StatsSummary, label: &str) -> Result<()> {
     println!();
     println!("═══════════════════════════════════════════════════════════");
     println!("  {label}");
@@ -98,17 +98,17 @@ fn print_summary(summary: &stats::StatsSummary, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn print_strategy_breakdown(rows: &[stats::StrategyDailyStatsRow]) -> Result<()> {
+fn print_strategy_breakdown(rows: &[statistics::StrategyDailyStatsRow]) -> Result<()> {
     if rows.is_empty() {
         return Ok(());
     }
 
-    let mut by_strategy: std::collections::HashMap<String, stats::StrategyDailyStatsRow> =
+    let mut by_strategy: std::collections::HashMap<String, statistics::StrategyDailyStatsRow> =
         std::collections::HashMap::new();
 
     for row in rows {
         let entry = by_strategy.entry(row.strategy.clone()).or_insert_with(|| {
-            stats::StrategyDailyStatsRow {
+            statistics::StrategyDailyStatsRow {
                 date: String::new(),
                 strategy: row.strategy.clone(),
                 ..Default::default()
@@ -152,7 +152,7 @@ fn print_strategy_breakdown(rows: &[stats::StrategyDailyStatsRow]) -> Result<()>
     Ok(())
 }
 
-fn print_daily_breakdown(rows: &[stats::DailyStatsRow]) -> Result<()> {
+fn print_daily_breakdown(rows: &[statistics::DailyStatsRow]) -> Result<()> {
     if rows.is_empty() {
         println!("  No data for this period.");
         println!();
@@ -192,14 +192,14 @@ fn print_open_positions(open_count: i64) {
 }
 
 
-/// Execute `stats export [--days N] [--output FILE]`.
+/// Execute `statistics export [--days N] [--output FILE]`.
 pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Result<()> {
-    let (from, to, _) = stats::date_range_history(days);
-    let csv = stats::export_daily_csv(db_path, from, to)?;
+    let (from, to, _) = statistics::date_range_history(days);
+    let csv = statistics::export_daily_csv(db_path, from, to)?;
 
     if let Some(path) = output {
         std::fs::write(path, &csv)?;
-        println!("Exported {} days of stats to {}", days, path.display());
+        println!("Exported {} days of statistics to {}", days, path.display());
     } else {
         print!("{csv}");
     }
@@ -207,13 +207,13 @@ pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Resul
     Ok(())
 }
 
-/// Execute `stats prune [--days N]`.
+/// Execute `statistics prune [--days N]`.
 pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
-    stats::prune_old_records(db_path, retention_days)?;
+    statistics::prune_old_records(db_path, retention_days)?;
     println!(
         "Pruned opportunities and trades older than {} days",
         retention_days
     );
-    println!("Note: Aggregated daily stats are preserved.");
+    println!("Note: Aggregated daily statistics are preserved.");
     Ok(())
 }
