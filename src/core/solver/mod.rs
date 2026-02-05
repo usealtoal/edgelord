@@ -7,8 +7,13 @@
 #![allow(clippy::result_large_err)]
 
 mod highs;
+mod bregman;
+mod frank_wolfe;
 
 pub use highs::HiGHSSolver;
+
+pub use bregman::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
+pub use frank_wolfe::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};
 
 use rust_decimal::Decimal;
 

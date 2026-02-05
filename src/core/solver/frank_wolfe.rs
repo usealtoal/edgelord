@@ -14,9 +14,8 @@
 use rust_decimal::Decimal;
 
 use crate::core::solver::{IlpProblem, LpProblem, SolutionStatus, Solver};
+use crate::core::solver::bregman::{bregman_divergence, bregman_gradient};
 use crate::error::Result;
-
-use super::bregman::{bregman_divergence, bregman_gradient};
 
 /// Configuration for Frank-Wolfe algorithm.
 #[derive(Debug, Clone)]

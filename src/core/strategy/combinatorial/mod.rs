@@ -25,8 +25,6 @@
 //! While combinatorial arbitrage captured only 0.24% ($95K) of historical profits,
 //! the mathematical infrastructure enables more sophisticated strategies.
 
-mod bregman;
-mod frank_wolfe;
 
 pub use bregman::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
 pub use frank_wolfe::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};

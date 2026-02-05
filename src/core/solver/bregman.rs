@@ -1,4 +1,4 @@
-//! Bregman divergence calculations for LMSR cost function.
+//! Solver utilities for LMSR Bregman divergence.
 //!
 //! For the Logarithmic Market Scoring Rule (LMSR):
 //! - Cost function: C(q) = b * log(Σ exp(qᵢ/b))
