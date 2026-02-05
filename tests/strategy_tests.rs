@@ -1,25 +1,14 @@
 //! Integration tests for strategy system.
 
+mod support;
+
 use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{Market, MarketId, OrderBook, Outcome, PriceLevel, TokenId};
+use edgelord::core::domain::{Market, OrderBook, PriceLevel};
 use edgelord::core::strategy::{
     DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };
 use rust_decimal_macros::dec;
-
-fn make_market() -> Market {
-    let outcomes = vec![
-        Outcome::new(TokenId::from("yes-token"), "Yes"),
-        Outcome::new(TokenId::from("no-token"), "No"),
-    ];
-    Market::new(
-        MarketId::from("test-market"),
-        "Will it happen?",
-        outcomes,
-        dec!(1),
-    )
-}
 
 fn setup_arbitrage_books(cache: &OrderBookCache, market: &Market) {
     let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
@@ -62,7 +51,13 @@ fn test_strategy_registry_detects_with_single_condition() {
         SingleConditionConfig::default(),
     )));
 
-    let market = make_market();
+    let market = support::market::make_binary_market(
+        "test-market",
+        "Will it happen?",
+        "yes-token",
+        "no-token",
+        dec!(1),
+    );
     let cache = OrderBookCache::new();
     setup_arbitrage_books(&cache, &market);
 
@@ -80,7 +75,13 @@ fn test_strategy_registry_empty_when_no_arbitrage() {
         SingleConditionConfig::default(),
     )));
 
-    let market = make_market();
+    let market = support::market::make_binary_market(
+        "test-market",
+        "Will it happen?",
+        "yes-token",
+        "no-token",
+        dec!(1),
+    );
     let cache = OrderBookCache::new();
     setup_no_arbitrage_books(&cache, &market);
 
@@ -102,7 +103,13 @@ fn test_multiple_strategies_in_registry() {
 
     assert_eq!(registry.strategies().len(), 2);
 
-    let market = make_market();
+    let market = support::market::make_binary_market(
+        "test-market",
+        "Will it happen?",
+        "yes-token",
+        "no-token",
+        dec!(1),
+    );
     let cache = OrderBookCache::new();
     setup_arbitrage_books(&cache, &market);
 
@@ -134,7 +141,13 @@ fn test_market_rebalancing_applies_to_multi_outcome() {
 fn test_empty_registry_returns_no_opportunities() {
     let registry = StrategyRegistry::new();
 
-    let market = make_market();
+    let market = support::market::make_binary_market(
+        "test-market",
+        "Will it happen?",
+        "yes-token",
+        "no-token",
+        dec!(1),
+    );
     let cache = OrderBookCache::new();
     setup_arbitrage_books(&cache, &market);
 
@@ -146,15 +159,19 @@ fn test_empty_registry_returns_no_opportunities() {
 
 #[test]
 fn strategy_skips_when_order_books_missing() {
-    use edgelord::core::domain::Outcome;
-
     // Test single-condition strategy with missing order books
     let mut registry = StrategyRegistry::new();
     registry.register(Box::new(SingleConditionStrategy::new(
         SingleConditionConfig::default(),
     )));
 
-    let market = make_market();
+    let market = support::market::make_binary_market(
+        "test-market",
+        "Will it happen?",
+        "yes-token",
+        "no-token",
+        dec!(1),
+    );
     let cache = OrderBookCache::new();
     // Don't add any order books - cache is empty
 
@@ -170,15 +187,10 @@ fn strategy_skips_when_order_books_missing() {
     let mut registry_rebal = StrategyRegistry::new();
     registry_rebal.register(Box::new(MarketRebalancingStrategy::new(Default::default())));
 
-    let outcomes = vec![
-        Outcome::new(TokenId::from("token-a"), "Option A"),
-        Outcome::new(TokenId::from("token-b"), "Option B"),
-        Outcome::new(TokenId::from("token-c"), "Option C"),
-    ];
-    let multi_market = Market::new(
-        MarketId::from("multi-market"),
+    let multi_market = support::market::make_multi_market(
+        "multi-market",
         "Who wins?",
-        outcomes,
+        &[("token-a", "Option A"), ("token-b", "Option B"), ("token-c", "Option C")],
         dec!(1),
     );
     let cache_rebal = OrderBookCache::new();
