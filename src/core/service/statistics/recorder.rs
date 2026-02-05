@@ -3,8 +3,6 @@
 //! Persists opportunities, trades, and daily aggregates to the database
 //! for historical analysis and CLI reporting.
 
-use std::sync::Arc;
-
 use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
 use diesel::OptionalExtension;
@@ -12,14 +10,13 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::SqliteConnection;
 use rust_decimal::Decimal;
 
-use super::convert::{decimal_to_f32, f32_to_decimal};
-use super::types::{
-    OpportunitySummary, RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent,
-};
+use super::convert::decimal_to_f32;
+use super::query::{summary_for_range, summary_for_today};
+use super::types::{RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent};
 use tracing::{debug, warn};
 
 use crate::core::db::model::{
-    DailyStatsRow, NewOpportunityRow, NewTradeRow, OpportunityRow, StrategyDailyStatsRow, TradeRow,
+    DailyStatsRow, NewOpportunityRow, NewTradeRow, StrategyDailyStatsRow, TradeRow,
 };
 use crate::core::db;
 use crate::core::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
@@ -276,41 +273,12 @@ impl StatsRecorder {
 
     /// Get summary for a date range.
     pub fn get_summary(&self, from: NaiveDate, to: NaiveDate) -> StatsSummary {
-        let mut conn = match self.pool.get() {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Failed to get DB connection for stats query: {e}");
-                return StatsSummary::default();
-            }
-        };
-
-        let rows: Vec<DailyStatsRow> = daily_stats::table
-            .filter(daily_stats::date.ge(from.to_string()))
-            .filter(daily_stats::date.le(to.to_string()))
-            .load(&mut conn)
-            .unwrap_or_default();
-
-        let mut summary = StatsSummary::default();
-        for row in rows {
-            summary.opportunities_detected += i64::from(row.opportunities_detected);
-            summary.opportunities_executed += i64::from(row.opportunities_executed);
-            summary.opportunities_rejected += i64::from(row.opportunities_rejected);
-            summary.trades_opened += i64::from(row.trades_opened);
-            summary.trades_closed += i64::from(row.trades_closed);
-            summary.profit_realized += f32_to_decimal(row.profit_realized);
-            summary.loss_realized += f32_to_decimal(row.loss_realized);
-            summary.win_count += i64::from(row.win_count);
-            summary.loss_count += i64::from(row.loss_count);
-            summary.total_volume += f32_to_decimal(row.total_volume);
-        }
-
-        summary
+        summary_for_range(&self.pool, from, to)
     }
 
     /// Get today's summary.
     pub fn get_today(&self) -> StatsSummary {
-        let today = Utc::now().date_naive();
-        self.get_summary(today, today)
+        summary_for_today(&self.pool)
     }
 
     /// Helper to update daily stats atomically.
@@ -418,132 +386,5 @@ impl StatsRecorder {
                 "Pruned old records"
             );
         }
-    }
-
-    /// Export daily stats to CSV format.
-    pub fn export_daily_csv(&self, from: NaiveDate, to: NaiveDate) -> String {
-        let mut conn = match self.pool.get() {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Failed to get DB connection for CSV export: {e}");
-                return String::new();
-            }
-        };
-
-        let rows: Vec<DailyStatsRow> = daily_stats::table
-            .filter(daily_stats::date.ge(from.to_string()))
-            .filter(daily_stats::date.le(to.to_string()))
-            .order(daily_stats::date.asc())
-            .load(&mut conn)
-            .unwrap_or_default();
-
-        let mut csv = String::from(
-            "date,opportunities_detected,opportunities_executed,trades_opened,trades_closed,profit,loss,net,win_count,loss_count,win_rate,volume,peak_exposure\n"
-        );
-
-        for row in rows {
-            let net = row.profit_realized - row.loss_realized;
-            let total = row.win_count + row.loss_count;
-            let win_rate = if total > 0 {
-                row.win_count as f32 / total as f32 * 100.0
-            } else {
-                0.0
-            };
-            csv.push_str(&format!(
-                "{},{},{},{},{},{:.2},{:.2},{:.2},{},{},{:.1},{:.2},{:.2}\n",
-                row.date,
-                row.opportunities_detected,
-                row.opportunities_executed,
-                row.trades_opened,
-                row.trades_closed,
-                row.profit_realized,
-                row.loss_realized,
-                net,
-                row.win_count,
-                row.loss_count,
-                win_rate,
-                row.total_volume,
-                row.peak_exposure
-            ));
-        }
-
-        csv
-    }
-
-    /// Get recent opportunities.
-    pub fn recent_opportunities(&self, limit: i64) -> Vec<OpportunitySummary> {
-        let mut conn = match self.pool.get() {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Failed to get DB connection for opportunities query: {e}");
-                return Vec::new();
-            }
-        };
-
-        let rows: Vec<OpportunityRow> = opportunities::table
-            .order(opportunities::detected_at.desc())
-            .limit(limit)
-            .load(&mut conn)
-            .unwrap_or_default();
-
-        rows.into_iter()
-            .map(|r| OpportunitySummary {
-                id: r.id.unwrap_or(0),
-                strategy: r.strategy,
-                edge: f32_to_decimal(r.edge),
-                expected_profit: f32_to_decimal(r.expected_profit),
-                executed: r.executed != 0,
-                rejected_reason: r.rejected_reason,
-                detected_at: r.detected_at,
-            })
-            .collect()
-    }
-}
-
-
-/// Create a stats recorder from a database pool.
-#[must_use]
-pub fn create_recorder(pool: Pool<ConnectionManager<SqliteConnection>>) -> Arc<StatsRecorder> {
-    Arc::new(StatsRecorder::new(pool))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rust_decimal_macros::dec;
-
-    #[test]
-    fn stats_summary_win_rate_with_trades() {
-        let summary = StatsSummary {
-            win_count: 7,
-            loss_count: 3,
-            ..Default::default()
-        };
-        assert!((summary.win_rate().unwrap() - 70.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn stats_summary_win_rate_no_trades() {
-        let summary = StatsSummary::default();
-        assert!(summary.win_rate().is_none());
-    }
-
-    #[test]
-    fn stats_summary_net_profit() {
-        let summary = StatsSummary {
-            profit_realized: dec!(100),
-            loss_realized: dec!(30),
-            ..Default::default()
-        };
-        assert_eq!(summary.net_profit(), dec!(70));
-    }
-
-    #[test]
-    fn decimal_conversion_roundtrip() {
-        let d = dec!(123.45);
-        let f = decimal_to_f32(d);
-        let back = f32_to_decimal(f);
-        // f32 precision loss is acceptable
-        assert!((back - d).abs() < dec!(0.01));
     }
 }

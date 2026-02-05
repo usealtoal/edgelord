@@ -112,8 +112,7 @@ pub fn load_daily_rows(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result
 
 pub fn export_daily_csv(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<String> {
     let pool = connect(db_path)?;
-    let recorder = StatsRecorder::new(pool);
-    Ok(recorder.export_daily_csv(from, to))
+    Ok(crate::core::service::statistics::export_daily_csv(&pool, from, to))
 }
 
 pub fn prune_old_records(db_path: &Path, retention_days: u32) -> Result<()> {
