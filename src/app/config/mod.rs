@@ -152,6 +152,139 @@ impl Config {
             }
             .into());
         }
+        if self.risk.max_position_per_market <= Decimal::ZERO {
+            return Err(ConfigError::InvalidValue {
+                field: "max_position_per_market",
+                reason: "must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if self.risk.max_total_exposure <= Decimal::ZERO {
+            return Err(ConfigError::InvalidValue {
+                field: "max_total_exposure",
+                reason: "must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if self.risk.min_profit_threshold < Decimal::ZERO {
+            return Err(ConfigError::InvalidValue {
+                field: "min_profit_threshold",
+                reason: "must be 0 or greater".to_string(),
+            }
+            .into());
+        }
+
+        if self.reconnection.initial_delay_ms == 0 {
+            return Err(ConfigError::InvalidValue {
+                field: "initial_delay_ms",
+                reason: "must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if self.reconnection.max_delay_ms < self.reconnection.initial_delay_ms {
+            return Err(ConfigError::InvalidValue {
+                field: "max_delay_ms",
+                reason: "must be >= initial_delay_ms".to_string(),
+            }
+            .into());
+        }
+        if self.reconnection.backoff_multiplier < 1.0 {
+            return Err(ConfigError::InvalidValue {
+                field: "backoff_multiplier",
+                reason: "must be >= 1.0".to_string(),
+            }
+            .into());
+        }
+        if self.reconnection.max_consecutive_failures == 0 {
+            return Err(ConfigError::InvalidValue {
+                field: "max_consecutive_failures",
+                reason: "must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if self.reconnection.circuit_breaker_cooldown_ms == 0 {
+            return Err(ConfigError::InvalidValue {
+                field: "circuit_breaker_cooldown_ms",
+                reason: "must be greater than 0".to_string(),
+            }
+            .into());
+        }
+
+        let latency = &self.governor.latency;
+        if latency.target_p50_ms == 0
+            || latency.target_p95_ms == 0
+            || latency.target_p99_ms == 0
+            || latency.max_p99_ms == 0
+        {
+            return Err(ConfigError::InvalidValue {
+                field: "latency_targets",
+                reason: "latency targets must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if !(latency.target_p50_ms <= latency.target_p95_ms
+            && latency.target_p95_ms <= latency.target_p99_ms
+            && latency.target_p99_ms <= latency.max_p99_ms)
+        {
+            return Err(ConfigError::InvalidValue {
+                field: "latency_targets",
+                reason: "targets must be ordered p50 <= p95 <= p99 <= max_p99".to_string(),
+            }
+            .into());
+        }
+
+        let scaling = &self.governor.scaling;
+        if scaling.check_interval_secs == 0
+            || scaling.expand_step == 0
+            || scaling.contract_step == 0
+            || scaling.cooldown_secs == 0
+        {
+            return Err(ConfigError::InvalidValue {
+                field: "scaling_config",
+                reason: "interval/steps/cooldown must be greater than 0".to_string(),
+            }
+            .into());
+        }
+        if scaling.expand_threshold <= 0.0 || scaling.contract_threshold <= 0.0 {
+            return Err(ConfigError::InvalidValue {
+                field: "scaling_config",
+                reason: "thresholds must be greater than 0".to_string(),
+            }
+            .into());
+        }
+
+        if self.cluster_detection.enabled {
+            if self.cluster_detection.debounce_ms == 0 {
+                return Err(ConfigError::InvalidValue {
+                    field: "debounce_ms",
+                    reason: "must be greater than 0".to_string(),
+                }
+                .into());
+            }
+            if self.cluster_detection.min_gap < Decimal::ZERO
+                || self.cluster_detection.min_gap > Decimal::ONE
+            {
+                return Err(ConfigError::InvalidValue {
+                    field: "min_gap",
+                    reason: "must be between 0 and 1".to_string(),
+                }
+                .into());
+            }
+            if self.cluster_detection.max_clusters_per_cycle == 0 {
+                return Err(ConfigError::InvalidValue {
+                    field: "max_clusters_per_cycle",
+                    reason: "must be greater than 0".to_string(),
+                }
+                .into());
+            }
+            if self.cluster_detection.channel_capacity == 0 {
+                return Err(ConfigError::InvalidValue {
+                    field: "channel_capacity",
+                    reason: "must be greater than 0".to_string(),
+                }
+                .into());
+            }
+        }
         Ok(())
     }
 
@@ -181,4 +314,3 @@ impl Config {
         self.logging.init();
     }
 }
-
