@@ -4,6 +4,7 @@ pub mod banner;
 pub mod check;
 pub mod config;
 pub mod logs;
+pub mod provision;
 pub mod run;
 pub mod service;
 pub mod statistics;
@@ -13,6 +14,7 @@ pub mod wallet;
 use clap::{Parser, Subcommand};
 use rust_decimal::Decimal;
 use std::path::PathBuf;
+use crate::cli::provision::ProvisionCommand;
 
 /// Edgelord - Multi-strategy arbitrage detection and execution.
 #[derive(Parser, Debug)]
@@ -41,6 +43,10 @@ pub enum Commands {
 
     /// Tail service logs
     Logs(LogsArgs),
+
+    /// Provision exchange-specific configuration
+    #[command(subcommand)]
+    Provision(ProvisionCommand),
 
     /// Manage systemd service
     #[command(subcommand)]

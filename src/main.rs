@@ -1,6 +1,7 @@
 use clap::Parser;
 use edgelord::cli::{
-    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand, WalletCommand,
+    CheckCommand, Cli, Commands, ConfigCommand, ProvisionCommand, ServiceCommand,
+    StatisticsCommand, WalletCommand,
 };
 
 #[tokio::main]
@@ -41,6 +42,7 @@ async fn main() {
             edgelord::cli::logs::execute(&args);
             Ok(())
         }
+        Commands::Provision(cmd) => edgelord::cli::provision::execute(cmd).await,
         Commands::Service(cmd) => match cmd {
             ServiceCommand::Install(args) => edgelord::cli::service::execute_install(&args),
             ServiceCommand::Uninstall => edgelord::cli::service::execute_uninstall(),
