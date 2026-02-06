@@ -1,7 +1,6 @@
 use clap::Parser;
 use edgelord::cli::{
-    CheckCommand, Cli, Commands, ConfigCommand, ProvisionCommand, ServiceCommand,
-    StatisticsCommand, WalletCommand,
+    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand, WalletCommand,
 };
 
 #[tokio::main]

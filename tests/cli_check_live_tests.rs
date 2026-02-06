@@ -45,3 +45,36 @@ fn check_live_warns_on_missing_wallet_or_mainnet() {
         "expected nonzero exit when not ready"
     );
 }
+
+#[test]
+fn check_live_fails_when_environment_is_testnet_even_with_mainnet_chain_id() {
+    let template = include_str!("../config.toml.example");
+    let testnet_chain137 = template.replace("chain_id = 80002", "chain_id = 137");
+    let path = write_temp_config(&testnet_chain137);
+
+    std::env::set_var(
+        "WALLET_PRIVATE_KEY",
+        "1111111111111111111111111111111111111111111111111111111111111111",
+    );
+    std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD");
+    std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD_FILE");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_edgelord"))
+        .args(["check", "live", "--config"])
+        .arg(&path)
+        .output()
+        .expect("run edgelord");
+
+    let _ = fs::remove_file(&path);
+    std::env::remove_var("WALLET_PRIVATE_KEY");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Environment"),
+        "expected environment warning in stdout: {stdout}"
+    );
+    assert!(
+        !output.status.success(),
+        "expected nonzero exit for testnet environment"
+    );
+}
