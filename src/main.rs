@@ -49,6 +49,7 @@ async fn main() {
         },
         Commands::Check(cmd) => match cmd {
             CheckCommand::Config(args) => edgelord::cli::check::execute_config(&args.config),
+            CheckCommand::Live(args) => edgelord::cli::check::execute_live(&args.config),
             CheckCommand::Connection(args) => {
                 edgelord::cli::check::execute_connection(&args.config).await
             }

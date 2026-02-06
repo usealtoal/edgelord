@@ -101,6 +101,8 @@ pub enum ServiceCommand {
 pub enum CheckCommand {
     /// Validate configuration file
     Config(ConfigPathArg),
+    /// Validate readiness for live trading
+    Live(ConfigPathArg),
     /// Test WebSocket connection to exchange
     Connection(ConfigPathArg),
     /// Test Telegram notification setup
