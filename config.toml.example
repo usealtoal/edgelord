@@ -170,7 +170,7 @@ max_slippage = 0.02
 # =============================================================================
 
 # Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.
-# See doc/deployment/telegram.md for setup instructions.
+# See docs/deployment/telegram.md for setup instructions.
 
 [telegram]
 enabled = false                     # Enable Telegram alerts
