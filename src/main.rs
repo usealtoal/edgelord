@@ -64,6 +64,17 @@ async fn main() {
             WalletCommand::Status(args) => {
                 edgelord::cli::wallet::execute_status(&args.config).await
             }
+            WalletCommand::Address(args) => edgelord::cli::wallet::execute_address(&args.config),
+            WalletCommand::Sweep(args) => {
+                edgelord::cli::wallet::execute_sweep(
+                    &args.config,
+                    &args.to,
+                    &args.asset,
+                    &args.network,
+                    args.yes,
+                )
+                .await
+            }
         },
     };
 

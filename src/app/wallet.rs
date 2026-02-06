@@ -6,10 +6,14 @@
 use rust_decimal::Decimal;
 
 use crate::app::{Config, Exchange};
+use crate::error::ConfigError;
 use crate::error::Result;
 
 #[cfg(feature = "polymarket")]
-use crate::core::exchange::{polymarket::PolymarketApproval, ApprovalResult, TokenApproval};
+use crate::core::exchange::{
+    polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult},
+    ApprovalResult, TokenApproval,
+};
 
 /// Current approval status for CLI display.
 ///
@@ -55,6 +59,15 @@ pub enum ApprovalOutcome {
     },
 }
 
+/// Outcome of a sweep operation.
+#[derive(Debug, Clone)]
+pub enum SweepOutcome {
+    /// No balance to sweep.
+    NoBalance { balance: Decimal },
+    /// Sweep transaction succeeded.
+    Transferred { tx_hash: String, amount: Decimal },
+}
+
 /// Wallet service providing CLI operations.
 ///
 /// Dispatches to the appropriate exchange-specific implementation
@@ -92,6 +105,27 @@ impl WalletService {
     pub async fn approve(config: &Config, amount: Decimal) -> Result<ApprovalOutcome> {
         match config.exchange {
             Exchange::Polymarket => Self::approve_polymarket(config, amount).await,
+        }
+    }
+
+    /// Get the wallet address for the configured exchange.
+    pub fn wallet_address(config: &Config) -> Result<String> {
+        match config.exchange {
+            Exchange::Polymarket => Self::polymarket_wallet_address(config),
+        }
+    }
+
+    /// Get the USDC balance for the configured exchange.
+    pub async fn usdc_balance(config: &Config) -> Result<Decimal> {
+        match config.exchange {
+            Exchange::Polymarket => Self::polymarket_usdc_balance(config).await,
+        }
+    }
+
+    /// Sweep the full USDC balance to the provided address.
+    pub async fn sweep_usdc(config: &Config, to: &str) -> Result<SweepOutcome> {
+        match config.exchange {
+            Exchange::Polymarket => Self::sweep_polymarket(config, to).await,
         }
     }
 
@@ -140,6 +174,66 @@ impl WalletService {
 
     #[cfg(not(feature = "polymarket"))]
     async fn approve_polymarket(_config: &Config, _amount: Decimal) -> Result<ApprovalOutcome> {
+        Err(crate::error::ConfigError::InvalidValue {
+            field: "exchange",
+            reason: "Polymarket support requires the 'polymarket' feature".to_string(),
+        }
+        .into())
+    }
+
+    #[cfg(feature = "polymarket")]
+    fn polymarket_wallet_address(config: &Config) -> Result<String> {
+        let approval = PolymarketApproval::new(config)?;
+        Ok(approval.wallet_address().to_string())
+    }
+
+    #[cfg(not(feature = "polymarket"))]
+    fn polymarket_wallet_address(_config: &Config) -> Result<String> {
+        Err(crate::error::ConfigError::InvalidValue {
+            field: "exchange",
+            reason: "Polymarket support requires the 'polymarket' feature".to_string(),
+        }
+        .into())
+    }
+
+    #[cfg(feature = "polymarket")]
+    async fn polymarket_usdc_balance(config: &Config) -> Result<Decimal> {
+        let approval = PolymarketApproval::new(config)?;
+        approval.usdc_balance().await
+    }
+
+    #[cfg(not(feature = "polymarket"))]
+    async fn polymarket_usdc_balance(_config: &Config) -> Result<Decimal> {
+        Err(crate::error::ConfigError::InvalidValue {
+            field: "exchange",
+            reason: "Polymarket support requires the 'polymarket' feature".to_string(),
+        }
+        .into())
+    }
+
+    #[cfg(feature = "polymarket")]
+    async fn sweep_polymarket(config: &Config, to: &str) -> Result<SweepOutcome> {
+        use alloy_primitives::Address;
+        use std::str::FromStr;
+
+        let to_address = Address::from_str(to).map_err(|e| ConfigError::InvalidValue {
+            field: "to",
+            reason: e.to_string(),
+        })?;
+
+        let approval = PolymarketApproval::new(config)?;
+        let result = approval.sweep_usdc(to_address).await?;
+
+        Ok(match result {
+            PolymarketSweepResult::NoBalance { balance } => SweepOutcome::NoBalance { balance },
+            PolymarketSweepResult::Transferred { tx_hash, amount } => {
+                SweepOutcome::Transferred { tx_hash, amount }
+            }
+        })
+    }
+
+    #[cfg(not(feature = "polymarket"))]
+    async fn sweep_polymarket(_config: &Config, _to: &str) -> Result<SweepOutcome> {
         Err(crate::error::ConfigError::InvalidValue {
             field: "exchange",
             reason: "Polymarket support requires the 'polymarket' feature".to_string(),

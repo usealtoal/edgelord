@@ -116,6 +116,10 @@ pub enum WalletCommand {
     Approve(WalletApproveArgs),
     /// Show wallet approval status
     Status(ConfigPathArg),
+    /// Show wallet address
+    Address(ConfigPathArg),
+    /// Sweep USDC balance to another address
+    Sweep(WalletSweepArgs),
 }
 
 /// Shared argument for commands that only need a config path.
@@ -283,6 +287,30 @@ pub struct WalletApproveArgs {
     /// Amount of USDC to approve (in dollars)
     #[arg(long, default_value = "10000")]
     pub amount: Decimal,
+
+    /// Skip confirmation prompt
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Arguments for the `wallet sweep` subcommand.
+#[derive(Parser, Debug)]
+pub struct WalletSweepArgs {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "config.toml")]
+    pub config: PathBuf,
+
+    /// Destination address
+    #[arg(long)]
+    pub to: String,
+
+    /// Asset symbol (default: usdc)
+    #[arg(long, default_value = "usdc")]
+    pub asset: String,
+
+    /// Network name (default: polygon)
+    #[arg(long, default_value = "polygon")]
+    pub network: String,
 
     /// Skip confirmation prompt
     #[arg(long)]

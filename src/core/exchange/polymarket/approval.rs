@@ -39,7 +39,17 @@ sol! {
         function allowance(address owner, address spender) external view returns (uint256);
         function approve(address spender, uint256 amount) external returns (bool);
         function balanceOf(address account) external view returns (uint256);
+        function transfer(address to, uint256 amount) external returns (bool);
     }
+}
+
+/// Result of a sweep operation.
+#[derive(Debug, Clone)]
+pub enum SweepResult {
+    /// No balance available to sweep.
+    NoBalance { balance: Decimal },
+    /// Sweep completed successfully.
+    Transferred { tx_hash: String, amount: Decimal },
 }
 
 /// Polymarket token approval handler.
@@ -128,6 +138,65 @@ impl PolymarketApproval {
     /// Get wallet address.
     pub fn wallet_address(&self) -> Address {
         self.signer.address()
+    }
+
+    /// Get USDC balance for the wallet.
+    pub async fn usdc_balance(&self) -> Result<Decimal> {
+        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
+            ConfigError::InvalidValue {
+                field: "rpc_url",
+                reason: e.to_string(),
+            }
+        })?;
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+        let usdc = IERC20::new(self.usdc_address()?, &provider);
+        let owner = self.signer.address();
+        let balance: U256 = usdc
+            .balanceOf(owner)
+            .call()
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to get balance: {e}")))?;
+
+        Ok(Self::from_usdc_units(balance))
+    }
+
+    /// Sweep the full USDC balance to the provided address.
+    pub async fn sweep_usdc(&self, to: Address) -> Result<SweepResult> {
+        let balance = self.usdc_balance().await?;
+        if balance <= Decimal::ZERO {
+            return Ok(SweepResult::NoBalance { balance });
+        }
+
+        let wallet = alloy_provider::network::EthereumWallet::from(self.signer.clone());
+        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
+            ConfigError::InvalidValue {
+                field: "rpc_url",
+                reason: e.to_string(),
+            }
+        })?;
+        let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
+
+        let usdc = IERC20::new(self.usdc_address()?, &provider);
+        let amount_units = Self::to_usdc_units(balance);
+
+        let pending_tx = usdc
+            .transfer(to, amount_units)
+            .send()
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to send transfer: {e}")))?;
+
+        let receipt = pending_tx
+            .get_receipt()
+            .await
+            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to get receipt: {e}")))?;
+
+        let tx_hash = format!("{:?}", receipt.transaction_hash);
+
+        Ok(SweepResult::Transferred {
+            tx_hash,
+            amount: balance,
+        })
     }
 }
 
