@@ -13,7 +13,7 @@
 
 ### Exceptions
 
-- `types.rs` is allowed where `type.rs` would conflict with Rust keywords.
+- Avoid generic plurals like `types.rs` or `traits.rs`. Use descriptive singular names instead (e.g., `exchange_config.rs`, `response.rs`, `stat.rs`).
 - `statistics/` is allowed as a singular service name for aggregated stats.
 
 ### Types
