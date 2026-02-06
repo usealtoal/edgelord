@@ -33,7 +33,7 @@
 
 ## File Size Limits
 
-- **Hard limit: 400 SLOC (source lines of code)**
+- **Hard limit: 500 SLOC (source lines of code)**
 - Tests (including `#[cfg(test)]` modules) **do not count** toward the limit
 - Approaching limit? Split into submodule
 - Prefer many small files over few large ones
