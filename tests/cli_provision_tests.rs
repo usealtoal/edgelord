@@ -1,8 +1,10 @@
-use edgelord::cli::{Cli, Commands};
+use alloy_signer_local::PrivateKeySigner;
 use edgelord::cli::provision::{execute, ProvisionCommand, ProvisionPolymarketArgs, WalletMode};
+use edgelord::cli::{Cli, Commands};
 use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -63,5 +65,41 @@ async fn provision_polymarket_writes_keystore_and_updates_config() {
     assert_eq!(path_value, keystore_path.to_string_lossy());
 
     let _ = fs::remove_dir_all(&dir);
+    std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD");
+}
+
+#[tokio::test]
+async fn provision_polymarket_imports_private_key() {
+    let dir = temp_path("provision-import");
+    fs::create_dir_all(&dir).expect("create temp dir");
+    let config_path = dir.join("config.toml");
+    let keystore_path = dir.join("keystore.json");
+
+    let template = include_str!("../config.toml.example");
+    fs::write(&config_path, template).expect("write config template");
+
+    let private_key = "6f142508b4eea641e33cb2a0161221105086a84584c74245ca463a49effea30b";
+    std::env::set_var("EDGELORD_PRIVATE_KEY", private_key);
+    std::env::set_var("EDGELORD_KEYSTORE_PASSWORD", "test-password");
+
+    let args = ProvisionPolymarketArgs {
+        config: config_path.clone(),
+        wallet: WalletMode::Import,
+        keystore_path: Some(keystore_path.clone()),
+    };
+
+    execute(ProvisionCommand::Polymarket(args))
+        .await
+        .expect("provision polymarket import");
+
+    assert!(keystore_path.exists(), "expected keystore to be created");
+
+    let expected = PrivateKeySigner::from_str(private_key).expect("parse private key");
+    let signer = PrivateKeySigner::decrypt_keystore(&keystore_path, "test-password")
+        .expect("decrypt keystore");
+    assert_eq!(signer.address(), expected.address());
+
+    let _ = fs::remove_dir_all(&dir);
+    std::env::remove_var("EDGELORD_PRIVATE_KEY");
     std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD");
 }

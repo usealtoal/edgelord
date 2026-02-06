@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use alloy_signer_local::PrivateKeySigner;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -68,13 +69,7 @@ fn provision_polymarket(args: ProvisionPolymarketArgs) -> Result<()> {
     let password = read_keystore_password()?;
     let signer = match args.wallet {
         WalletMode::Generate => create_keystore(&keystore_path, &password)?,
-        WalletMode::Import => {
-            return Err(ConfigError::InvalidValue {
-                field: "wallet",
-                reason: "import mode not implemented yet".to_string(),
-            }
-            .into());
-        }
+        WalletMode::Import => import_keystore(&keystore_path, &password)?,
     };
 
     update_wallet_keystore_path(&config_path, &keystore_path)?;
@@ -196,6 +191,49 @@ fn create_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
             field: "keystore_path",
             reason: e.to_string(),
         })?;
+
+    Ok(signer)
+}
+
+fn import_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
+    let private_key = std::env::var("EDGELORD_PRIVATE_KEY").map_err(|_| {
+        ConfigError::MissingField {
+            field: "EDGELORD_PRIVATE_KEY",
+        }
+    })?;
+    let signer = PrivateKeySigner::from_str(&private_key).map_err(|e| {
+        ConfigError::InvalidValue {
+            field: "EDGELORD_PRIVATE_KEY",
+            reason: e.to_string(),
+        }
+    })?;
+
+    let parent = path.parent().ok_or_else(|| ConfigError::InvalidValue {
+        field: "keystore_path",
+        reason: "missing parent directory".to_string(),
+    })?;
+    fs::create_dir_all(parent)?;
+
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| ConfigError::InvalidValue {
+            field: "keystore_path",
+            reason: "invalid file name".to_string(),
+        })?;
+
+    let mut rng = OsRng;
+    let (signer, _uuid) = PrivateKeySigner::encrypt_keystore(
+        parent,
+        &mut rng,
+        signer.to_bytes(),
+        password,
+        Some(name),
+    )
+    .map_err(|e| ConfigError::InvalidValue {
+        field: "keystore_path",
+        reason: e.to_string(),
+    })?;
 
     Ok(signer)
 }
