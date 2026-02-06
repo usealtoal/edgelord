@@ -3,7 +3,7 @@ name = "edgelord"
 version = "0.1.0"
 edition = "2021"
 description = "Polymarket arbitrage detection and execution"
-license = "MIT"
+license = "UNLICENSED"
 
 [features]
 default = ["polymarket"]
