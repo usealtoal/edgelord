@@ -29,7 +29,7 @@ mod filter;
 pub mod polymarket;
 mod reconnecting;
 mod scorer;
-mod traits;
+mod exchange_config;
 
 pub use approval::{ApprovalResult, ApprovalStatus, TokenApproval};
 pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
@@ -37,7 +37,7 @@ pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
 pub use scorer::MarketScorer;
-pub use traits::ExchangeConfig;
+pub use exchange_config::ExchangeConfig;
 
 // === Trait definitions ===
 
