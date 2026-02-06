@@ -4,6 +4,7 @@ pub mod banner;
 pub mod check;
 pub mod config;
 pub mod logs;
+pub mod provision;
 pub mod run;
 pub mod service;
 pub mod statistics;
@@ -13,6 +14,7 @@ pub mod wallet;
 use clap::{Parser, Subcommand};
 use rust_decimal::Decimal;
 use std::path::PathBuf;
+pub use provision::ProvisionCommand;
 
 /// Edgelord - Multi-strategy arbitrage detection and execution.
 #[derive(Parser, Debug)]
@@ -41,6 +43,10 @@ pub enum Commands {
 
     /// Tail service logs
     Logs(LogsArgs),
+
+    /// Provision exchange-specific configuration
+    #[command(subcommand)]
+    Provision(ProvisionCommand),
 
     /// Manage systemd service
     #[command(subcommand)]
@@ -95,6 +101,8 @@ pub enum ServiceCommand {
 pub enum CheckCommand {
     /// Validate configuration file
     Config(ConfigPathArg),
+    /// Validate readiness for live trading
+    Live(ConfigPathArg),
     /// Test WebSocket connection to exchange
     Connection(ConfigPathArg),
     /// Test Telegram notification setup
@@ -108,6 +116,10 @@ pub enum WalletCommand {
     Approve(WalletApproveArgs),
     /// Show wallet approval status
     Status(ConfigPathArg),
+    /// Show wallet address
+    Address(ConfigPathArg),
+    /// Sweep USDC balance to another address
+    Sweep(WalletSweepArgs),
 }
 
 /// Shared argument for commands that only need a config path.
@@ -275,6 +287,30 @@ pub struct WalletApproveArgs {
     /// Amount of USDC to approve (in dollars)
     #[arg(long, default_value = "10000")]
     pub amount: Decimal,
+
+    /// Skip confirmation prompt
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Arguments for the `wallet sweep` subcommand.
+#[derive(Parser, Debug)]
+pub struct WalletSweepArgs {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "config.toml")]
+    pub config: PathBuf,
+
+    /// Destination address
+    #[arg(long)]
+    pub to: String,
+
+    /// Asset symbol (default: usdc)
+    #[arg(long, default_value = "usdc")]
+    pub asset: String,
+
+    /// Network name (default: polygon)
+    #[arg(long, default_value = "polygon")]
+    pub network: String,
 
     /// Skip confirmation prompt
     #[arg(long)]

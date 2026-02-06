@@ -18,12 +18,37 @@ cargo build --release
 
 The binary is at `./target/release/edgelord`.
 
+## Provisioning (Recommended)
+
+Provisioning creates an encrypted keystore and updates your config automatically.
+
+```bash
+export EDGELORD_KEYSTORE_PASSWORD="..."
+./target/release/edgelord provision polymarket --config config.polymarket.toml
+```
+
+To import an existing private key into a keystore:
+
+```bash
+export EDGELORD_PRIVATE_KEY="0x..."
+export EDGELORD_KEYSTORE_PASSWORD="..."
+./target/release/edgelord provision polymarket --wallet import --config config.polymarket.toml
+```
+
+By default, the keystore is written to:
+
+```
+~/.config/edgelord/exchanges/polymarket/keystore.json
+```
+
+Use `--keystore-path` to override. For headless setups, you can provide the passphrase via `EDGELORD_KEYSTORE_PASSWORD_FILE`.
+
 ## Configuration
 
 Copy the example config:
 
 ```bash
-cp config.toml.example config.toml
+cp config.toml.example config.polymarket.toml
 ```
 
 Key sections:
@@ -50,10 +75,22 @@ See [Configuration](configuration.md) for all options.
 
 ## Environment Variables
 
-Required for trading:
+If using a keystore (provisioned):
+
+```bash
+export EDGELORD_KEYSTORE_PASSWORD="..."              # or EDGELORD_KEYSTORE_PASSWORD_FILE
+```
+
+If using a raw private key (manual setup):
 
 ```bash
 export WALLET_PRIVATE_KEY="0x..."
+```
+
+When importing a key into a keystore:
+
+```bash
+export EDGELORD_PRIVATE_KEY="0x..."
 ```
 
 Optional for Telegram alerts (requires `--features telegram`):
@@ -68,19 +105,25 @@ export TELEGRAM_CHAT_ID="..."
 Interactive mode with colored output:
 
 ```bash
-./target/release/edgelord run
+./target/release/edgelord run --config config.polymarket.toml
 ```
 
 Production mode with JSON logs:
 
 ```bash
-./target/release/edgelord run --no-banner --json-logs
+./target/release/edgelord run --config config.polymarket.toml --no-banner --json-logs
 ```
 
 Check status:
 
 ```bash
 ./target/release/edgelord status
+```
+
+Check mainnet readiness:
+
+```bash
+./target/release/edgelord check live --config config.polymarket.toml
 ```
 
 ## Verifying It Works

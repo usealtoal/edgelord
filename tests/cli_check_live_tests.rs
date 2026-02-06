@@ -1,0 +1,47 @@
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+fn write_temp_config(contents: &str) -> PathBuf {
+    let mut path = std::env::temp_dir();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    path.push(format!("edgelord-check-live-{nanos}.toml"));
+    fs::write(&path, contents).expect("write temp config");
+    path
+}
+
+#[test]
+fn check_live_warns_on_missing_wallet_or_mainnet() {
+    let template = include_str!("../config.toml.example");
+    let path = write_temp_config(template);
+
+    std::env::remove_var("WALLET_PRIVATE_KEY");
+    std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD");
+    std::env::remove_var("EDGELORD_KEYSTORE_PASSWORD_FILE");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_edgelord"))
+        .args(["check", "live", "--config"])
+        .arg(&path)
+        .output()
+        .expect("run edgelord");
+
+    let _ = fs::remove_file(&path);
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("⚠ Wallet"),
+        "expected wallet warning in stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("⚠ Chain ID"),
+        "expected chain id warning in stdout: {stdout}"
+    );
+    assert!(
+        !output.status.success(),
+        "expected nonzero exit when not ready"
+    );
+}

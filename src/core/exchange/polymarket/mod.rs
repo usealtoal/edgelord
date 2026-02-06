@@ -11,7 +11,7 @@ mod scorer;
 mod response;
 mod websocket;
 
-pub use approval::PolymarketApproval;
+pub use approval::{PolymarketApproval, SweepResult};
 pub use client::PolymarketClient;
 pub use config::{PolymarketExchangeConfig, POLYMARKET_PAYOUT};
 pub use dedup::PolymarketDeduplicator;

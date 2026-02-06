@@ -5,6 +5,7 @@
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
+use std::fs;
 use std::path::Path;
 
 use crate::error::{ConfigError, Result};
@@ -121,6 +122,50 @@ fn default_database_path() -> String {
     "edgelord.db".to_string()
 }
 
+fn read_keystore_password() -> Result<String> {
+    if let Ok(password) = std::env::var("EDGELORD_KEYSTORE_PASSWORD") {
+        return Ok(password);
+    }
+    if let Ok(path) = std::env::var("EDGELORD_KEYSTORE_PASSWORD_FILE") {
+        let contents = fs::read_to_string(path).map_err(ConfigError::ReadFile)?;
+        let password = contents.trim().to_string();
+        if password.is_empty() {
+            return Err(ConfigError::MissingField {
+                field: "EDGELORD_KEYSTORE_PASSWORD_FILE",
+            }
+            .into());
+        }
+        return Ok(password);
+    }
+
+    Err(ConfigError::MissingField {
+        field: "EDGELORD_KEYSTORE_PASSWORD",
+    }
+    .into())
+}
+
+#[cfg(feature = "polymarket")]
+fn decrypt_keystore_private_key(path: &str, password: &str) -> Result<String> {
+    use alloy_signer_local::PrivateKeySigner;
+
+    let signer = PrivateKeySigner::decrypt_keystore(path, password).map_err(|e| {
+        ConfigError::InvalidValue {
+            field: "keystore_path",
+            reason: e.to_string(),
+        }
+    })?;
+    Ok(format!("{:x}", signer.to_bytes()))
+}
+
+#[cfg(not(feature = "polymarket"))]
+fn decrypt_keystore_private_key(_path: &str, _password: &str) -> Result<String> {
+    Err(ConfigError::InvalidValue {
+        field: "keystore_path",
+        reason: "keystore support requires polymarket feature".to_string(),
+    }
+    .into())
+}
+
 impl Config {
     #[allow(clippy::result_large_err)]
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -130,6 +175,15 @@ impl Config {
 
         // Load private key from environment variable (never from config file for security)
         config.wallet.private_key = std::env::var("WALLET_PRIVATE_KEY").ok();
+        if config.wallet.private_key.is_none() {
+            if let Some(ref keystore_path) = config.wallet.keystore_path {
+                let password = read_keystore_password()?;
+                config.wallet.private_key = Some(decrypt_keystore_private_key(
+                    keystore_path,
+                    &password,
+                )?);
+            }
+        }
 
         config.validate()?;
 

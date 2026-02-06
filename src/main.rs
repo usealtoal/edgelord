@@ -1,6 +1,7 @@
 use clap::Parser;
 use edgelord::cli::{
-    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand, WalletCommand,
+    CheckCommand, Cli, Commands, ConfigCommand, ProvisionCommand, ServiceCommand,
+    StatisticsCommand, WalletCommand,
 };
 
 #[tokio::main]
@@ -41,12 +42,14 @@ async fn main() {
             edgelord::cli::logs::execute(&args);
             Ok(())
         }
+        Commands::Provision(cmd) => edgelord::cli::provision::execute(cmd).await,
         Commands::Service(cmd) => match cmd {
             ServiceCommand::Install(args) => edgelord::cli::service::execute_install(&args),
             ServiceCommand::Uninstall => edgelord::cli::service::execute_uninstall(),
         },
         Commands::Check(cmd) => match cmd {
             CheckCommand::Config(args) => edgelord::cli::check::execute_config(&args.config),
+            CheckCommand::Live(args) => edgelord::cli::check::execute_live(&args.config),
             CheckCommand::Connection(args) => {
                 edgelord::cli::check::execute_connection(&args.config).await
             }
@@ -60,6 +63,17 @@ async fn main() {
             }
             WalletCommand::Status(args) => {
                 edgelord::cli::wallet::execute_status(&args.config).await
+            }
+            WalletCommand::Address(args) => edgelord::cli::wallet::execute_address(&args.config),
+            WalletCommand::Sweep(args) => {
+                edgelord::cli::wallet::execute_sweep(
+                    &args.config,
+                    &args.to,
+                    &args.asset,
+                    &args.network,
+                    args.yes,
+                )
+                .await
             }
         },
     };
