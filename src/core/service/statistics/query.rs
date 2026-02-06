@@ -7,7 +7,7 @@ use diesel::SqliteConnection;
 use tracing::warn;
 
 use super::export::summary_from_rows;
-use super::types::StatsSummary;
+use super::stat::StatsSummary;
 use crate::core::db::model::DailyStatsRow;
 use crate::core::db::schema::daily_stats;
 

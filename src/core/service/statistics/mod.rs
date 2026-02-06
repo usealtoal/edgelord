@@ -2,12 +2,12 @@ mod convert;
 mod export;
 mod query;
 mod recorder;
-mod types;
+mod stat;
 
 pub use convert::{decimal_to_f32, f32_to_decimal};
 pub use export::{export_daily_csv, recent_opportunities, summary_from_rows};
 pub use recorder::StatsRecorder;
-pub use types::{
+pub use stat::{
     OpportunitySummary, RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeLeg, TradeOpenEvent,
 };
 
