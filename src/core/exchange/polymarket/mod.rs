@@ -8,7 +8,7 @@ mod executor;
 mod filter;
 mod message;
 mod scorer;
-mod types;
+mod response;
 mod websocket;
 
 pub use approval::PolymarketApproval;
@@ -19,5 +19,5 @@ pub use executor::PolymarketExecutor;
 pub use filter::PolymarketFilter;
 pub use message::{PolymarketBookMessage, PolymarketWsMessage, PolymarketWsPriceLevel};
 pub use scorer::PolymarketScorer;
-pub use types::{PolymarketMarket, PolymarketToken};
+pub use response::{PolymarketMarket, PolymarketToken};
 pub use websocket::{PolymarketDataStream, PolymarketWebSocketHandler};

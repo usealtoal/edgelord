@@ -6,7 +6,7 @@ use diesel::SqliteConnection;
 use tracing::warn;
 
 use super::convert::f32_to_decimal;
-use super::types::{OpportunitySummary, StatsSummary};
+use super::stat::{OpportunitySummary, StatsSummary};
 use crate::core::db::schema::{daily_stats, opportunities};
 use crate::core::db::model::{DailyStatsRow, OpportunityRow};
 

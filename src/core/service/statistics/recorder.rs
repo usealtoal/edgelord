@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 
 use super::convert::decimal_to_f32;
 use super::query::{summary_for_range, summary_for_today};
-use super::types::{RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent};
+use super::stat::{RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent};
 use tracing::{debug, warn};
 
 use crate::core::db::model::{

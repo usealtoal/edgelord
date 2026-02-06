@@ -29,7 +29,7 @@ mod filter;
 pub mod polymarket;
 mod reconnecting;
 mod scorer;
-mod traits;
+mod exchange_config;
 mod types;
 
 pub use approval::{ApprovalResult, ApprovalStatus, TokenApproval};
@@ -38,7 +38,7 @@ pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
 pub use scorer::MarketScorer;
-pub use traits::ExchangeConfig;
+pub use exchange_config::ExchangeConfig;
 pub use types::{
     ArbitrageExecutor, ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher, MarketInfo,
     OrderExecutor, OrderRequest, OrderSide, OutcomeInfo,

@@ -10,7 +10,7 @@ use reqwest::Client as HttpClient;
 use tracing::{debug, info, warn};
 use tokio::time::sleep;
 
-use super::types::{PolymarketMarket, PolymarketMarketsResponse};
+use super::response::{PolymarketMarket, PolymarketMarketsResponse};
 use crate::app::PolymarketConfig;
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 use crate::error::Result;
