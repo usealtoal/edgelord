@@ -34,14 +34,17 @@ cd edgelord
 cargo build --release
 
 # Configure (copy and edit)
-cp config.toml.example config.toml
+# Provision (recommended for Polymarket)
+export EDGELORD_KEYSTORE_PASSWORD="..."        # Keystore passphrase
+./target/release/edgelord provision polymarket --config config.polymarket.toml
 
-# Set API keys
-export WALLET_PRIVATE_KEY="..."        # For execution
+# Or manual config
+cp config.toml.example config.toml
+export WALLET_PRIVATE_KEY="..."                # For execution
 export ANTHROPIC_API_KEY="..."         # For relation inference
 
 # Run
-./target/release/edgelord run
+./target/release/edgelord run --config config.polymarket.toml
 ```
 
 See [Getting Started](docs/getting-started.md) for detailed setup.
