@@ -60,13 +60,13 @@ impl StatsRecorder {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to get DB connection for stats: {e}");
+                warn!(error = %e, "Failed to get database connection for stats");
                 return None;
             }
         };
 
         if let Err(e) = db::configure_sqlite_connection(&mut conn) {
-            warn!("Failed to configure SQLite connection: {e}");
+            warn!(error = %e, "Failed to configure SQLite connection");
         }
 
         // Execute insert and daily stats update in a transaction
@@ -76,7 +76,7 @@ impl StatsRecorder {
                 .values(&row)
                 .execute(conn)
                 .map_err(|e| {
-                    warn!("Failed to record opportunity: {e}");
+                    warn!(error = %e, "Failed to record opportunity");
                     e
                 })?;
 
@@ -87,7 +87,7 @@ impl StatsRecorder {
                 .get_result::<LastInsertRowId>(conn)
                 .map(|row| row.id)
                 .map_err(|e| {
-                    warn!("Failed to get inserted ID: {e}");
+                    warn!(error = %e, "Failed to fetch inserted opportunity ID");
                     e
                 })?;
 
@@ -103,7 +103,7 @@ impl StatsRecorder {
                 }
             })
             .map_err(|e| {
-                warn!("Failed to update daily stats: {e}");
+                warn!(error = %e, "Failed to update daily stats for opportunity");
                 e
             })?;
 
@@ -116,7 +116,7 @@ impl StatsRecorder {
                 Some(id)
             }
             Err(e) => {
-                warn!("Transaction failed: {e}");
+                warn!(error = %e, "Opportunity transaction failed");
                 None
             }
         }
@@ -143,13 +143,13 @@ impl StatsRecorder {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to get DB connection for stats: {e}");
+                warn!(error = %e, "Failed to get database connection for stats");
                 return None;
             }
         };
 
         if let Err(e) = db::configure_sqlite_connection(&mut conn) {
-            warn!("Failed to configure SQLite connection: {e}");
+            warn!(error = %e, "Failed to configure SQLite connection");
         }
 
         let id = conn.transaction(|conn| {
@@ -157,7 +157,7 @@ impl StatsRecorder {
                 .values(&row)
                 .execute(conn)
                 .map_err(|e| {
-                    warn!("Failed to record trade open: {e}");
+                    warn!(error = %e, "Failed to record trade open");
                     e
                 })?;
 
@@ -165,7 +165,7 @@ impl StatsRecorder {
                 .get_result::<LastInsertRowId>(conn)
                 .map(|row| row.id)
                 .map_err(|e| {
-                    warn!("Failed to get trade ID: {e}");
+                    warn!(error = %e, "Failed to fetch inserted trade ID");
                     e
                 })?;
 
@@ -175,7 +175,7 @@ impl StatsRecorder {
                 strategy.trades_opened += 1;
             })
             .map_err(|e| {
-                warn!("Failed to update daily stats: {e}");
+                warn!(error = %e, "Failed to update daily stats for trade open");
                 e
             })?;
 
@@ -188,7 +188,7 @@ impl StatsRecorder {
                 Some(id)
             }
             Err(e) => {
-                warn!("Transaction failed: {e}");
+                warn!(error = %e, "Trade-open transaction failed");
                 None
             }
         }
@@ -202,7 +202,7 @@ impl StatsRecorder {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to get DB connection for stats: {e}");
+                warn!(error = %e, "Failed to get database connection for stats");
                 return;
             }
         };
@@ -231,7 +231,7 @@ impl StatsRecorder {
             .execute(&mut conn);
 
         if let Err(e) = result {
-            warn!("Failed to record trade close: {e}");
+            warn!(error = %e, "Failed to record trade close");
             return;
         }
 
@@ -292,7 +292,7 @@ impl StatsRecorder {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to get DB connection for daily stats: {e}");
+                warn!(error = %e, "Failed to get database connection for daily stats");
                 return;
             }
         };
@@ -364,7 +364,7 @@ impl StatsRecorder {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to get DB connection for pruning: {e}");
+                warn!(error = %e, "Failed to get database connection for pruning");
                 return;
             }
         };

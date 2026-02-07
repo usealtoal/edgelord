@@ -231,7 +231,7 @@ impl ClusterDetectionService {
         }
 
         if errors > 0 {
-            debug!(errors = errors, "Some cluster detections failed");
+            warn!(errors = errors, "Some cluster detections failed");
         }
 
         opportunities

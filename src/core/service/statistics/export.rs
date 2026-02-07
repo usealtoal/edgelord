@@ -19,7 +19,7 @@ pub fn export_daily_csv(
     let mut conn = match pool.get() {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to get DB connection for CSV export: {e}");
+            warn!(error = %e, "Failed to get database connection for CSV export");
             return String::new();
         }
     };
@@ -72,7 +72,10 @@ pub fn recent_opportunities(
     let mut conn = match pool.get() {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to get DB connection for opportunities query: {e}");
+            warn!(
+                error = %e,
+                "Failed to get database connection for opportunity query"
+            );
             return Vec::new();
         }
     };

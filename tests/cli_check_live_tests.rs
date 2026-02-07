@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn write_temp_config(contents: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -16,6 +19,8 @@ fn write_temp_config(contents: &str) -> PathBuf {
 
 #[test]
 fn check_live_warns_on_missing_wallet_or_mainnet() {
+    let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+
     let template = include_str!("../config.toml.example");
     let path = write_temp_config(template);
 
@@ -48,6 +53,8 @@ fn check_live_warns_on_missing_wallet_or_mainnet() {
 
 #[test]
 fn check_live_fails_when_environment_is_testnet_even_with_mainnet_chain_id() {
+    let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+
     let template = include_str!("../config.toml.example");
     let testnet_chain137 = template.replace("chain_id = 80002", "chain_id = 137");
     let path = write_temp_config(&testnet_chain137);

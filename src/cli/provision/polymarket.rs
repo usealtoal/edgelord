@@ -6,6 +6,7 @@ use alloy_signer_local::PrivateKeySigner;
 use clap::{Parser, ValueEnum};
 use rand::rngs::OsRng;
 
+use crate::cli::output;
 use crate::error::{ConfigError, Result};
 
 /// Wallet setup mode.
@@ -58,10 +59,11 @@ pub(super) fn execute_polymarket(args: ProvisionPolymarketArgs) -> Result<()> {
 
     update_wallet_keystore_path(&config_path, &keystore_path)?;
 
-    println!("Provisioned Polymarket wallet");
-    println!("  Address: {}", signer.address());
-    println!("  Keystore: {}", keystore_path.display());
-    println!("  Funding: USDC on Polygon");
+    output::section("Polymarket Provisioning");
+    output::ok("Wallet provisioned");
+    output::key_value("Address", signer.address());
+    output::key_value("Keystore", keystore_path.display());
+    output::key_value("Funding", "USDC on Polygon");
 
     Ok(())
 }

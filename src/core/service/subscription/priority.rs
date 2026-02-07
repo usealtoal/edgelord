@@ -300,19 +300,23 @@ impl SubscriptionManager for PrioritySubscriptionManager {
     async fn on_connection_event(&self, event: ConnectionEvent) -> Result<()> {
         match &event {
             ConnectionEvent::Connected { connection_id } => {
-                info!(connection_id, "Connection established");
+                info!(connection_id = *connection_id, "Connection established");
             }
             ConnectionEvent::Disconnected {
                 connection_id,
                 reason,
             } => {
-                warn!(connection_id, reason, "Connection lost");
+                warn!(
+                    connection_id = *connection_id,
+                    reason = %reason,
+                    "Connection lost"
+                );
             }
             ConnectionEvent::ShardUnhealthy { shard_id } => {
-                warn!(shard_id, "Shard became unhealthy");
+                warn!(shard_id = *shard_id, "Shard became unhealthy");
             }
             ConnectionEvent::ShardRecovered { shard_id } => {
-                info!(shard_id, "Shard recovered");
+                info!(shard_id = *shard_id, "Shard recovered");
             }
         }
         Ok(())

@@ -1,5 +1,6 @@
 use std::fs;
 
+use crate::cli::output;
 use crate::error::{Error, Result};
 
 use super::common::{is_root, run_systemctl, SERVICE_PATH};
@@ -15,27 +16,26 @@ pub fn execute_uninstall() -> Result<()> {
 
     // Stop service if running
     if run_systemctl(&["stop", "edgelord"]) {
-        println!("✓ Stopped edgelord service");
+        output::ok("Stopped edgelord service");
     }
 
     // Disable service
     if run_systemctl(&["disable", "edgelord"]) {
-        println!("✓ Disabled edgelord service");
+        output::ok("Disabled edgelord service");
     }
 
     // Remove service file
     if std::path::Path::new(SERVICE_PATH).exists() {
         fs::remove_file(SERVICE_PATH)?;
-        println!("✓ Removed {SERVICE_PATH}");
+        output::ok(&format!("Removed {SERVICE_PATH}"));
     }
 
     // Reload systemd
     if run_systemctl(&["daemon-reload"]) {
-        println!("✓ Reloaded systemd daemon");
+        output::ok("Reloaded systemd daemon");
     }
 
-    println!();
-    println!("Edgelord service has been uninstalled.");
-    println!();
+    output::section("Service Removed");
+    output::key_value("Status", "edgelord service uninstalled");
     Ok(())
 }

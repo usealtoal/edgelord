@@ -19,7 +19,7 @@ pub(crate) fn summary_for_range(
     let mut conn = match pool.get() {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to get DB connection for stats query: {e}");
+            warn!(error = %e, "Failed to get database connection for stats query");
             return StatsSummary::default();
         }
     };

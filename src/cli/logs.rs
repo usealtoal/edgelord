@@ -1,6 +1,6 @@
 //! Handler for the `logs` command.
 
-use crate::cli::LogsArgs;
+use crate::cli::{output, LogsArgs};
 use std::process::Command;
 
 /// Execute the logs command.
@@ -26,15 +26,15 @@ pub fn execute(args: &LogsArgs) {
             if !exit.success() {
                 if let Some(code) = exit.code() {
                     if code == 1 {
-                        eprintln!("No logs found. Is the edgelord service installed?");
-                        eprintln!("Run 'sudo edgelord service install' to install the service.");
+                        output::warn("No logs found. Is the edgelord service installed?");
+                        output::warn("Run `sudo edgelord service install` to install it.");
                     }
                 }
             }
         }
         Err(e) => {
-            eprintln!("Failed to execute journalctl: {e}");
-            eprintln!("Make sure you're running on a system with systemd.");
+            output::error(&format!("Failed to execute journalctl: {e}"));
+            output::warn("This command requires a host with systemd.");
         }
     }
 }
