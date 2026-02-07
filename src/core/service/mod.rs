@@ -1,8 +1,8 @@
-//! Cross-cutting services - risk management, notifications, etc.
+//! Cross-cutting services - risk management, messaging, etc.
 
 pub mod cluster;
 mod governor;
-mod notification;
+mod messaging;
 pub mod position;
 mod risk;
 pub mod statistics;
@@ -12,7 +12,7 @@ pub use governor::{
     AdaptiveGovernor, GovernorConfig, LatencyGovernor, LatencyMetrics, LatencyTargets,
     ScalingConfig,
 };
-pub use notification::{
+pub use messaging::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
     RiskEvent, SummaryEvent,
 };
@@ -25,4 +25,4 @@ pub use statistics::{
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 
 #[cfg(feature = "telegram")]
-pub use notification::{TelegramConfig, TelegramNotifier};
+pub use messaging::{TelegramConfig, TelegramNotifier};
