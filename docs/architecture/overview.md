@@ -1,139 +1,62 @@
 # Architecture Overview
 
-This document covers system design, module structure, and data flow.
+Edgelord separates pure trading logic from exchange adapters and runtime orchestration.
 
-## Design Principles
+## Design Goals
 
-1. **Low latency** — Hot path targets <40ms to compete with sophisticated traders
-2. **Strategy pattern** — Pluggable detection algorithms via `Strategy` trait
-3. **Exchange abstraction** — Generic traits with exchange-specific implementations
-4. **Domain-driven** — Exchange-agnostic core types, Polymarket-prefixed adapters
-5. **Fail safe** — Risk checks prevent executing bad trades
+- Keep strategy logic exchange-agnostic.
+- Keep execution gated by explicit risk checks.
+- Keep the runtime resilient to network interruptions.
+- Keep configuration explicit and auditable.
 
-## System Overview
-
-```mermaid
-flowchart TB
-    subgraph core["Core"]
-        WS[MarketDataStream] --> Cache[OrderBookCache]
-        Cache --> Registry[StrategyRegistry]
-
-        subgraph strategies[Strategies]
-            SC[SingleCondition]
-            RB[Rebalancing]
-            CB[Combinatorial]
-        end
-
-        Registry --> strategies
-        strategies --> Risk[RiskManager]
-        Risk --> Exec[ArbitrageExecutor]
-    end
-
-    subgraph exchange["Polymarket"]
-        PM_WS[PolymarketDataStream]
-        PM_EX[PolymarketExecutor]
-    end
-
-    WS -.-> PM_WS
-    Exec -.-> PM_EX
-```
-
-## Module Structure
-
-```
-src/
-├── core/                  # Library code
-│   ├── domain/            # Pure types (Market, Opportunity, OrderBook)
-│   ├── exchange/          # Exchange traits + implementations
-│   ├── strategy/          # Detection algorithms
-│   ├── service/           # Risk, notifications, subscriptions
-│   ├── solver/            # LP/ILP abstraction (HiGHS)
-│   └── cache/             # OrderBookCache, PositionTracker
-│
-├── app/                   # Application orchestration
-│   ├── config/            # Configuration loading
-│   ├── orchestrator/      # Main event loop
-│   └── state.rs           # Shared state
-│
-└── cli/                   # Command-line interface
-```
-
-## Data Flow
-
-1. **WebSocket receives update** — Price change on exchange (~5ms)
-2. **OrderBookCache updates** — Thread-safe cache refreshed (~1ms)
-3. **Strategies scan** — Each applicable strategy checks for opportunities (~5ms)
-4. **Risk manager validates** — Position limits, exposure, slippage (~1ms)
-5. **Executor submits orders** — API calls to exchange (~25ms)
-6. **Position tracker records** — Trade logged, exposure updated
+## High-Level Components
 
 ```mermaid
-sequenceDiagram
-    participant WS as WebSocket
-    participant Cache as OrderBookCache
-    participant Strategy as StrategyRegistry
-    participant Risk as RiskManager
-    participant Exec as Executor
+flowchart LR
+    WS[Market Data Stream] --> Cache[Order Book Cache]
+    Cache --> Strat[Strategy Registry]
+    Strat --> Risk[Risk Manager]
+    Risk --> Exec[Arbitrage Executor]
+    Exec --> Exch[Exchange API]
 
-    WS->>Cache: Price update
-    Cache->>Strategy: Trigger detection
-    Strategy->>Strategy: Run applicable strategies
-    Strategy->>Risk: Opportunity found
-    Risk->>Risk: Check limits
-    Risk->>Exec: Approved
-    Exec->>WS: Submit orders
+    Cache --> Cluster[Cluster Detection]
+    Cluster --> Strat
+
+    Stats[Stats Recorder] <---> Orchestrator[App Orchestrator]
+    Orchestrator --> WS
+    Orchestrator --> Strat
 ```
 
-## Key Traits
+## Module Boundaries
 
-### Strategy
+- `src/core/domain`
+  - Exchange-independent entities (markets, opportunities, relations, positions).
+- `src/core/exchange`
+  - Traits and adapters for market data, fetching, and execution.
+- `src/core/strategy`
+  - Detection algorithms and strategy registry.
+- `src/core/service`
+  - Risk gating, notification dispatch, stats capture, subscription logic.
+- `src/app`
+  - Runtime orchestration and config loading.
+- `src/cli`
+  - End-user command surface.
 
-```rust
-pub trait Strategy: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn applies_to(&self, ctx: &MarketContext) -> bool;
-    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity>;
-}
-```
+## Runtime Flow
 
-### MarketDataStream
+1. Load config and initialize services.
+2. Build market registry and subscribe to relevant tokens.
+3. Process market events into the order-book cache.
+4. Evaluate strategy opportunities.
+5. Pass opportunities through risk checks.
+6. Execute or reject and record outcomes.
 
-```rust
-#[async_trait]
-pub trait MarketDataStream: Send {
-    async fn connect(&mut self) -> Result<()>;
-    async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<()>;
-    async fn next_event(&mut self) -> Option<MarketEvent>;
-}
-```
+## Resilience and Safety
 
-### ArbitrageExecutor
+- Reconnection logic wraps market streams.
+- Circuit breakers and exposure limits constrain damage during degraded conditions.
+- `dry_run` mode preserves detection flow without sending orders.
 
-```rust
-#[async_trait]
-pub trait ArbitrageExecutor: Send + Sync {
-    async fn execute_arbitrage(&self, opp: &Opportunity) -> Result<ExecutionResult>;
-    async fn cancel(&self, order_id: &OrderId) -> Result<()>;
-}
-```
+## Extensibility
 
-## Risk Management
-
-The `RiskManager` validates every opportunity before execution:
-
-- **Position limits** — Max exposure per market
-- **Total exposure** — Portfolio-wide cap
-- **Profit threshold** — Skip tiny opportunities
-- **Slippage check** — Reject if prices moved too much
-
-Circuit breakers halt trading after consecutive failures, with configurable cooldown.
-
-## Connection Resilience
-
-`ReconnectingDataStream` wraps WebSocket connections with:
-
-- Exponential backoff on failures
-- Automatic resubscription after reconnect
-- Circuit breaker after N consecutive failures
-
-See [Configuration](../configuration.md) for tuning parameters.
+To add another exchange, implement the exchange trait set and register it in the factory path. Core strategies and risk services remain unchanged.
