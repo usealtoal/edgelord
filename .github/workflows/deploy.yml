@@ -1,121 +1,171 @@
-name: Deploy
+name: Manual Deploy
 
 on:
-  # Uncomment to enable automatic deployment on push to main
-  # push:
-  #   branches: [main]
-  #   paths-ignore:
-  #     - 'docs/**'
-  #     - '*.md'
-  #     - 'LICENSE'
   workflow_dispatch:
     inputs:
-      skip_deploy:
-        description: 'Skip deployment (build and test only)'
-        required: false
-        default: 'false'
+      ref:
+        description: "Git ref to deploy (branch, tag, or SHA)"
+        required: true
+        default: "main"
+        type: string
+      environment:
+        description: "GitHub Environment gate"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+      restart_only:
+        description: "Restart service only (skip build + release upload)"
+        required: true
+        default: false
         type: boolean
+      run_live_check:
+        description: "Run `edgelord check live` before restart"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-and-test:
+  deploy:
+    name: Deploy to VPS
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve release SHA
+        id: release
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-action@stable
+        if: ${{ !inputs.restart_only }}
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release
+      - name: Build release binary
+        if: ${{ !inputs.restart_only }}
         run: cargo build --release
 
-      - name: Run tests
+      - name: Run tests (release profile)
+        if: ${{ !inputs.restart_only }}
         run: cargo test --release
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: edgelord-linux
-          path: target/release/edgelord
-          retention-days: 7
-
-  deploy:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event.inputs.skip_deploy != 'true'
-    environment: production
-
-    steps:
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: edgelord-linux
-
-      - name: Make binary executable
-        run: chmod +x edgelord
-
-      - name: Setup SSH
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_SSH_PORT"
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy to VPS
+      - name: Upload release binary
+        if: ${{ !inputs.restart_only }}
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
-          # Copy binary to VPS
-          scp edgelord ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/edgelord-new
+          set -euo pipefail
+          test -n "$DEPLOY_USER"
+          scp \
+            -i ~/.ssh/id_ed25519 \
+            -P "$DEPLOY_SSH_PORT" \
+            target/release/edgelord \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/edgelord-$RELEASE_SHA"
 
-          # SSH and deploy
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            set -e
+      - name: Deploy and restart
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RESTART_ONLY: ${{ inputs.restart_only }}
+          RUN_LIVE_CHECK: ${{ inputs.run_live_check }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
 
-            # Stop service
-            sudo systemctl stop edgelord || true
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -p "$DEPLOY_SSH_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' RESTART_ONLY='$RESTART_ONLY' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' bash -s" <<'REMOTE'
+            set -euo pipefail
 
-            # Backup old binary
-            if [ -f /opt/edgelord/edgelord ]; then
-              sudo cp /opt/edgelord/edgelord /opt/edgelord/edgelord.bak
+            CONFIG_PATH="$DEPLOY_PATH/config/config.toml"
+            CURRENT_LINK="$DEPLOY_PATH/current"
+            RELEASE_DIR="$DEPLOY_PATH/releases/$RELEASE_SHA"
+            PREV_TARGET="$(readlink -f "$CURRENT_LINK" || true)"
+
+            rollback() {
+              echo "Deployment failed; attempting rollback"
+              if [[ -n "${PREV_TARGET:-}" && -d "$PREV_TARGET" ]]; then
+                ln -sfn "$PREV_TARGET" "$CURRENT_LINK"
+                if [[ -x "$CURRENT_LINK/edgelord" ]]; then
+                  sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH" || true
+                fi
+                sudo systemctl restart edgelord || true
+                sudo systemctl is-active edgelord || true
+              fi
+            }
+
+            trap rollback ERR
+
+            if [[ "$RESTART_ONLY" != "true" ]]; then
+              mkdir -p "$RELEASE_DIR"
+              install -m 755 "$BINARY_STAGING" "$RELEASE_DIR/edgelord"
+              rm -f "$BINARY_STAGING"
+              ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
             fi
 
-            # Install new binary
-            sudo mv /tmp/edgelord-new /opt/edgelord/edgelord
-            sudo chown edgelord:edgelord /opt/edgelord/edgelord
-            sudo chmod +x /opt/edgelord/edgelord
+            if [[ ! -x "$CURRENT_LINK/edgelord" ]]; then
+              echo "Missing binary at $CURRENT_LINK/edgelord"
+              exit 1
+            fi
 
-            # Start service
-            sudo systemctl start edgelord
+            if [[ ! -f "$CONFIG_PATH" ]]; then
+              echo "Missing config at $CONFIG_PATH"
+              exit 1
+            fi
 
-            # Verify it's running
+            "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
+            if [[ "$RUN_LIVE_CHECK" == "true" ]]; then
+              "$CURRENT_LINK/edgelord" check live --config "$CONFIG_PATH"
+            fi
+
+            sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH"
+            sudo systemctl restart edgelord
             sleep 2
             sudo systemctl is-active edgelord
-          EOF
 
-      - name: Notify success
-        if: success()
-        run: |
-          echo "Deployment successful!"
-          # TODO: Add Telegram notification
-
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            if [ -f /opt/edgelord/edgelord.bak ]; then
-              sudo mv /opt/edgelord/edgelord.bak /opt/edgelord/edgelord
-              sudo systemctl start edgelord || true
-            fi
-          EOF
+            trap - ERR
+            echo "Deployment completed"
+          REMOTE

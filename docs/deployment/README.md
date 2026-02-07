@@ -4,6 +4,8 @@ This section covers production deployment and operations for edgelord.
 
 ## Deployment Tracks
 
+- [DigitalOcean Manual Runbook](digitalocean-manual.md)
+  - End-to-end setup and click-driven GitHub Actions deployment.
 - [Wallet Setup](wallet.md)
   - Prepare a dedicated Polygon wallet and funding model.
 - [Infrastructure](infrastructure.md)
