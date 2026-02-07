@@ -3,7 +3,10 @@ use edgelord::cli::provision::{execute, ProvisionCommand, ProvisionPolymarketArg
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn temp_path(name: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -17,6 +20,8 @@ fn temp_path(name: &str) -> PathBuf {
 
 #[tokio::test]
 async fn wallet_address_reads_from_keystore() {
+    let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+
     let dir = temp_path("address");
     fs::create_dir_all(&dir).expect("create temp dir");
     let config_path = dir.join("config.toml");
@@ -60,6 +65,8 @@ async fn wallet_address_reads_from_keystore() {
 
 #[test]
 fn wallet_sweep_requires_wallet() {
+    let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+
     let template = include_str!("../config.toml.example");
     let path = temp_path("sweep");
     fs::write(&path, template).expect("write config template");

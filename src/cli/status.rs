@@ -5,6 +5,7 @@ use std::path::Path;
 use chrono::Duration;
 
 use crate::app::status;
+use crate::cli::output;
 
 /// Execute the status command.
 pub fn execute(db_path: &Path) {
@@ -13,14 +14,11 @@ pub fn execute(db_path: &Path) {
     // Check if systemd service is running
     let (running, pid) = check_systemd_status();
 
-    println!();
-    println!("edgelord v{version}");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
+    output::section(&format!("edgelord v{version}"));
     if running {
-        println!("Status:      ● running (pid {pid})");
+        output::key_value("Status", format!("running (pid {pid})"));
     } else {
-        println!("Status:      ○ stopped");
+        output::key_value("Status", "stopped");
     }
 
     // Try to connect to database for stats
@@ -28,18 +26,12 @@ pub fn execute(db_path: &Path) {
         if let Ok(snapshot) = status::load_status(db_path) {
             display_db_stats(snapshot);
         } else {
-            println!();
-            println!("Database:    error reading stats ({db_path:?})");
-            println!();
+            output::warn(&format!("Database error reading stats ({db_path:?})"));
         }
     } else {
-        println!();
-        println!("Database:    not found ({db_path:?})");
-        println!();
-        println!("Run 'edgelord run' to start trading and create the database.");
+        output::warn(&format!("Database not found ({db_path:?})"));
+        output::note("Run `edgelord run` to start trading and create the database.");
     }
-
-    println!();
 }
 
 fn check_systemd_status() -> (bool, String) {
@@ -77,25 +69,22 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
     let today = chrono::Utc::now().date_naive();
     let week_ago = today - Duration::days(7);
 
-    println!();
-
     // Today
     if let Some(row) = today_row {
-        println!("Today ({today}):");
-        println!("  Opportunities: {}", row.opportunities_detected);
-        println!("  Trades Opened: {}", row.trades_opened);
-        println!("  Trades Closed: {}", row.trades_closed);
-        println!("  Profit:        ${:.2}", row.profit_realized);
-        println!("  Loss:          ${:.2}", row.loss_realized);
-        println!(
-            "  Net:           ${:.2}",
-            row.profit_realized - row.loss_realized
+        output::section(&format!("Today ({today})"));
+        output::key_value("Opportunities", row.opportunities_detected);
+        output::key_value("Trades opened", row.trades_opened);
+        output::key_value("Trades closed", row.trades_closed);
+        output::key_value("Profit", format!("${:.2}", row.profit_realized));
+        output::key_value("Loss", format!("${:.2}", row.loss_realized));
+        output::key_value(
+            "Net",
+            format!("${:.2}", row.profit_realized - row.loss_realized),
         );
     } else {
-        println!("Today ({today}): no data");
+        output::section(&format!("Today ({today})"));
+        output::note("No data");
     }
-
-    println!();
 
     // Last 7 days
     let week_opps: i32 = week_rows.iter().map(|r| r.opportunities_detected).sum();
@@ -107,15 +96,14 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
     let week_wins: i32 = week_rows.iter().map(|r| r.win_count).sum();
     let week_losses: i32 = week_rows.iter().map(|r| r.loss_count).sum();
 
-    println!("Last 7 Days ({week_ago} to {today}):");
-    println!("  Opportunities: {}", week_opps);
-    println!("  Trades Closed: {}", week_trades);
-    println!("  Net Profit:    ${:.2}", week_profit);
+    output::section(&format!("Last 7 Days ({week_ago} to {today})"));
+    output::key_value("Opportunities", week_opps);
+    output::key_value("Trades closed", week_trades);
+    output::key_value("Net profit", format!("${:.2}", week_profit));
     if week_wins + week_losses > 0 {
         let win_rate = week_wins as f32 / (week_wins + week_losses) as f32 * 100.0;
-        println!("  Win Rate:      {:.1}%", win_rate);
+        output::key_value("Win rate", format!("{win_rate:.1}%"));
     }
 
-    println!();
-    println!("Open Positions: {open_positions}");
+    output::key_value("Open positions", open_positions);
 }

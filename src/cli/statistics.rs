@@ -48,53 +48,54 @@ pub fn execute_history(db_path: &Path, days: u32) -> Result<()> {
 }
 
 fn print_summary(summary: &statistics::StatsSummary, label: &str) -> Result<()> {
-    println!();
-    println!("═══════════════════════════════════════════════════════════");
-    println!("  {label}");
-    println!("═══════════════════════════════════════════════════════════");
-    println!();
-    println!("  Opportunities");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Detected:     {:>8}", summary.opportunities_detected);
-    println!(
-        "    Executed:     {:>8}    ({:.1}%)",
-        summary.opportunities_executed,
-        if summary.opportunities_detected > 0 {
-            summary.opportunities_executed as f64 / summary.opportunities_detected as f64 * 100.0
-        } else {
-            0.0
-        }
+    output::section(label);
+    output::section("Opportunities");
+    output::key_value("Detected", summary.opportunities_detected);
+    output::key_value(
+        "Executed",
+        format!(
+            "{} ({:.1}%)",
+            summary.opportunities_executed,
+            if summary.opportunities_detected > 0 {
+                summary.opportunities_executed as f64 / summary.opportunities_detected as f64
+                    * 100.0
+            } else {
+                0.0
+            }
+        ),
     );
-    println!("    Rejected:     {:>8}", summary.opportunities_rejected);
-    println!();
-    println!("  Trades");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Opened:       {:>8}", summary.trades_opened);
-    println!("    Closed:       {:>8}", summary.trades_closed);
-    println!(
-        "    Win Rate:     {:>7}%",
-        summary
-            .win_rate()
-            .map(|r| format!("{r:.1}"))
-            .unwrap_or_else(|| "N/A".to_string())
+    output::key_value("Rejected", summary.opportunities_rejected);
+
+    output::section("Trades");
+    output::key_value("Opened", summary.trades_opened);
+    output::key_value("Closed", summary.trades_closed);
+    output::key_value(
+        "Win rate",
+        format!(
+            "{}%",
+            summary
+                .win_rate()
+                .map(|r| format!("{r:.1}"))
+                .unwrap_or_else(|| "N/A".to_string())
+        ),
     );
-    println!();
-    println!("  Profit/Loss");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Profit:       ${:>8.2}", summary.profit_realized);
-    println!("    Loss:         ${:>8.2}", summary.loss_realized);
-    println!(
-        "    Net:          ${:>8.2}  {}",
-        summary.net_profit(),
-        if summary.net_profit() >= Decimal::ZERO {
-            "✓"
-        } else {
-            "✗"
-        }
+
+    output::section("Profit/Loss");
+    output::key_value("Profit", format!("${:.2}", summary.profit_realized));
+    output::key_value("Loss", format!("${:.2}", summary.loss_realized));
+    output::key_value(
+        "Net",
+        format!(
+            "${:>8.2} {}",
+            summary.net_profit(),
+            if summary.net_profit() >= Decimal::ZERO {
+                "✓"
+            } else {
+                "✗"
+            }
+        ),
     );
-    println!();
-    println!("    Volume:       ${:>8.2}", summary.total_volume);
-    println!();
+    output::key_value("Volume", format!("${:.2}", summary.total_volume));
 
     Ok(())
 }
@@ -124,16 +125,15 @@ fn print_strategy_breakdown(rows: &[statistics::StrategyDailyStatsRow]) -> Resul
         entry.loss_count += row.loss_count;
     }
 
-    println!("  By Strategy");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    {:20} {:>8} {:>8} {:>10} {:>8}",
+    output::section("By Strategy");
+    output::note(&format!(
+        "{:20} {:>8} {:>8} {:>10} {:>8}",
         "Strategy", "Opps", "Trades", "Profit", "Win %"
-    );
-    println!(
-        "    {:─<20} {:─>8} {:─>8} {:─>10} {:─>8}",
+    ));
+    output::note(&format!(
+        "{:─<20} {:─>8} {:─>8} {:─>10} {:─>8}",
         "", "", "", "", ""
-    );
+    ));
 
     for (name, stats_row) in &by_strategy {
         let total = stats_row.win_count + stats_row.loss_count;
@@ -142,37 +142,34 @@ fn print_strategy_breakdown(rows: &[statistics::StrategyDailyStatsRow]) -> Resul
         } else {
             "N/A".to_string()
         };
-        println!(
-            "    {:20} {:>8} {:>8} ${:>9.2} {:>8}",
+        output::note(&format!(
+            "{:20} {:>8} {:>8} ${:>9.2} {:>8}",
             name,
             stats_row.opportunities_detected,
             stats_row.trades_closed,
             stats_row.profit_realized,
             win_rate
-        );
+        ));
     }
-    println!();
 
     Ok(())
 }
 
 fn print_daily_breakdown(rows: &[statistics::DailyStatsRow]) -> Result<()> {
     if rows.is_empty() {
-        println!("  No data for this period.");
-        println!();
+        output::note("No data for this period.");
         return Ok(());
     }
 
-    println!("  Daily Breakdown");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    {:12} {:>6} {:>6} {:>10} {:>8}",
+    output::section("Daily Breakdown");
+    output::note(&format!(
+        "{:12} {:>6} {:>6} {:>10} {:>8}",
         "Date", "Opps", "Trades", "Net P/L", "Win %"
-    );
-    println!(
-        "    {:─<12} {:─>6} {:─>6} {:─>10} {:─>8}",
+    ));
+    output::note(&format!(
+        "{:─<12} {:─>6} {:─>6} {:─>10} {:─>8}",
         "", "", "", "", ""
-    );
+    ));
 
     for row in rows {
         let total = row.win_count + row.loss_count;
@@ -182,19 +179,18 @@ fn print_daily_breakdown(rows: &[statistics::DailyStatsRow]) -> Result<()> {
             "-".to_string()
         };
         let net = row.profit_realized - row.loss_realized;
-        println!(
-            "    {:12} {:>6} {:>6} ${:>9.2} {:>8}",
+        output::note(&format!(
+            "{:12} {:>6} {:>6} ${:>9.2} {:>8}",
             row.date, row.opportunities_detected, row.trades_closed, net, win_rate
-        );
+        ));
     }
-    println!();
 
     Ok(())
 }
 
 fn print_open_positions(open_count: i64) {
     if open_count > 0 {
-        println!("  Open Positions: {open_count}");
+        output::key_value("Open positions", open_count);
     }
 }
 

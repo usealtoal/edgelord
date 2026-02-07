@@ -37,123 +37,106 @@ pub fn execute_init(path: &Path, force: bool) -> Result<()> {
 /// Execute `config show`.
 pub fn execute_show(path: &Path) -> Result<()> {
     let config = Config::load(path)?;
-
-    println!();
-    println!("═══════════════════════════════════════════════════════════");
-    println!("  Effective Configuration");
-    println!("═══════════════════════════════════════════════════════════");
-    println!();
-
-    // General
-    println!("  General");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Profile:       {:?}", config.profile);
-    println!("    Dry Run:       {}", config.dry_run);
-    println!();
-
-    // Exchange
     let network = config.network();
-    println!("  Exchange");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Type:          {:?}", config.exchange);
-    println!("    Environment:   {:?}", network.environment);
-    println!("    Chain ID:      {}", network.chain_id);
-    println!("    WS URL:        {}", network.ws_url);
-    println!("    API URL:       {}", network.api_url);
-    println!();
 
-    // Strategies
-    println!("  Strategies");
-    println!("  ─────────────────────────────────────────────────────────");
-    for name in &config.strategies.enabled {
-        println!("    • {name}");
-    }
+    output::section("Effective Configuration");
+    output::key_value("Profile", format!("{:?}", config.profile));
+    output::key_value("Dry run", config.dry_run);
+
+    output::section("Exchange");
+    output::key_value("Type", format!("{:?}", config.exchange));
+    output::key_value("Environment", network.environment);
+    output::key_value("Chain ID", network.chain_id);
+    output::key_value("WebSocket", &network.ws_url);
+    output::key_value("API", &network.api_url);
+
+    output::section("Strategies");
     if config.strategies.enabled.is_empty() {
-        println!("    (none enabled)");
-    }
-    println!();
-
-    // Risk
-    println!("  Risk Management");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    Max Position:  ${}",
-        config.risk.max_position_per_market
-    );
-    println!("    Max Exposure:  ${}", config.risk.max_total_exposure);
-    println!("    Min Profit:    ${}", config.risk.min_profit_threshold);
-    println!(
-        "    Max Slippage:  {:.1}%",
-        config.risk.max_slippage.to_f64().unwrap_or(0.0) * 100.0
-    );
-    println!();
-
-    // Wallet
-    println!("  Wallet");
-    println!("  ─────────────────────────────────────────────────────────");
-    if config.wallet.private_key.is_some() {
-        println!("    Private Key:   ✓ (from WALLET_PRIVATE_KEY)");
+        output::note("(none enabled)");
     } else {
-        println!("    Private Key:   ✗ (not set)");
+        for name in &config.strategies.enabled {
+            output::note(&format!("- {name}"));
+        }
     }
-    println!();
 
-    // Notifications
-    println!("  Notifications");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    Telegram:      {}",
-        if config.telegram.enabled {
-            "✓ enabled"
-        } else {
-            "✗ disabled"
-        }
+    output::section("Risk");
+    output::key_value(
+        "Max position",
+        format!("${}", config.risk.max_position_per_market),
     );
-    println!();
+    output::key_value(
+        "Max exposure",
+        format!("${}", config.risk.max_total_exposure),
+    );
+    output::key_value(
+        "Min profit",
+        format!("${}", config.risk.min_profit_threshold),
+    );
+    output::key_value(
+        "Max slippage",
+        format!(
+            "{:.1}%",
+            config.risk.max_slippage.to_f64().unwrap_or(0.0) * 100.0
+        ),
+    );
 
-    // LLM
-    println!("  LLM (Relation Inference)");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!("    Provider:      {:?}", config.llm.provider);
-    println!(
-        "    Inference:     {}",
-        if config.inference.enabled {
-            "✓ enabled"
+    output::section("Wallet");
+    if config.wallet.private_key.is_some() {
+        output::ok("Private key loaded from WALLET_PRIVATE_KEY");
+    } else {
+        output::warn("Private key not set");
+    }
+
+    output::section("Notifications");
+    output::key_value(
+        "Telegram",
+        if config.telegram.enabled {
+            "enabled"
         } else {
-            "✗ disabled"
-        }
+            "disabled"
+        },
+    );
+
+    output::section("LLM Inference");
+    output::key_value("Provider", format!("{:?}", config.llm.provider));
+    output::key_value(
+        "Enabled",
+        if config.inference.enabled {
+            "yes"
+        } else {
+            "no"
+        },
     );
     if config.inference.enabled {
-        println!(
-            "    Min Confidence: {:.0}%",
-            config.inference.min_confidence * 100.0
+        output::key_value(
+            "Min confidence",
+            format!("{:.0}%", config.inference.min_confidence * 100.0),
         );
-        println!("    TTL:           {}s", config.inference.ttl_seconds);
+        output::key_value("TTL", format!("{}s", config.inference.ttl_seconds));
     }
-    println!();
 
-    // Cluster Detection
-    println!("  Cluster Detection");
-    println!("  ─────────────────────────────────────────────────────────");
-    println!(
-        "    Enabled:       {}",
+    output::section("Cluster Detection");
+    output::key_value(
+        "Enabled",
         if config.cluster_detection.enabled {
-            "✓"
+            "yes"
         } else {
-            "✗"
-        }
+            "no"
+        },
     );
     if config.cluster_detection.enabled {
-        println!(
-            "    Debounce:      {}ms",
-            config.cluster_detection.debounce_ms
+        output::key_value(
+            "Debounce",
+            format!("{}ms", config.cluster_detection.debounce_ms),
         );
-        println!(
-            "    Min Gap:       {:.1}%",
-            config.cluster_detection.min_gap.to_f64().unwrap_or(0.0) * 100.0
+        output::key_value(
+            "Min gap",
+            format!(
+                "{:.1}%",
+                config.cluster_detection.min_gap.to_f64().unwrap_or(0.0) * 100.0
+            ),
         );
     }
-    println!();
 
     Ok(())
 }

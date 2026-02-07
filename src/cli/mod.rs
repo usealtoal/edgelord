@@ -4,7 +4,7 @@ pub mod banner;
 pub mod check;
 pub mod config;
 pub mod logs;
-pub(crate) mod output;
+pub mod output;
 pub mod provision;
 pub mod run;
 pub mod service;

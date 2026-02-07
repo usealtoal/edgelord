@@ -32,6 +32,11 @@ pub fn error(message: &str) {
     eprintln!("✗ {message}");
 }
 
+/// Print a top-level fatal error line.
+pub fn fatal(message: &str) {
+    eprintln!("Error: {message}");
+}
+
 /// Print a single-line note.
 pub fn note(message: &str) {
     println!("{message}");

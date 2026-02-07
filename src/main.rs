@@ -1,6 +1,7 @@
 use clap::Parser;
 use edgelord::cli::{
-    CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand, WalletCommand,
+    output, CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand,
+    WalletCommand,
 };
 
 #[tokio::main]
@@ -78,7 +79,7 @@ async fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("Error: {e}");
+        output::fatal(&e.to_string());
         std::process::exit(1);
     }
 }
