@@ -15,16 +15,35 @@ on:
         type: choice
         options:
           - production
-      restart_only:
-        description: "Restart service only (skip build + release upload)"
+      mode:
+        description: "Deployment mode"
         required: true
-        default: false
+        default: "deploy"
+        type: choice
+        options:
+          - deploy
+          - validate_only
+          - restart_only
+          - rollback_previous
+      confirm:
+        description: "Type `deploy-production` to confirm"
+        required: true
+        type: string
+      run_connection_check:
+        description: "Run `edgelord check connection` before service action"
+        required: true
+        default: true
         type: boolean
       run_live_check:
         description: "Run `edgelord check live` before restart"
         required: true
         default: true
         type: boolean
+      change_note:
+        description: "Optional deploy note (shown in logs)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -52,16 +71,34 @@ jobs:
         id: release
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Confirm deployment intent
+        run: |
+          set -euo pipefail
+          expected="deploy-${{ inputs.environment }}"
+          if [[ "${{ inputs.confirm }}" != "$expected" ]]; then
+            echo "Confirmation mismatch. Expected: $expected"
+            exit 1
+          fi
+
+      - name: Print deployment plan
+        run: |
+          echo "Mode: ${{ inputs.mode }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Ref: ${{ inputs.ref }}"
+          if [[ -n "${{ inputs.change_note }}" ]]; then
+            echo "Change note: ${{ inputs.change_note }}"
+          fi
+
       - name: Install Rust toolchain
-        if: ${{ !inputs.restart_only }}
+        if: ${{ inputs.mode == 'deploy' }}
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build release binary
-        if: ${{ !inputs.restart_only }}
+        if: ${{ inputs.mode == 'deploy' }}
         run: cargo build --release
 
       - name: Run tests (release profile)
-        if: ${{ !inputs.restart_only }}
+        if: ${{ inputs.mode == 'deploy' }}
         run: cargo test --release
 
       - name: Configure SSH
@@ -84,7 +121,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Upload release binary
-        if: ${{ !inputs.restart_only }}
+        if: ${{ inputs.mode == 'deploy' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
@@ -106,7 +143,8 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
-          RESTART_ONLY: ${{ inputs.restart_only }}
+          MODE: ${{ inputs.mode }}
+          RUN_CONNECTION_CHECK: ${{ inputs.run_connection_check }}
           RUN_LIVE_CHECK: ${{ inputs.run_live_check }}
         run: |
           set -euo pipefail
@@ -117,7 +155,7 @@ jobs:
             -i ~/.ssh/id_ed25519 \
             -p "$DEPLOY_SSH_PORT" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' RESTART_ONLY='$RESTART_ONLY' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' bash -s" <<'REMOTE'
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' MODE='$MODE' RUN_CONNECTION_CHECK='$RUN_CONNECTION_CHECK' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' bash -s" <<'REMOTE'
             set -euo pipefail
 
             CONFIG_PATH="$DEPLOY_PATH/config/config.toml"
@@ -125,47 +163,92 @@ jobs:
             RELEASE_DIR="$DEPLOY_PATH/releases/$RELEASE_SHA"
             PREV_TARGET="$(readlink -f "$CURRENT_LINK" || true)"
 
+            run_checks() {
+              "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
+              if [[ "$RUN_CONNECTION_CHECK" == "true" ]]; then
+                "$CURRENT_LINK/edgelord" check connection --config "$CONFIG_PATH"
+              fi
+              if [[ "$RUN_LIVE_CHECK" == "true" ]]; then
+                "$CURRENT_LINK/edgelord" check live --config "$CONFIG_PATH"
+              fi
+            }
+
+            restart_service() {
+              sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH"
+              sudo systemctl restart edgelord
+              sleep 2
+              sudo systemctl is-active edgelord
+            }
+
             rollback() {
               echo "Deployment failed; attempting rollback"
               if [[ -n "${PREV_TARGET:-}" && -d "$PREV_TARGET" ]]; then
                 ln -sfn "$PREV_TARGET" "$CURRENT_LINK"
                 if [[ -x "$CURRENT_LINK/edgelord" ]]; then
-                  sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH" || true
+                  restart_service || true
                 fi
-                sudo systemctl restart edgelord || true
-                sudo systemctl is-active edgelord || true
               fi
             }
-
-            trap rollback ERR
-
-            if [[ "$RESTART_ONLY" != "true" ]]; then
-              mkdir -p "$RELEASE_DIR"
-              install -m 755 "$BINARY_STAGING" "$RELEASE_DIR/edgelord"
-              rm -f "$BINARY_STAGING"
-              ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
-            fi
-
-            if [[ ! -x "$CURRENT_LINK/edgelord" ]]; then
-              echo "Missing binary at $CURRENT_LINK/edgelord"
-              exit 1
-            fi
 
             if [[ ! -f "$CONFIG_PATH" ]]; then
               echo "Missing config at $CONFIG_PATH"
               exit 1
             fi
 
-            "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
-            if [[ "$RUN_LIVE_CHECK" == "true" ]]; then
-              "$CURRENT_LINK/edgelord" check live --config "$CONFIG_PATH"
+            case "$MODE" in
+              deploy)
+                trap rollback ERR
+                mkdir -p "$RELEASE_DIR"
+                install -m 755 "$BINARY_STAGING" "$RELEASE_DIR/edgelord"
+                rm -f "$BINARY_STAGING"
+                ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+                run_checks
+                restart_service
+                trap - ERR
+                ;;
+              validate_only)
+                if [[ ! -x "$CURRENT_LINK/edgelord" ]]; then
+                  echo "Missing binary at $CURRENT_LINK/edgelord"
+                  exit 1
+                fi
+                run_checks
+                ;;
+              restart_only)
+                if [[ ! -x "$CURRENT_LINK/edgelord" ]]; then
+                  echo "Missing binary at $CURRENT_LINK/edgelord"
+                  exit 1
+                fi
+                restart_service
+                ;;
+              rollback_previous)
+                CURRENT_TARGET="$(readlink -f "$CURRENT_LINK" || true)"
+                if [[ -n "${CURRENT_TARGET:-}" ]]; then
+                  PREVIOUS_TARGET="$(
+                    ls -1dt "$DEPLOY_PATH"/releases/* 2>/dev/null \
+                      | grep -v "^$CURRENT_TARGET$" \
+                      | head -n 1
+                  )"
+                else
+                  PREVIOUS_TARGET="$(ls -1dt "$DEPLOY_PATH"/releases/* 2>/dev/null | head -n 1)"
+                fi
+                if [[ -z "${PREVIOUS_TARGET:-}" ]]; then
+                  echo "No previous release found for rollback"
+                  exit 1
+                fi
+                ln -sfn "$PREVIOUS_TARGET" "$CURRENT_LINK"
+                run_checks
+                restart_service
+                ;;
+              *)
+                echo "Unsupported mode: $MODE"
+                exit 1
+                ;;
+            esac
+
+            if [[ ! -x "$CURRENT_LINK/edgelord" ]]; then
+              echo "Missing binary at $CURRENT_LINK/edgelord"
+              exit 1
             fi
 
-            sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH"
-            sudo systemctl restart edgelord
-            sleep 2
-            sudo systemctl is-active edgelord
-
-            trap - ERR
-            echo "Deployment completed"
+            echo "Mode $MODE completed successfully"
           REMOTE

@@ -185,7 +185,11 @@ This runbook assumes the repository deploy workflow at `.github/workflows/deploy
 - Inputs:
   - `ref` (branch/tag/sha to deploy)
   - `environment` (for example `production`)
-  - `restart_only` (optional boolean)
+  - `mode` (`deploy`, `validate_only`, `restart_only`, `rollback_previous`)
+  - `confirm` (must equal `deploy-production` for prod)
+  - `run_connection_check` (optional boolean)
+  - `run_live_check` (optional boolean)
+  - `change_note` (optional free text)
 - Environment protection:
   - Required reviewer approval before production deploy.
 
@@ -210,17 +214,13 @@ Do not store in GitHub:
 
 On manual click-run:
 
-1. Build release binary from selected `ref`.
-2. Upload binary + required runtime files to VPS release dir:
-   - `/opt/edgelord/releases/<sha>/`
-3. Switch symlink:
-   - `/opt/edgelord/current -> /opt/edgelord/releases/<sha>`
-4. Run remote checks:
-   - `edgelord check config`
-   - `edgelord check live` (if live mode)
-5. Restart service:
-   - `sudo systemctl restart edgelord`
-6. Verify health:
+1. Validate confirmation phrase and environment gate.
+2. Execute action by mode:
+   - `deploy`: build/test binary, upload release, switch symlink, run checks, restart service.
+   - `validate_only`: run remote checks only (no binary change, no restart).
+   - `restart_only`: reinstall/restart service from current release only.
+   - `rollback_previous`: switch symlink to previous release, run checks, restart service.
+3. Verify health:
    - `systemctl is-active edgelord`
 
 If verification fails:
@@ -234,10 +234,15 @@ If verification fails:
 1. Push code to `main` (or chosen branch/tag).
 2. Open GitHub -> Actions -> `Manual Deploy`.
 3. Click `Run workflow`.
-4. Choose `ref` and `production` environment.
-5. Approve environment gate.
-6. Watch workflow to completion.
-7. Verify on host:
+4. Choose:
+   - `mode = deploy`
+   - `ref = <target git ref>`
+   - `environment = production`
+   - `confirm = deploy-production`
+5. (Optional) set `run_connection_check` / `run_live_check`.
+6. Approve environment gate.
+7. Watch workflow to completion.
+8. Verify on host:
    - `systemctl status edgelord`
    - `edgelord status --db /opt/edgelord/data/edgelord.db`
    - `edgelord logs --follow`
@@ -246,8 +251,9 @@ If verification fails:
 
 Preferred:
 
-1. Re-run `Manual Deploy` with last known-good `ref`.
-2. Approve and complete workflow.
+1. Re-run `Manual Deploy` with `mode = rollback_previous`.
+2. Set `confirm = deploy-production`.
+3. Approve and complete workflow.
 
 Emergency host-side rollback:
 
