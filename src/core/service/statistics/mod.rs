@@ -8,7 +8,8 @@ pub use convert::{decimal_to_f32, f32_to_decimal};
 pub use export::{export_daily_csv, recent_opportunities, summary_from_rows};
 pub use recorder::StatsRecorder;
 pub use stat::{
-    OpportunitySummary, RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeLeg, TradeOpenEvent,
+    OpportunitySummary, RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeLeg,
+    TradeOpenEvent,
 };
 
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -16,7 +17,9 @@ use diesel::SqliteConnection;
 
 /// Create a stats recorder from a database pool.
 #[must_use]
-pub fn create_recorder(pool: Pool<ConnectionManager<SqliteConnection>>) -> std::sync::Arc<StatsRecorder> {
+pub fn create_recorder(
+    pool: Pool<ConnectionManager<SqliteConnection>>,
+) -> std::sync::Arc<StatsRecorder> {
     std::sync::Arc::new(StatsRecorder::new(pool))
 }
 

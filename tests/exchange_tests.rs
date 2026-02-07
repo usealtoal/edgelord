@@ -7,15 +7,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::app::{
-    Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig,
-};
+use edgelord::app::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
 use edgelord::core::domain::OrderBook;
+use edgelord::core::domain::TokenId;
 use edgelord::core::exchange::polymarket::PolymarketClient;
+use edgelord::core::exchange::ExchangeFactory;
 use edgelord::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
 use edgelord::error::{ConfigError, Error};
-use edgelord::core::exchange::ExchangeFactory;
-use edgelord::core::domain::TokenId;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 
@@ -91,7 +89,10 @@ impl MockDataStream {
     }
 
     fn counts(&self) -> (Arc<AtomicU32>, Arc<AtomicU32>) {
-        (Arc::clone(&self.connect_count), Arc::clone(&self.subscribe_count))
+        (
+            Arc::clone(&self.connect_count),
+            Arc::clone(&self.subscribe_count),
+        )
     }
 }
 

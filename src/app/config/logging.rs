@@ -13,8 +13,8 @@ pub struct LoggingConfig {
 impl LoggingConfig {
     /// Initialize the tracing subscriber with this logging configuration.
     pub fn init(&self) {
-        let filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(&self.level));
+        let filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&self.level));
 
         match self.format.as_str() {
             "json" => {

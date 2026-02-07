@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use tracing::{debug, info, warn};
 use tokio::time::sleep;
+use tracing::{debug, info, warn};
 
 use super::response::{PolymarketMarket, PolymarketMarketsResponse};
 use crate::app::PolymarketConfig;

@@ -6,9 +6,9 @@
 // Allow large error types in Result - Error includes WebSocket variant for unified error handling
 #![allow(clippy::result_large_err)]
 
-mod highs;
 mod bregman;
 mod frank_wolfe;
+mod highs;
 
 pub use highs::HiGHSSolver;
 

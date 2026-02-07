@@ -130,7 +130,8 @@ impl ClusterDetector {
         );
 
         // Build opportunity
-        let opportunity = self.build_opportunity(cluster, &token_ids, &result.mu, result.gap, registry)?;
+        let opportunity =
+            self.build_opportunity(cluster, &token_ids, &result.mu, result.gap, registry)?;
 
         Ok(Some(ClusterOpportunity {
             cluster_id,
@@ -201,9 +202,11 @@ impl ClusterDetector {
             .map(|(token_id, &price)| OpportunityLeg::new(token_id.clone(), price))
             .collect();
 
-        let market_id = cluster.markets.first().ok_or_else(|| {
-            Error::Parse("Cluster has no markets".to_string())
-        })?.clone();
+        let market_id = cluster
+            .markets
+            .first()
+            .ok_or_else(|| Error::Parse("Cluster has no markets".to_string()))?
+            .clone();
 
         let question = registry
             .get_by_market_id(&market_id)

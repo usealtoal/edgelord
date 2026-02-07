@@ -11,8 +11,8 @@
 use rust_decimal::Decimal;
 use std::result::Result;
 
-use crate::error::DomainError;
 use super::id::{MarketId, TokenId};
+use crate::error::DomainError;
 
 /// A single outcome within a market.
 ///

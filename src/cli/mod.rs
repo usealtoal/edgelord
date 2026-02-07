@@ -12,9 +12,9 @@ pub mod status;
 pub mod wallet;
 
 use clap::{Parser, Subcommand};
+pub use provision::ProvisionCommand;
 use rust_decimal::Decimal;
 use std::path::PathBuf;
-pub use provision::ProvisionCommand;
 
 /// Edgelord - Multi-strategy arbitrage detection and execution.
 #[derive(Parser, Debug)]

@@ -20,12 +20,15 @@ use crate::app::state::AppState;
 use crate::core::cache::OrderBookCache;
 use crate::core::db;
 use crate::core::domain::{MarketRegistry, TokenId};
-use crate::core::exchange::{ExchangeFactory, MarketDataStream, ReconnectingDataStream};
+use crate::core::exchange::{
+    ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
+};
 use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::cluster::ClusterDetectionService;
-use crate::core::service::statistics;
 use crate::core::service::position::PositionManager;
-use crate::core::service::{Event, OpportunityEvent, RiskManager};
+use crate::core::service::statistics;
+use crate::core::service::{Event, NotifierRegistry, OpportunityEvent, RiskManager, StatsRecorder};
+use crate::core::strategy::StrategyRegistry;
 use crate::error::Result;
 
 use builder::{
@@ -33,6 +36,37 @@ use builder::{
     build_strategy_registry, init_executor,
 };
 use handler::handle_market_event;
+
+/// Inputs required to process one market event through detection and risk gates.
+pub struct EventProcessingContext<'a> {
+    pub cache: &'a OrderBookCache,
+    pub registry: &'a MarketRegistry,
+    pub strategies: &'a StrategyRegistry,
+    pub executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
+    pub risk_manager: &'a RiskManager,
+    pub notifiers: &'a Arc<NotifierRegistry>,
+    pub state: &'a Arc<AppState>,
+    pub stats: &'a Arc<StatsRecorder>,
+    pub position_manager: &'a Arc<PositionManager>,
+    pub dry_run: bool,
+}
+
+/// Process a single market event through the orchestrator pipeline.
+pub fn process_market_event(event: MarketEvent, context: EventProcessingContext<'_>) {
+    handle_market_event(
+        event,
+        context.cache,
+        context.registry,
+        context.strategies,
+        context.executor,
+        context.risk_manager,
+        context.notifiers,
+        context.state,
+        context.stats,
+        context.position_manager,
+        context.dry_run,
+    );
+}
 
 /// Main application orchestrator.
 pub(crate) struct Orchestrator;
@@ -170,18 +204,15 @@ impl Orchestrator {
         // Initialize inference infrastructure
         let cluster_cache = build_cluster_cache(&config);
         let llm_client = build_llm_client(&config);
-        let inferrer: Option<Arc<dyn Inferrer>> = llm_client
-            .map(|llm| build_inferrer(&config, llm));
+        let inferrer: Option<Arc<dyn Inferrer>> =
+            llm_client.map(|llm| build_inferrer(&config, llm));
 
         if inferrer.is_some() {
             info!("Inference service enabled");
         }
 
         // Build strategy registry with cache for combinatorial strategy
-        let strategies = Arc::new(build_strategy_registry(
-            &config,
-            Arc::clone(&cluster_cache),
-        ));
+        let strategies = Arc::new(build_strategy_registry(&config, Arc::clone(&cluster_cache)));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),
             "Strategies loaded"
@@ -247,10 +278,7 @@ impl Orchestrator {
                 match inf.infer(&summaries).await {
                     Ok(relations) => {
                         if !relations.is_empty() {
-                            info!(
-                                relations = relations.len(),
-                                "Discovered market relations"
-                            );
+                            info!(relations = relations.len(), "Discovered market relations");
                             cluster_cache.put_relations(relations);
                         } else {
                             debug!("No relations discovered in initial batch");
@@ -275,9 +303,8 @@ impl Orchestrator {
 
         // Create order book cache (with notifications if cluster detection enabled)
         let (cache, cluster_handle) = if config.cluster_detection.enabled {
-            let (cache, update_rx) = OrderBookCache::with_notifications(
-                config.cluster_detection.channel_capacity,
-            );
+            let (cache, update_rx) =
+                OrderBookCache::with_notifications(config.cluster_detection.channel_capacity);
             let cache = Arc::new(cache);
 
             // Start cluster detection service
@@ -300,7 +327,8 @@ impl Orchestrator {
                         "Cluster opportunity detected"
                     );
                     // Notify about the opportunity
-                    let event = Event::OpportunityDetected(OpportunityEvent::from(&opp.opportunity));
+                    let event =
+                        Event::OpportunityDetected(OpportunityEvent::from(&opp.opportunity));
                     notifiers_clone.notify_all(event);
                 }
             });

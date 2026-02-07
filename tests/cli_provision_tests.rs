@@ -1,7 +1,7 @@
 use alloy_signer_local::PrivateKeySigner;
+use clap::Parser;
 use edgelord::cli::provision::{execute, ProvisionCommand, ProvisionPolymarketArgs, WalletMode};
 use edgelord::cli::{Cli, Commands};
-use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;

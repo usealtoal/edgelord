@@ -81,11 +81,7 @@ Rules:
         )
     }
 
-    fn parse_response(
-        &self,
-        response: &str,
-        markets: &[MarketSummary],
-    ) -> Result<Vec<Relation>> {
+    fn parse_response(&self, response: &str, markets: &[MarketSummary]) -> Result<Vec<Relation>> {
         let json_str = extract_json(response)?;
         let parsed: LlmResponse = serde_json::from_str(json_str)
             .map_err(|e| crate::error::Error::Parse(format!("Invalid JSON: {e}")))?;
@@ -168,14 +164,18 @@ impl RawRelation {
     fn markets_valid(&self, valid: &HashSet<&str>) -> bool {
         match self.kind.as_str() {
             "implies" => {
-                self.if_yes.as_ref().is_some_and(|a| valid.contains(a.as_str()))
-                    && self.then_yes.as_ref().is_some_and(|c| valid.contains(c.as_str()))
-            }
-            "mutually_exclusive" | "exactly_one" => {
-                self.markets
+                self.if_yes
                     .as_ref()
-                    .is_some_and(|ms| ms.iter().all(|m| valid.contains(m.as_str())))
+                    .is_some_and(|a| valid.contains(a.as_str()))
+                    && self
+                        .then_yes
+                        .as_ref()
+                        .is_some_and(|c| valid.contains(c.as_str()))
             }
+            "mutually_exclusive" | "exactly_one" => self
+                .markets
+                .as_ref()
+                .is_some_and(|ms| ms.iter().all(|m| valid.contains(m.as_str()))),
             _ => false,
         }
     }
@@ -201,13 +201,18 @@ fn extract_json(text: &str) -> Result<&str> {
     // Find JSON in markdown code block or raw
     if let Some(start) = text.find("```json") {
         let start = start + 7;
-        let end = text[start..].find("```").map(|i| start + i).unwrap_or(text.len());
+        let end = text[start..]
+            .find("```")
+            .map(|i| start + i)
+            .unwrap_or(text.len());
         Ok(text[start..end].trim())
     } else if let Some(start) = text.find('{') {
         let end = text.rfind('}').map(|i| i + 1).unwrap_or(text.len());
         Ok(&text[start..end])
     } else {
-        Err(crate::error::Error::Parse("No JSON found in response".into()))
+        Err(crate::error::Error::Parse(
+            "No JSON found in response".into(),
+        ))
     }
 }
 

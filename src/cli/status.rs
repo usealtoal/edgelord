@@ -87,7 +87,10 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
         println!("  Trades Closed: {}", row.trades_closed);
         println!("  Profit:        ${:.2}", row.profit_realized);
         println!("  Loss:          ${:.2}", row.loss_realized);
-        println!("  Net:           ${:.2}", row.profit_realized - row.loss_realized);
+        println!(
+            "  Net:           ${:.2}",
+            row.profit_realized - row.loss_realized
+        );
     } else {
         println!("Today ({today}): no data");
     }

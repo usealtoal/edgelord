@@ -15,9 +15,7 @@ use rust_decimal::Decimal;
 use tracing::{info, warn};
 
 use crate::app::Config;
-use crate::core::domain::{
-    ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId,
-};
+use crate::core::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId};
 use crate::core::exchange::{
     ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide,
 };

@@ -165,7 +165,9 @@ mod tests {
     #[test]
     fn test_get_many() {
         let cache = OrderBookCache::new();
-        let tokens: Vec<TokenId> = (0..3).map(|i| TokenId::from(format!("token-{i}"))).collect();
+        let tokens: Vec<TokenId> = (0..3)
+            .map(|i| TokenId::from(format!("token-{i}")))
+            .collect();
 
         for (i, token) in tokens.iter().enumerate() {
             let price = rust_decimal::Decimal::from(i as u32 + 1) / rust_decimal::Decimal::from(10);

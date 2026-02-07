@@ -178,10 +178,8 @@ impl Config {
         if config.wallet.private_key.is_none() {
             if let Some(ref keystore_path) = config.wallet.keystore_path {
                 let password = read_keystore_password()?;
-                config.wallet.private_key = Some(decrypt_keystore_private_key(
-                    keystore_path,
-                    &password,
-                )?);
+                config.wallet.private_key =
+                    Some(decrypt_keystore_private_key(keystore_path, &password)?);
             }
         }
 

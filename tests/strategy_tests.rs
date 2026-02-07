@@ -190,7 +190,11 @@ fn strategy_skips_when_order_books_missing() {
     let multi_market = support::market::make_multi_market(
         "multi-market",
         "Who wins?",
-        &[("token-a", "Option A"), ("token-b", "Option B"), ("token-c", "Option C")],
+        &[
+            ("token-a", "Option A"),
+            ("token-b", "Option B"),
+            ("token-c", "Option C"),
+        ],
         dec!(1),
     );
     let cache_rebal = OrderBookCache::new();

@@ -5,8 +5,8 @@ use std::result::Result;
 
 use chrono::{DateTime, Utc};
 
-use crate::error::DomainError;
 use super::{MarketId, Price, TokenId, Volume};
+use crate::error::DomainError;
 
 /// Unique position identifier.
 ///

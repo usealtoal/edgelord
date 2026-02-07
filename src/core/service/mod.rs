@@ -9,17 +9,18 @@ pub mod statistics;
 mod subscription;
 
 pub use governor::{
-    AdaptiveGovernor, GovernorConfig, LatencyGovernor, LatencyMetrics, LatencyTargets, ScalingConfig,
+    AdaptiveGovernor, GovernorConfig, LatencyGovernor, LatencyMetrics, LatencyTargets,
+    ScalingConfig,
 };
 pub use notification::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
     RiskEvent, SummaryEvent,
 };
-pub use risk::{RiskCheckResult, RiskManager};
 pub use position::{CloseReason, CloseResult, MarketSettledEvent, PositionManager};
+pub use risk::{RiskCheckResult, RiskManager};
 pub use statistics::{
-    OpportunitySummary, RecordedOpportunity, StatsSummary, StatsRecorder, TradeCloseEvent,
-    TradeOpenEvent, TradeLeg,
+    OpportunitySummary, RecordedOpportunity, StatsRecorder, StatsSummary, TradeCloseEvent,
+    TradeLeg, TradeOpenEvent,
 };
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 

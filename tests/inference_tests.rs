@@ -6,8 +6,8 @@ use chrono::Duration;
 
 use edgelord::core::cache::ClusterCache;
 use edgelord::core::domain::{MarketId, Relation, RelationKind};
-use edgelord::core::llm::Llm;
 use edgelord::core::inference::{Inferrer, LlmInferrer, MarketSummary};
+use edgelord::core::llm::Llm;
 use edgelord::error::Result;
 
 /// Mock LLM that returns predefined responses.
@@ -17,11 +17,14 @@ struct MockLlm {
 
 impl MockLlm {
     fn new(response: impl Into<String>) -> Self {
-        Self { response: response.into() }
+        Self {
+            response: response.into(),
+        }
     }
 
     fn with_mutual_exclusion() -> Self {
-        Self::new(r#"{
+        Self::new(
+            r#"{
             "relations": [
                 {
                     "type": "mutually_exclusive",
@@ -30,11 +33,13 @@ impl MockLlm {
                     "reasoning": "Only one can win the election"
                 }
             ]
-        }"#)
+        }"#,
+        )
     }
 
     fn with_implication() -> Self {
-        Self::new(r#"{
+        Self::new(
+            r#"{
             "relations": [
                 {
                     "type": "implies",
@@ -44,7 +49,8 @@ impl MockLlm {
                     "reasoning": "PA is a swing state"
                 }
             ]
-        }"#)
+        }"#,
+        )
     }
 
     fn empty() -> Self {
@@ -184,7 +190,10 @@ async fn test_end_to_end_inference_to_cache() {
 
     // 6. Get cluster and verify constraints were computed
     let cluster = cache.get_for_market(&MarketId::new("trump-wins")).unwrap();
-    assert!(!cluster.constraints.is_empty(), "Constraints should be pre-computed");
+    assert!(
+        !cluster.constraints.is_empty(),
+        "Constraints should be pre-computed"
+    );
 }
 
 #[tokio::test]

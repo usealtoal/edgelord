@@ -55,7 +55,9 @@ pub fn execute_install(args: &InstallArgs) -> Result<()> {
 
     // Reload systemd
     if !run_systemctl(&["daemon-reload"]) {
-        return Err(Error::Connection("failed to reload systemd daemon".to_string()));
+        return Err(Error::Connection(
+            "failed to reload systemd daemon".to_string(),
+        ));
     }
     println!("✓ Reloaded systemd daemon");
 

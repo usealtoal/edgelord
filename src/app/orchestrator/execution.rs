@@ -58,76 +58,78 @@ pub(crate) fn spawn_execution(
             Ok(exec_result) => match exec_result {
                 Ok(exec_result) => {
                     match &exec_result {
-                    ArbitrageExecutionResult::Success { filled: _ } => {
-                        // Record trade open first to get trade_id
-                        let trade_id = if let Some(opp_id) = opportunity_id {
-                            let legs: Vec<TradeLeg> = opportunity
-                                .legs()
-                                .iter()
-                                .map(|leg| TradeLeg {
-                                    token_id: leg.token_id().to_string(),
-                                    side: "buy".to_string(),
-                                    price: leg.ask_price(),
+                        ArbitrageExecutionResult::Success { filled: _ } => {
+                            // Record trade open first to get trade_id
+                            let trade_id = if let Some(opp_id) = opportunity_id {
+                                let legs: Vec<TradeLeg> = opportunity
+                                    .legs()
+                                    .iter()
+                                    .map(|leg| TradeLeg {
+                                        token_id: leg.token_id().to_string(),
+                                        side: "buy".to_string(),
+                                        price: leg.ask_price(),
+                                        size: opportunity.volume(),
+                                    })
+                                    .collect();
+
+                                stats.record_trade_open(&TradeOpenEvent {
+                                    opportunity_id: opp_id,
+                                    strategy: opportunity.strategy().to_string(),
+                                    market_ids: vec![market_id.clone()],
+                                    legs,
                                     size: opportunity.volume(),
+                                    expected_profit: opportunity.expected_profit(),
                                 })
-                                .collect();
+                            } else {
+                                None
+                            };
 
-                            stats.record_trade_open(&TradeOpenEvent {
-                                opportunity_id: opp_id,
-                                strategy: opportunity.strategy().to_string(),
-                                market_ids: vec![market_id.clone()],
-                                legs,
-                                size: opportunity.volume(),
-                                expected_profit: opportunity.expected_profit(),
-                            })
-                        } else {
-                            None
-                        };
+                            // Record position with trade_id for close tracking
+                            record_position(&state, &opportunity, trade_id);
 
-                        // Record position with trade_id for close tracking
-                        record_position(&state, &opportunity, trade_id);
+                            // Release reserved exposure (now converted to actual position exposure)
+                            state.release_exposure(reserved_exposure);
 
-                        // Release reserved exposure (now converted to actual position exposure)
-                        state.release_exposure(reserved_exposure);
+                            // Track peak exposure
+                            let exposure = state.total_exposure();
+                            stats.update_peak_exposure(exposure);
+                        }
+                        ArbitrageExecutionResult::PartialFill { filled, failed } => {
+                            let filled_ids: Vec<_> =
+                                filled.iter().map(|f| f.token_id.to_string()).collect();
+                            let failed_ids: Vec<_> =
+                                failed.iter().map(|f| f.token_id.to_string()).collect();
+                            warn!(
+                                filled = ?filled_ids,
+                                failed = ?failed_ids,
+                                "Partial fill detected, attempting recovery"
+                            );
 
-                        // Track peak exposure
-                        let exposure = state.total_exposure();
-                        stats.update_peak_exposure(exposure);
-                    }
-                    ArbitrageExecutionResult::PartialFill { filled, failed } => {
-                        let filled_ids: Vec<_> =
-                            filled.iter().map(|f| f.token_id.to_string()).collect();
-                        let failed_ids: Vec<_> =
-                            failed.iter().map(|f| f.token_id.to_string()).collect();
-                        warn!(
-                            filled = ?filled_ids,
-                            failed = ?failed_ids,
-                            "Partial fill detected, attempting recovery"
-                        );
+                            // Try to cancel all filled orders
+                            let mut cancel_failed = false;
+                            for fill in filled.iter() {
+                                let order_id = OrderId::new(fill.order_id.clone());
+                                if let Err(cancel_err) =
+                                    ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await
+                                {
+                                    warn!(error = %cancel_err, token = %fill.token_id, "Failed to cancel filled leg");
+                                    cancel_failed = true;
+                                }
+                            }
 
-                        // Try to cancel all filled orders
-                        let mut cancel_failed = false;
-                        for fill in filled.iter() {
-                            let order_id = OrderId::new(fill.order_id.clone());
-                            if let Err(cancel_err) =
-                                ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await
-                            {
-                                warn!(error = %cancel_err, token = %fill.token_id, "Failed to cancel filled leg");
-                                cancel_failed = true;
+                            if cancel_failed {
+                                warn!("Some cancellations failed, recording partial position");
+                                record_partial_position(&state, &opportunity, filled, failed, None);
+                                // Release reserved exposure (partial position recorded)
+                                state.release_exposure(reserved_exposure);
+                            } else {
+                                info!(
+                                    "Successfully cancelled all filled legs, no position recorded"
+                                );
+                                // Release reserved exposure (no position recorded)
+                                state.release_exposure(reserved_exposure);
                             }
                         }
-
-                        if cancel_failed {
-                            warn!("Some cancellations failed, recording partial position");
-                            record_partial_position(&state, &opportunity, filled, failed, None);
-                            // Release reserved exposure (partial position recorded)
-                            state.release_exposure(reserved_exposure);
-                        } else {
-                            info!("Successfully cancelled all filled legs, no position recorded");
-                            // Release reserved exposure (no position recorded)
-                            state.release_exposure(reserved_exposure);
-                        }
-                    }
                         ArbitrageExecutionResult::Failed { .. } => {
                             // Release reserved exposure on failure
                             state.release_exposure(reserved_exposure);
@@ -284,15 +286,15 @@ mod tests {
                     FilledLeg::new(TokenId::from("token-1"), "order-1"),
                     FilledLeg::new(TokenId::from("token-2"), "order-2"),
                 ],
-                failed: vec![FailedLeg::new(
-                    TokenId::from("token-3"),
-                    "execution failed",
-                )],
+                failed: vec![FailedLeg::new(TokenId::from("token-3"), "execution failed")],
             })
         }
 
         async fn cancel(&self, order_id: &OrderId) -> Result<(), Error> {
-            if self.cancel_fail_order_ids.contains(&order_id.as_str().to_string()) {
+            if self
+                .cancel_fail_order_ids
+                .contains(&order_id.as_str().to_string())
+            {
                 Err(Error::Execution(ExecutionError::OrderRejected(
                     "cancel failed".to_string(),
                 )))
@@ -438,14 +440,7 @@ mod tests {
 
         assert!(state.try_lock_execution("timeout-market"));
 
-        spawn_execution(
-            executor,
-            opportunity,
-            notifiers,
-            state.clone(),
-            stats,
-            None,
-        );
+        spawn_execution(executor, opportunity, notifiers, state.clone(), stats, None);
 
         let start = Instant::now();
         let timeout = Duration::from_secs(1);

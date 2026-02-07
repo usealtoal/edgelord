@@ -385,10 +385,7 @@ mod tests {
         let manager = PrioritySubscriptionManager::new(100);
         let market_id = make_market_id("market-1");
 
-        manager.register_market_tokens(
-            market_id.clone(),
-            vec![make_token_id("old-token")],
-        );
+        manager.register_market_tokens(market_id.clone(), vec![make_token_id("old-token")]);
         manager.register_market_tokens(
             market_id.clone(),
             vec![make_token_id("new-token-1"), make_token_id("new-token-2")],
@@ -455,14 +452,8 @@ mod tests {
         let manager = PrioritySubscriptionManager::new(100);
 
         // Register markets with tokens
-        manager.register_market_tokens(
-            make_market_id("low"),
-            vec![make_token_id("low-token")],
-        );
-        manager.register_market_tokens(
-            make_market_id("high"),
-            vec![make_token_id("high-token")],
-        );
+        manager.register_market_tokens(make_market_id("low"), vec![make_token_id("low-token")]);
+        manager.register_market_tokens(make_market_id("high"), vec![make_token_id("high-token")]);
         manager.register_market_tokens(
             make_market_id("medium"),
             vec![make_token_id("medium-token")],
@@ -489,14 +480,8 @@ mod tests {
     async fn expand_multiple_markets() {
         let manager = PrioritySubscriptionManager::new(100);
 
-        manager.register_market_tokens(
-            make_market_id("market-1"),
-            vec![make_token_id("token-1")],
-        );
-        manager.register_market_tokens(
-            make_market_id("market-2"),
-            vec![make_token_id("token-2")],
-        );
+        manager.register_market_tokens(make_market_id("market-1"), vec![make_token_id("token-1")]);
+        manager.register_market_tokens(make_market_id("market-2"), vec![make_token_id("token-2")]);
 
         manager.enqueue(vec![
             make_market_score("market-1", 0.5),
@@ -518,10 +503,7 @@ mod tests {
             make_market_id("market-1"),
             vec![make_token_id("token-1a"), make_token_id("token-1b")], // 2 tokens
         );
-        manager.register_market_tokens(
-            make_market_id("market-2"),
-            vec![make_token_id("token-2")],
-        );
+        manager.register_market_tokens(make_market_id("market-2"), vec![make_token_id("token-2")]);
 
         manager.enqueue(vec![
             make_market_score("market-1", 0.5),
@@ -543,10 +525,7 @@ mod tests {
         let manager = PrioritySubscriptionManager::new(100);
 
         // Don't register tokens for market-1
-        manager.register_market_tokens(
-            make_market_id("market-2"),
-            vec![make_token_id("token-2")],
-        );
+        manager.register_market_tokens(make_market_id("market-2"), vec![make_token_id("token-2")]);
 
         manager.enqueue(vec![
             make_market_score("market-1", 0.9), // No token mapping
@@ -575,14 +554,8 @@ mod tests {
     async fn contract_removes_tokens_lifo() {
         let manager = PrioritySubscriptionManager::new(100);
 
-        manager.register_market_tokens(
-            make_market_id("market-1"),
-            vec![make_token_id("token-1")],
-        );
-        manager.register_market_tokens(
-            make_market_id("market-2"),
-            vec![make_token_id("token-2")],
-        );
+        manager.register_market_tokens(make_market_id("market-1"), vec![make_token_id("token-1")]);
+        manager.register_market_tokens(make_market_id("market-2"), vec![make_token_id("token-2")]);
 
         manager.enqueue(vec![
             make_market_score("market-1", 0.5),
@@ -602,10 +575,7 @@ mod tests {
     async fn contract_removes_market_when_no_tokens_left() {
         let manager = PrioritySubscriptionManager::new(100);
 
-        manager.register_market_tokens(
-            make_market_id("market-1"),
-            vec![make_token_id("token-1")],
-        );
+        manager.register_market_tokens(make_market_id("market-1"), vec![make_token_id("token-1")]);
 
         manager.enqueue(vec![make_market_score("market-1", 0.5)]);
         manager.expand(1).await.unwrap();
@@ -622,10 +592,7 @@ mod tests {
     async fn contract_handles_more_than_active() {
         let manager = PrioritySubscriptionManager::new(100);
 
-        manager.register_market_tokens(
-            make_market_id("market-1"),
-            vec![make_token_id("token-1")],
-        );
+        manager.register_market_tokens(make_market_id("market-1"), vec![make_token_id("token-1")]);
 
         manager.enqueue(vec![make_market_score("market-1", 0.5)]);
         manager.expand(1).await.unwrap();
@@ -659,10 +626,7 @@ mod tests {
     async fn is_subscribed_returns_true_after_expand() {
         let manager = PrioritySubscriptionManager::new(100);
 
-        manager.register_market_tokens(
-            make_market_id("market-1"),
-            vec![make_token_id("token-1")],
-        );
+        manager.register_market_tokens(make_market_id("market-1"), vec![make_token_id("token-1")]);
         manager.enqueue(vec![make_market_score("market-1", 0.5)]);
 
         assert!(!manager.is_subscribed(&make_market_id("market-1")));

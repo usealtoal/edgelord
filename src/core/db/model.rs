@@ -2,7 +2,9 @@
 
 use diesel::prelude::*;
 
-use super::schema::{clusters, daily_stats, opportunities, relations, strategy_daily_stats, trades};
+use super::schema::{
+    clusters, daily_stats, opportunities, relations, strategy_daily_stats, trades,
+};
 
 /// Database row for a relation.
 #[derive(Queryable, Selectable, Insertable, Debug, Clone)]

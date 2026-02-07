@@ -37,10 +37,11 @@ impl OpenAiLlm {
 
     /// Create from environment variable.
     pub fn from_env(model: impl Into<String>) -> Result<Self> {
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .map_err(|_| Error::Config(crate::error::ConfigError::MissingField {
+        let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+            Error::Config(crate::error::ConfigError::MissingField {
                 field: "OPENAI_API_KEY",
-            }))?;
+            })
+        })?;
         Ok(Self::new(api_key, model, 4096, 0.2))
     }
 }

@@ -383,9 +383,11 @@ mod tests {
     #[test]
     fn market_score_sorting_by_priority() {
         let factors = ScoreFactors::default();
-        let mut scores = [MarketScore::new(make_market_id("medium"), factors, 0.5),
+        let mut scores = [
+            MarketScore::new(make_market_id("medium"), factors, 0.5),
             MarketScore::new(make_market_id("low"), factors, 0.2),
-            MarketScore::new(make_market_id("high"), factors, 0.8)];
+            MarketScore::new(make_market_id("high"), factors, 0.8),
+        ];
 
         scores.sort();
 
@@ -398,9 +400,11 @@ mod tests {
     #[test]
     fn market_score_sorting_descending_for_priority_queue() {
         let factors = ScoreFactors::default();
-        let mut scores = [MarketScore::new(make_market_id("medium"), factors, 0.5),
+        let mut scores = [
+            MarketScore::new(make_market_id("medium"), factors, 0.5),
             MarketScore::new(make_market_id("low"), factors, 0.2),
-            MarketScore::new(make_market_id("high"), factors, 0.8)];
+            MarketScore::new(make_market_id("high"), factors, 0.8),
+        ];
 
         scores.sort_by(|a, b| b.cmp(a)); // Descending order
 

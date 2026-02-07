@@ -47,13 +47,8 @@ fn test_exchange_config_parses_binary_markets() {
 
 #[test]
 fn test_generic_market_registry_workflow() {
-    let binary = support::market::make_binary_market(
-        "m1",
-        "Will it rain?",
-        "yes-1",
-        "no-1",
-        dec!(1.00),
-    );
+    let binary =
+        support::market::make_binary_market("m1", "Will it rain?", "yes-1", "no-1", dec!(1.00));
     let multi = support::market::make_multi_market(
         "m2",
         "Who wins?",
@@ -109,13 +104,7 @@ fn test_opportunity_with_configurable_payout() {
 #[test]
 fn test_market_payout_flows_through() {
     // Create market with specific payout
-    let market = support::market::make_binary_market(
-        "m1",
-        "Test?",
-        "yes",
-        "no",
-        dec!(5.00),
-    );
+    let market = support::market::make_binary_market("m1", "Test?", "yes", "no", dec!(5.00));
 
     // Payout is accessible
     assert_eq!(market.payout(), dec!(5.00));

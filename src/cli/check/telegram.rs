@@ -13,11 +13,10 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
         }
     })?;
 
-    let chat_id = std::env::var("TELEGRAM_CHAT_ID").map_err(|_| {
-        crate::error::ConfigError::MissingField {
+    let chat_id =
+        std::env::var("TELEGRAM_CHAT_ID").map_err(|_| crate::error::ConfigError::MissingField {
             field: "TELEGRAM_CHAT_ID environment variable",
-        }
-    })?;
+        })?;
 
     println!("Sending test message to Telegram...");
     let masked_token = if token.len() >= 15 {

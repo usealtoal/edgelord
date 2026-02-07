@@ -43,7 +43,10 @@ max_slippage = 1.5
     let _ = fs::remove_file(&path);
 
     match result {
-        Err(Error::Config(ConfigError::InvalidValue { field: "max_slippage", .. })) => {}
+        Err(Error::Config(ConfigError::InvalidValue {
+            field: "max_slippage",
+            ..
+        })) => {}
         Err(err) => panic!("Expected invalid slippage error, got {err}"),
         Ok(config) => panic!(
             "Expected invalid slippage to be rejected, got {}",
@@ -168,7 +171,10 @@ target_p95_ms = 50
     let _ = fs::remove_file(&path);
 
     match result {
-        Err(Error::Config(ConfigError::InvalidValue { field: "latency_targets", .. })) => {}
+        Err(Error::Config(ConfigError::InvalidValue {
+            field: "latency_targets",
+            ..
+        })) => {}
         Err(err) => panic!("Expected invalid latency targets error, got {err}"),
         Ok(_) => panic!("Expected invalid latency targets to be rejected"),
     }
@@ -198,7 +204,9 @@ min_gap = 1.5
     let _ = fs::remove_file(&path);
 
     match result {
-        Err(Error::Config(ConfigError::InvalidValue { field: "min_gap", .. })) => {}
+        Err(Error::Config(ConfigError::InvalidValue {
+            field: "min_gap", ..
+        })) => {}
         Err(err) => panic!("Expected invalid min_gap error, got {err}"),
         Ok(_) => panic!("Expected invalid min_gap to be rejected"),
     }
