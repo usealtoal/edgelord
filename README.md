@@ -11,141 +11,91 @@
 
 </div>
 
-## What It Does
+## Overview
 
-Detects and executes arbitrage opportunities on prediction markets. Based on [research](https://arxiv.org/abs/2508.03474) showing $40M in arbitrage profits extracted from Polymarket in one year.
+edgelord is a Rust CLI for running arbitrage detection and execution workflows against prediction-market exchanges.
 
-Three detection strategies, ordered by historical profit share:
+Current implementation focus:
 
-| Strategy | What It Finds | Profit Share |
-|----------|---------------|--------------|
-| Market Rebalancing | Sum of all outcomes < $1 | 73% ($29M) |
-| Single-Condition | YES + NO < $1 | 27% ($10.5M) |
-| Combinatorial | Cross-market logical dependencies | <1% ($95K) |
+- Exchange: Polymarket
+- Detection model: multi-strategy (single-condition, market-rebalancing, combinatorial)
+- Runtime model: event-driven with risk-gated execution
 
-**New:** LLM-powered relation inference automatically discovers which markets are correlated, enabling combinatorial arbitrage without manual configuration.
+## Strategy Coverage
+
+| Strategy | Market Scope | Core Signal |
+|---|---|---|
+| Market Rebalancing | Multi-outcome markets | `sum(outcomes) < payout` |
+| Single-Condition | Binary markets | `YES + NO < payout` |
+| Combinatorial | Related market clusters | Cross-market constraint violations |
 
 ## Quick Start
 
 ```bash
-# Clone and build
 git clone https://github.com/usealtoal/edgelord.git
 cd edgelord
 cargo build --release
-
-# Configure (copy and edit)
-# Provision (recommended for Polymarket)
-export EDGELORD_KEYSTORE_PASSWORD="..."        # Keystore passphrase
-./target/release/edgelord provision polymarket --config config.polymarket.toml
-
-# Or manual config
 cp config.toml.example config.toml
-export WALLET_PRIVATE_KEY="..."                # For execution
-export ANTHROPIC_API_KEY="..."         # For relation inference
-
-# Run
-./target/release/edgelord run --config config.polymarket.toml
 ```
 
-See [Getting Started](docs/getting-started.md) for detailed setup.
+Provision wallet (recommended):
 
-## How It Works
-
-```mermaid
-flowchart LR
-    subgraph Startup
-        Markets[Fetch Markets] --> LLM[LLM Inference]
-        LLM --> Relations[Discover Relations]
-        Relations --> Cache[Cluster Cache]
-    end
-
-    subgraph Runtime
-        WS[WebSocket] --> OB[Order Book Cache]
-        OB --> S1[Single Condition]
-        OB --> S2[Rebalancing]
-        OB --> CD[Cluster Detection]
-        CD --> FW[Frank-Wolfe]
-    end
-
-    S1 --> Risk[Risk Manager]
-    S2 --> Risk
-    FW --> Risk
-    Risk --> Exec[Executor]
-    Exec --> Exchange[Exchange API]
+```bash
+export EDGELORD_KEYSTORE_PASSWORD="change-me"
+./target/release/edgelord provision polymarket --config config.toml
 ```
 
-**Startup:**
-1. Fetch active markets from exchange
-2. Run LLM inference to discover market relations (if enabled)
-3. Build clusters of related markets with pre-computed constraints
+Validate and run:
 
-**Runtime:**
-1. WebSocket streams order book updates
-2. Per-market strategies (single-condition, rebalancing) check each update
-3. Cluster detection service monitors related markets, runs Frank-Wolfe when prices change
-4. Opportunities pass through risk management and execute
-
-## Configuration
-
-Key settings in `config.toml`:
-
-```toml
-[strategies]
-enabled = ["single_condition", "market_rebalancing", "combinatorial"]
-
-[strategies.combinatorial]
-enabled = true
-
-[inference]
-enabled = true              # LLM discovers market relations
-
-[cluster_detection]
-enabled = true              # Real-time cluster arbitrage detection
-
-[llm]
-provider = "anthropic"      # or "openai"
+```bash
+./target/release/edgelord check config --config config.toml
+./target/release/edgelord check connection --config config.toml
+./target/release/edgelord run --config config.toml
 ```
 
-See [Configuration](docs/configuration.md) for all options.
+## Production Readiness Flow
+
+1. Run in `dry_run = true` first.
+2. Validate with `check live` before any live deployment.
+3. Start with conservative risk limits.
+4. Promote to mainnet only after stable observation windows.
 
 ## Documentation
 
-- **[Getting Started](docs/getting-started.md)** — Installation, configuration, first run
-- **[Configuration](docs/configuration.md)** — All options explained
-- **[Strategies](docs/strategies/overview.md)** — How each detection algorithm works
-- **[Architecture](docs/architecture/overview.md)** — System design and data flow
-- **[Deployment](docs/deployment/)** — VPS, wallet, Telegram alerts, operations
+- [Documentation Home](docs/README.md)
+- [Getting Started](docs/getting-started.md)
+- [CLI Reference](docs/cli-reference.md)
+- [Configuration Reference](docs/configuration.md)
+- [Strategy Guide](docs/strategies/overview.md)
+- [Architecture](docs/architecture/overview.md)
+- [Deployment Guide](docs/deployment/README.md)
+- [Testing Guide](docs/testing.md)
 
-Implementation plans and research notes live in `docs/plans/` and `docs/research/`.
+## Example Commands
+
+```bash
+# Run
+edgelord run --config config.toml
+
+# Diagnostics
+edgelord check live --config config.toml
+
+# Wallet operations
+edgelord wallet address --config config.toml
+edgelord wallet approve --config config.toml --amount 1000 --yes
+
+# Statistics
+edgelord statistics today --db edgelord.db
+```
 
 ## Project Structure
 
-```
+```text
 src/
-├── core/
-│   ├── domain/         # Pure types (Market, Relation, Cluster)
-│   ├── exchange/       # Exchange abstraction + Polymarket impl
-│   ├── strategy/       # Detection algorithms
-│   ├── inference/      # LLM-powered relation discovery
-│   ├── llm/            # Anthropic/OpenAI clients
-│   ├── cache/          # Order book + cluster caches
-│   ├── store/          # Persistence (SQLite, memory)
-│   ├── solver/         # Frank-Wolfe, HiGHS ILP
-│   └── service/        # Cluster detection, risk, notifications
-├── app/                # Orchestration, config, CLI
-└── cli/                # Command handlers
+├── app/      # Orchestration and config loading
+├── cli/      # Command handlers and CLI surface
+└── core/     # Domain, exchange adapters, strategies, services, solvers
 ```
-
-## Status
-
-- [x] Foundation — WebSocket, order book cache, market data
-- [x] Detection — Single-condition and rebalancing strategies
-- [x] Execution — Order submission, position tracking
-- [x] Risk Management — Limits, circuit breakers, slippage checks
-- [x] Multi-Exchange Abstraction — Generic traits, Polymarket implementation
-- [x] LLM Inference — Automatic relation discovery
-- [x] Combinatorial Strategy — Frank-Wolfe + cluster detection
-- [ ] Mainnet Validation — Production testing with real capital
 
 ## License
 

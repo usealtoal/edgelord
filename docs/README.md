@@ -1,23 +1,31 @@
-# Documentation
+# Edgelord Documentation
 
-Welcome to the edgelord documentation.
+Edgelord is a Rust CLI for detecting and executing prediction-market arbitrage with configurable risk controls.
 
-## Contents
+## Documentation Map
 
-### Getting Started
-- **[Getting Started](getting-started.md)** — Prerequisites, installation, configuration, running
+- [Getting Started](getting-started.md)
+  - Install the binary, bootstrap config, provision a wallet, and run safely.
+- [CLI Reference](cli-reference.md)
+  - Command-by-command usage for `run`, `check`, `provision`, `wallet`, `service`, and reporting commands.
+- [Configuration Reference](configuration.md)
+  - Production-focused configuration guidance with practical defaults.
+- [Testing Guide](testing.md)
+  - Local test strategy and smoke-test guidance.
+- [Architecture](architecture/overview.md)
+  - High-level system design and runtime flow.
+- [Strategy Guide](strategies/overview.md)
+  - Detection strategies, constraints, and selection guidance.
+- [Deployment](deployment/README.md)
+  - VPS setup, wallet setup, Telegram alerts, and operations.
 
-### Reference
-- **[Configuration](configuration.md)** — All configuration options with defaults and examples
-- **[Architecture](architecture/overview.md)** — System design, module structure, data flow
-- **[Deployment](deployment/)** — VPS setup, wallet funding, Telegram alerts, operations
+## Intended Audience
 
-### Strategies
-- **[Strategy Overview](strategies/overview.md)** — How the strategy system works
-- **[Single-Condition](strategies/single-condition.md)** — Binary market arbitrage (YES + NO < $1)
-- **[Market Rebalancing](strategies/market-rebalancing.md)** — Multi-outcome arbitrage (sum < $1)
-- **[Combinatorial](strategies/combinatorial.md)** — Cross-market arbitrage via Frank-Wolfe + ILP
+- Operators deploying and running edgelord in a managed environment.
+- Engineers extending strategy, exchange, or orchestration behavior.
 
-### Background
-- **[Research](research/)** — Polymarket technical details and arbitrage theory
-- **[Plans](plans/)** — Implementation plans (historical)
+## Conventions
+
+- Paths are shown relative to repository root unless noted.
+- Environment variables are uppercase (for example, `WALLET_PRIVATE_KEY`).
+- Commands assume a Unix-like shell.
