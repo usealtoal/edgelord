@@ -1,6 +1,12 @@
-# Telegram Alerts
+# Telegram Integration
 
 Telegram alerts provide lightweight execution and risk visibility.
+
+Build with Telegram support enabled:
+
+```bash
+cargo build --release --features telegram
+```
 
 ## Required Environment Variables
 
@@ -22,6 +28,27 @@ notify_risk_rejections = true
 ```bash
 ./target/release/edgelord check telegram --config config.toml
 ```
+
+## Bot Commands
+
+When Telegram is enabled in config and `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` are set, the bot also accepts commands from the configured `TELEGRAM_CHAT_ID`:
+
+- `/start` and `/help`
+- `/status`
+- `/health`
+- `/positions`
+- `/pause`
+- `/resume`
+- `/set_risk <field> <value>`
+
+Supported `set_risk` fields:
+
+- `min_profit`
+- `max_slippage` (0 to 1)
+- `max_position`
+- `max_exposure`
+
+Runtime risk updates apply immediately and are process-local (they do not rewrite `config.toml`).
 
 ## Recommended Alert Policy
 

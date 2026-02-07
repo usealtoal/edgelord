@@ -21,7 +21,7 @@ pub use orchestrator::{
     health_check, process_market_event, EventProcessingContext, HealthCheck, HealthReport,
     HealthStatus,
 };
-pub use state::{AppState, RiskLimits};
+pub use state::{AppState, RiskLimitKind, RiskLimitUpdateError, RiskLimits};
 pub use wallet::{ApprovalOutcome, SweepOutcome, WalletApprovalStatus, WalletService};
 
 use crate::error::Result;

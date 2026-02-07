@@ -71,6 +71,28 @@ min_profit_threshold = 0.50
 max_slippage = 0.02
 ```
 
+## Telegram Integration (Optional)
+
+Telegram support is optional and requires building with the `telegram` feature.
+
+```bash
+cargo build --release --features telegram
+```
+
+```toml
+[telegram]
+enabled = true
+notify_opportunities = false
+notify_executions = true
+notify_risk_rejections = true
+```
+
+Runtime bot commands are accepted only from `TELEGRAM_CHAT_ID` and include:
+
+- `/status`, `/health`, `/positions`
+- `/pause`, `/resume`
+- `/set_risk <field> <value>` where `field` is `min_profit`, `max_slippage`, `max_position`, or `max_exposure`
+
 ## Optional Inference and Cluster Detection
 
 Enable when using combinatorial relation-based detection.

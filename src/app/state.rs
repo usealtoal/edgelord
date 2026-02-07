@@ -33,12 +33,60 @@ impl Default for RiskLimits {
     }
 }
 
+/// Risk limit fields that may be changed at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RiskLimitKind {
+    MaxPositionPerMarket,
+    MaxTotalExposure,
+    MinProfitThreshold,
+    MaxSlippage,
+}
+
+impl RiskLimitKind {
+    /// Stable field name used in logs and command output.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MaxPositionPerMarket => "max_position",
+            Self::MaxTotalExposure => "max_exposure",
+            Self::MinProfitThreshold => "min_profit",
+            Self::MaxSlippage => "max_slippage",
+        }
+    }
+}
+
+/// Error returned when a runtime risk limit update is invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RiskLimitUpdateError {
+    reason: &'static str,
+}
+
+impl RiskLimitUpdateError {
+    #[must_use]
+    pub const fn new(reason: &'static str) -> Self {
+        Self { reason }
+    }
+
+    #[must_use]
+    pub const fn reason(&self) -> &'static str {
+        self.reason
+    }
+}
+
+impl std::fmt::Display for RiskLimitUpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.reason)
+    }
+}
+
+impl std::error::Error for RiskLimitUpdateError {}
+
 /// Shared application state accessible by all services.
 pub struct AppState {
     /// Position tracker for all open/closed positions.
     positions: RwLock<PositionTracker>,
     /// Risk limits configuration.
-    risk_limits: RiskLimits,
+    risk_limits: RwLock<RiskLimits>,
     /// Circuit breaker - when true, no new trades.
     circuit_breaker: AtomicBool,
     /// Reason for circuit breaker activation.
@@ -55,7 +103,7 @@ impl AppState {
     pub fn new(risk_limits: RiskLimits) -> Self {
         Self {
             positions: RwLock::new(PositionTracker::new()),
-            risk_limits,
+            risk_limits: RwLock::new(risk_limits),
             circuit_breaker: AtomicBool::new(false),
             circuit_breaker_reason: RwLock::new(None),
             pending_executions: Mutex::new(HashSet::new()),
@@ -74,8 +122,45 @@ impl AppState {
     }
 
     /// Get risk limits.
-    pub const fn risk_limits(&self) -> &RiskLimits {
-        &self.risk_limits
+    pub fn risk_limits(&self) -> RiskLimits {
+        self.risk_limits.read().clone()
+    }
+
+    /// Set one risk limit at runtime with validation.
+    ///
+    /// Returns a full snapshot of limits after the update.
+    pub fn set_risk_limit(
+        &self,
+        kind: RiskLimitKind,
+        value: Decimal,
+    ) -> Result<RiskLimits, RiskLimitUpdateError> {
+        match kind {
+            RiskLimitKind::MaxPositionPerMarket | RiskLimitKind::MaxTotalExposure => {
+                if value <= Decimal::ZERO {
+                    return Err(RiskLimitUpdateError::new("value must be greater than 0"));
+                }
+            }
+            RiskLimitKind::MinProfitThreshold => {
+                if value < Decimal::ZERO {
+                    return Err(RiskLimitUpdateError::new("value must be 0 or greater"));
+                }
+            }
+            RiskLimitKind::MaxSlippage => {
+                if value < Decimal::ZERO || value > Decimal::ONE {
+                    return Err(RiskLimitUpdateError::new("value must be between 0 and 1"));
+                }
+            }
+        }
+
+        let mut limits = self.risk_limits.write();
+        match kind {
+            RiskLimitKind::MaxPositionPerMarket => limits.max_position_per_market = value,
+            RiskLimitKind::MaxTotalExposure => limits.max_total_exposure = value,
+            RiskLimitKind::MinProfitThreshold => limits.min_profit_threshold = value,
+            RiskLimitKind::MaxSlippage => limits.max_slippage = value,
+        }
+
+        Ok(limits.clone())
     }
 
     /// Check if circuit breaker is active.
@@ -105,6 +190,11 @@ impl AppState {
         self.positions.read().total_exposure()
     }
 
+    /// Count open positions.
+    pub fn open_position_count(&self) -> usize {
+        self.positions.read().open_count()
+    }
+
     /// Try to acquire execution lock for a market.
     /// Returns `true` if lock acquired, `false` if already locked.
     pub fn try_lock_execution(&self, market_id: &str) -> bool {
@@ -114,6 +204,11 @@ impl AppState {
     /// Release execution lock for a market.
     pub fn release_execution(&self, market_id: &str) {
         self.pending_executions.lock().remove(market_id);
+    }
+
+    /// Count markets with in-flight executions.
+    pub fn pending_execution_count(&self) -> usize {
+        self.pending_executions.lock().len()
     }
 
     /// Get current pending exposure.
@@ -127,7 +222,7 @@ impl AppState {
         let positions = self.positions.read();
         let mut pending = self.pending_exposure.lock();
         let current = positions.total_exposure();
-        let limit = self.risk_limits.max_total_exposure;
+        let limit = self.risk_limits.read().max_total_exposure;
 
         if current + *pending + amount > limit {
             return false;
@@ -157,6 +252,7 @@ impl Default for AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_app_state_default() {
@@ -189,6 +285,30 @@ mod tests {
     }
 
     #[test]
+    fn test_set_risk_limit_updates_value() {
+        let state = AppState::default();
+
+        let updated = state
+            .set_risk_limit(RiskLimitKind::MinProfitThreshold, dec!(0.25))
+            .unwrap();
+
+        assert_eq!(updated.min_profit_threshold, dec!(0.25));
+        assert_eq!(state.risk_limits().min_profit_threshold, dec!(0.25));
+    }
+
+    #[test]
+    fn test_set_risk_limit_rejects_invalid() {
+        let state = AppState::default();
+
+        let err = state
+            .set_risk_limit(RiskLimitKind::MaxSlippage, dec!(1.5))
+            .unwrap_err();
+
+        assert_eq!(err.reason(), "value must be between 0 and 1");
+        assert_eq!(state.risk_limits().max_slippage, Decimal::new(2, 2));
+    }
+
+    #[test]
     fn test_execution_locking() {
         let state = AppState::default();
 
@@ -209,7 +329,6 @@ mod tests {
     #[test]
     fn test_total_exposure() {
         use crate::core::domain::{MarketId, Position, PositionLeg, PositionStatus, TokenId};
-        use rust_decimal_macros::dec;
 
         let state = AppState::default();
 

@@ -195,7 +195,7 @@ impl Orchestrator {
         let risk_manager = Arc::new(RiskManager::new(state.clone()));
 
         // Initialize notifiers
-        let notifiers = Arc::new(build_notifier_registry(&config));
+        let notifiers = Arc::new(build_notifier_registry(&config, Arc::clone(&state)));
         info!(notifiers = notifiers.len(), "Notifiers initialized");
 
         // Initialize executor (optional)

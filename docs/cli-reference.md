@@ -58,6 +58,8 @@ edgelord check connection --config config.toml
 edgelord check telegram --config config.toml
 ```
 
+`check telegram` validates delivery only. Interactive bot commands are documented in `docs/deployment/telegram.md`.
+
 ## Provisioning
 
 Provision exchange-specific wallet/config defaults.
