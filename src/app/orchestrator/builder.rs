@@ -6,6 +6,7 @@ use chrono::Duration;
 use tracing::{info, warn};
 
 use crate::app::config::{Config, LlmProvider};
+use crate::app::AppState;
 use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
 use crate::core::inference::{Inferrer, LlmInferrer};
@@ -17,7 +18,7 @@ use crate::core::strategy::StrategyRegistry;
 use crate::core::service::{TelegramConfig, TelegramNotifier};
 
 /// Build notifier registry from configuration.
-pub(crate) fn build_notifier_registry(config: &Config) -> NotifierRegistry {
+pub(crate) fn build_notifier_registry(config: &Config, state: Arc<AppState>) -> NotifierRegistry {
     let mut registry = NotifierRegistry::new();
 
     // Always add log notifier
@@ -33,7 +34,10 @@ pub(crate) fn build_notifier_registry(config: &Config) -> NotifierRegistry {
                 notify_risk_rejections: config.telegram.notify_risk_rejections,
                 ..tg_config
             };
-            registry.register(Box::new(TelegramNotifier::new(tg_config)));
+            registry.register(Box::new(TelegramNotifier::new_with_control(
+                tg_config,
+                Arc::clone(&state),
+            )));
             info!("Telegram notifier enabled");
         } else {
             warn!("Telegram enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
@@ -42,7 +46,7 @@ pub(crate) fn build_notifier_registry(config: &Config) -> NotifierRegistry {
 
     // Suppress unused variable warning when telegram feature is disabled
     #[cfg(not(feature = "telegram"))]
-    let _ = config;
+    let _ = (config, state);
 
     registry
 }

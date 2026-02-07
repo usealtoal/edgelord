@@ -17,7 +17,7 @@ Edgelord is a Rust CLI for detecting and executing prediction-market arbitrage w
 - [Strategy Guide](strategies/overview.md)
   - Detection strategies, constraints, and selection guidance.
 - [Deployment](deployment/README.md)
-  - VPS setup, wallet setup, Telegram alerts, and operations.
+  - VPS setup, wallet setup, Telegram integration, and operations.
 
 ## Intended Audience
 
