@@ -23,7 +23,9 @@ fn connect(db_path: &Path) -> Result<Pool<ConnectionManager<SqliteConnection>>> 
 
 pub fn load_summary(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<StatsSummary> {
     let pool = connect(db_path)?;
-    let mut conn = pool.get().map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
 
     let rows: Vec<DailyStatsRow> = daily_stats::table
         .filter(daily_stats::date.ge(from.to_string()))
@@ -54,7 +56,9 @@ pub fn load_strategy_breakdown(
     to: NaiveDate,
 ) -> Result<Vec<StrategyDailyStatsRow>> {
     let pool = connect(db_path)?;
-    let mut conn = pool.get().map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
 
     let rows: Vec<StrategyDailyStatsRow> = strategy_daily_stats::table
         .filter(strategy_daily_stats::date.ge(from.to_string()))
@@ -67,7 +71,9 @@ pub fn load_strategy_breakdown(
 
 pub fn load_open_positions(db_path: &Path) -> Result<i64> {
     let pool = connect(db_path)?;
-    let mut conn = pool.get().map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
 
     let open_count: i64 = trades::table
         .filter(trades::status.eq("open"))
@@ -95,9 +101,15 @@ pub fn date_range_history(days: u32) -> (NaiveDate, NaiveDate, String) {
     (start, today, format!("Last {days} Days"))
 }
 
-pub fn load_daily_rows(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<Vec<DailyStatsRow>> {
+pub fn load_daily_rows(
+    db_path: &Path,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Vec<DailyStatsRow>> {
     let pool = connect(db_path)?;
-    let mut conn = pool.get().map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
 
     let rows: Vec<DailyStatsRow> = daily_stats::table
         .filter(daily_stats::date.ge(from.to_string()))
@@ -109,10 +121,11 @@ pub fn load_daily_rows(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result
     Ok(rows)
 }
 
-
 pub fn export_daily_csv(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<String> {
     let pool = connect(db_path)?;
-    Ok(crate::core::service::statistics::export_daily_csv(&pool, from, to))
+    Ok(crate::core::service::statistics::export_daily_csv(
+        &pool, from, to,
+    ))
 }
 
 pub fn prune_old_records(db_path: &Path, retention_days: u32) -> Result<()> {

@@ -161,13 +161,13 @@ fn create_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
     })?;
     fs::create_dir_all(parent)?;
 
-    let name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| ConfigError::InvalidValue {
-            field: "keystore_path",
-            reason: "invalid file name".to_string(),
-        })?;
+    let name =
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| ConfigError::InvalidValue {
+                field: "keystore_path",
+                reason: "invalid file name".to_string(),
+            })?;
 
     let mut rng = OsRng;
     let (signer, _uuid) = PrivateKeySigner::new_keystore(parent, &mut rng, password, Some(name))
@@ -180,15 +180,15 @@ fn create_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
 }
 
 fn import_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
-    let private_key = std::env::var("EDGELORD_PRIVATE_KEY").map_err(|_| {
-        ConfigError::MissingField {
+    let private_key =
+        std::env::var("EDGELORD_PRIVATE_KEY").map_err(|_| ConfigError::MissingField {
             field: "EDGELORD_PRIVATE_KEY",
-        }
-    })?;
-    let signer = PrivateKeySigner::from_str(&private_key).map_err(|e| ConfigError::InvalidValue {
-        field: "EDGELORD_PRIVATE_KEY",
-        reason: e.to_string(),
-    })?;
+        })?;
+    let signer =
+        PrivateKeySigner::from_str(&private_key).map_err(|e| ConfigError::InvalidValue {
+            field: "EDGELORD_PRIVATE_KEY",
+            reason: e.to_string(),
+        })?;
 
     let parent = path.parent().ok_or_else(|| ConfigError::InvalidValue {
         field: "keystore_path",
@@ -196,13 +196,13 @@ fn import_keystore(path: &Path, password: &str) -> Result<PrivateKeySigner> {
     })?;
     fs::create_dir_all(parent)?;
 
-    let name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| ConfigError::InvalidValue {
-            field: "keystore_path",
-            reason: "invalid file name".to_string(),
-        })?;
+    let name =
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| ConfigError::InvalidValue {
+                field: "keystore_path",
+                reason: "invalid file name".to_string(),
+            })?;
 
     let mut rng = OsRng;
     let (signer, _uuid) = PrivateKeySigner::encrypt_keystore(

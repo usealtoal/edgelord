@@ -25,9 +25,7 @@ impl SqliteRelationStore {
         Self::to_row_with(
             relation,
             |kind| serde_json::to_string(kind).map_err(|e| Error::Parse(e.to_string())),
-            |market_ids| {
-                serde_json::to_string(market_ids).map_err(|e| Error::Parse(e.to_string()))
-            },
+            |market_ids| serde_json::to_string(market_ids).map_err(|e| Error::Parse(e.to_string())),
         )
     }
 
@@ -203,7 +201,9 @@ mod tests {
         let store = SqliteRelationStore::new(pool);
 
         let relation = Relation::new(
-            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m1"), MarketId::new("m2")] },
+            RelationKind::MutuallyExclusive {
+                markets: vec![MarketId::new("m1"), MarketId::new("m2")],
+            },
             0.85,
             "Test reasoning".to_string(),
         );
@@ -213,7 +213,10 @@ mod tests {
         let loaded = store.get(&id).await.unwrap().unwrap();
 
         assert_eq!(loaded.id, id);
-        assert!((loaded.confidence - 0.85).abs() < 0.001, "confidence mismatch");
+        assert!(
+            (loaded.confidence - 0.85).abs() < 0.001,
+            "confidence mismatch"
+        );
         assert_eq!(loaded.reasoning, "Test reasoning");
     }
 
@@ -223,7 +226,9 @@ mod tests {
         let store = SqliteRelationStore::new(pool);
 
         let relation = Relation::new(
-            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m1"), MarketId::new("m2")] },
+            RelationKind::MutuallyExclusive {
+                markets: vec![MarketId::new("m1"), MarketId::new("m2")],
+            },
             0.9,
             "test".to_string(),
         );
@@ -242,7 +247,9 @@ mod tests {
 
         // Create valid relation
         let valid = Relation::new(
-            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m1"), MarketId::new("m2")] },
+            RelationKind::MutuallyExclusive {
+                markets: vec![MarketId::new("m1"), MarketId::new("m2")],
+            },
             0.9,
             "valid".to_string(),
         );
@@ -250,7 +257,9 @@ mod tests {
 
         // Create expired relation
         let mut expired = Relation::new(
-            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m3"), MarketId::new("m4")] },
+            RelationKind::MutuallyExclusive {
+                markets: vec![MarketId::new("m3"), MarketId::new("m4")],
+            },
             0.9,
             "expired".to_string(),
         );
@@ -279,7 +288,9 @@ mod tests {
         let store = SqliteRelationStore::new(pool);
 
         let relation = Relation::new(
-            RelationKind::MutuallyExclusive { markets: vec![MarketId::new("m1"), MarketId::new("m2")] },
+            RelationKind::MutuallyExclusive {
+                markets: vec![MarketId::new("m1"), MarketId::new("m2")],
+            },
             0.85,
             "Test reasoning".to_string(),
         );

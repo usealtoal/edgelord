@@ -7,9 +7,9 @@
 use rust_decimal::Decimal;
 use std::result::Result;
 
-use crate::error::DomainError;
 use super::id::{MarketId, TokenId};
 use super::money::Price;
+use crate::error::DomainError;
 
 /// A single leg of an opportunity representing one outcome to purchase.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -378,23 +378,12 @@ mod tests {
         ];
 
         // Zero volume should fail
-        let result = Opportunity::try_new(
-            make_market_id(),
-            "Test",
-            legs.clone(),
-            dec!(0),
-            dec!(1.0),
-        );
+        let result =
+            Opportunity::try_new(make_market_id(), "Test", legs.clone(), dec!(0), dec!(1.0));
         assert!(result.is_err());
 
         // Negative volume should fail
-        let result = Opportunity::try_new(
-            make_market_id(),
-            "Test",
-            legs,
-            dec!(-10),
-            dec!(1.0),
-        );
+        let result = Opportunity::try_new(make_market_id(), "Test", legs, dec!(-10), dec!(1.0));
         assert!(result.is_err());
     }
 
@@ -417,13 +406,7 @@ mod tests {
         assert!(result.is_err());
 
         // Payout less than cost should fail
-        let result = Opportunity::try_new(
-            make_market_id(),
-            "Test",
-            legs,
-            dec!(100),
-            dec!(0.80),
-        );
+        let result = Opportunity::try_new(make_market_id(), "Test", legs, dec!(100), dec!(0.80));
         assert!(result.is_err());
     }
 }

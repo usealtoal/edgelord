@@ -21,19 +21,19 @@ async fn main() {
             StatisticsCommand::History(args) => {
                 edgelord::cli::statistics::execute_history(&args.db, args.days)
             }
-            StatisticsCommand::Export(args) => {
-                edgelord::cli::statistics::execute_export(
-                    &args.db,
-                    args.days,
-                    args.output.as_deref(),
-                )
-            }
+            StatisticsCommand::Export(args) => edgelord::cli::statistics::execute_export(
+                &args.db,
+                args.days,
+                args.output.as_deref(),
+            ),
             StatisticsCommand::Prune(args) => {
                 edgelord::cli::statistics::execute_prune(&args.db, args.days)
             }
         },
         Commands::Config(cmd) => match cmd {
-            ConfigCommand::Init(args) => edgelord::cli::config::execute_init(&args.path, args.force),
+            ConfigCommand::Init(args) => {
+                edgelord::cli::config::execute_init(&args.path, args.force)
+            }
             ConfigCommand::Show(args) => edgelord::cli::config::execute_show(&args.config),
             ConfigCommand::Validate(args) => edgelord::cli::config::execute_validate(&args.config),
         },

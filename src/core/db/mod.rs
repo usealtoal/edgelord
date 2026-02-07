@@ -3,8 +3,8 @@
 pub mod model;
 pub mod schema;
 
-use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
@@ -33,7 +33,9 @@ pub fn create_pool(database_url: &str) -> Result<DbPool> {
 /// # Errors
 /// Returns an error if migrations fail.
 pub fn run_migrations(pool: &DbPool) -> Result<()> {
-    let mut conn = pool.get().map_err(|e| crate::error::Error::Connection(e.to_string()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| crate::error::Error::Connection(e.to_string()))?;
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| crate::error::Error::Connection(e.to_string()))?;
     Ok(())

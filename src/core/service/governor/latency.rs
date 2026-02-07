@@ -375,11 +375,17 @@ mod tests {
         let metrics = governor.latency_metrics();
 
         // p50 should be around 50ms (rounding may give 50 or 51)
-        assert!(metrics.p50 >= Duration::from_millis(49) && metrics.p50 <= Duration::from_millis(51));
+        assert!(
+            metrics.p50 >= Duration::from_millis(49) && metrics.p50 <= Duration::from_millis(51)
+        );
         // p95 should be around 95ms (rounding may give 94, 95, or 96)
-        assert!(metrics.p95 >= Duration::from_millis(94) && metrics.p95 <= Duration::from_millis(96));
+        assert!(
+            metrics.p95 >= Duration::from_millis(94) && metrics.p95 <= Duration::from_millis(96)
+        );
         // p99 should be around 99ms
-        assert!(metrics.p99 >= Duration::from_millis(98) && metrics.p99 <= Duration::from_millis(100));
+        assert!(
+            metrics.p99 >= Duration::from_millis(98) && metrics.p99 <= Duration::from_millis(100)
+        );
         assert_eq!(metrics.sample_count, 100);
     }
 
@@ -397,9 +403,18 @@ mod tests {
     fn latency_governor_percentile_single_element() {
         let samples = vec![Duration::from_millis(10)];
 
-        assert_eq!(LatencyGovernor::percentile(&samples, 0.0), Duration::from_millis(10));
-        assert_eq!(LatencyGovernor::percentile(&samples, 0.5), Duration::from_millis(10));
-        assert_eq!(LatencyGovernor::percentile(&samples, 1.0), Duration::from_millis(10));
+        assert_eq!(
+            LatencyGovernor::percentile(&samples, 0.0),
+            Duration::from_millis(10)
+        );
+        assert_eq!(
+            LatencyGovernor::percentile(&samples, 0.5),
+            Duration::from_millis(10)
+        );
+        assert_eq!(
+            LatencyGovernor::percentile(&samples, 1.0),
+            Duration::from_millis(10)
+        );
     }
 
     #[test]
@@ -407,13 +422,19 @@ mod tests {
         let samples: Vec<Duration> = (1..=10).map(|i| Duration::from_millis(i * 10)).collect();
 
         // p0 = 10ms (index 0)
-        assert_eq!(LatencyGovernor::percentile(&samples, 0.0), Duration::from_millis(10));
+        assert_eq!(
+            LatencyGovernor::percentile(&samples, 0.0),
+            Duration::from_millis(10)
+        );
         // p50 = 50ms (index 4.5 -> rounds to 5 -> 60ms? Actually (9 * 0.5).round() = 4)
         // Index = (10 - 1) * 0.5 = 4.5, rounded = 4 or 5
         let p50 = LatencyGovernor::percentile(&samples, 0.5);
         assert!(p50 == Duration::from_millis(50) || p50 == Duration::from_millis(60));
         // p100 = 100ms (index 9)
-        assert_eq!(LatencyGovernor::percentile(&samples, 1.0), Duration::from_millis(100));
+        assert_eq!(
+            LatencyGovernor::percentile(&samples, 1.0),
+            Duration::from_millis(100)
+        );
     }
 
     // --- LatencyGovernor::in_cooldown tests ---
@@ -574,8 +595,8 @@ mod tests {
                 ..Default::default()
             },
             scaling: ScalingConfig {
-                expand_threshold: 0.6,  // expand when p95 < 60ms (60% of 100ms)
-                hysteresis: 0.1,        // with hysteresis: expand when < 50ms
+                expand_threshold: 0.6, // expand when p95 < 60ms (60% of 100ms)
+                hysteresis: 0.1,       // with hysteresis: expand when < 50ms
                 ..Default::default()
             },
             ..Default::default()
@@ -600,9 +621,9 @@ mod tests {
                 ..Default::default()
             },
             scaling: ScalingConfig {
-                expand_threshold: 0.6,    // expand when < 60ms
-                contract_threshold: 0.9,  // contract when > 90ms
-                hysteresis: 0.1,          // expand threshold becomes 50ms
+                expand_threshold: 0.6,   // expand when < 60ms
+                contract_threshold: 0.9, // contract when > 90ms
+                hysteresis: 0.1,         // expand threshold becomes 50ms
                 ..Default::default()
             },
             ..Default::default()

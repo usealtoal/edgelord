@@ -246,7 +246,10 @@ pub(crate) fn handle_opportunity(
 
 /// Get the maximum slippage across all legs.
 /// Returns None if prices cannot be determined (books not in cache or empty).
-pub(crate) fn get_max_slippage(opportunity: &Opportunity, cache: &OrderBookCache) -> Option<Decimal> {
+pub(crate) fn get_max_slippage(
+    opportunity: &Opportunity,
+    cache: &OrderBookCache,
+) -> Option<Decimal> {
     let mut max_slippage = Decimal::ZERO;
 
     for leg in opportunity.legs() {

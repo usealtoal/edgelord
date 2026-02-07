@@ -27,7 +27,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     // Use a unique name to avoid conflicts between test runs
     let temp_file = std::env::temp_dir().join(format!("test_stats_{}.db", std::process::id()));
     let db_url = format!("sqlite://{}", temp_file.display());
-    
+
     // Create pool with larger size to handle concurrent connections
     use diesel::r2d2::{ConnectionManager, Pool};
     use diesel::SqliteConnection;
@@ -36,7 +36,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         .max_size(15) // Larger pool for concurrent access
         .build(manager)
         .unwrap();
-    
+
     // Enable WAL mode on initial connection (database-level setting)
     {
         use diesel::prelude::*;
@@ -45,10 +45,10 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
             .execute(&mut conn)
             .unwrap();
     }
-    
+
     run_migrations(&db_pool).unwrap();
     let recorder = StatsRecorder::new(db_pool.clone());
-    
+
     // Clean up temp file after test
     let _guard = TempFileGuard(temp_file);
 
@@ -64,7 +64,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         let handle = std::thread::spawn(move || {
             // Small delay to stagger inserts slightly
             std::thread::sleep(std::time::Duration::from_millis(i as u64 * 10));
-            
+
             let event = RecordedOpportunity {
                 strategy: format!("strategy-{}", i),
                 market_ids: vec![format!("market-{}", i)],
@@ -73,7 +73,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
                 executed: false,
                 rejected_reason: None,
             };
-            
+
             recorder_clone.record_opportunity(&event)
         });
         handles.push(handle);
@@ -101,7 +101,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         unique_count,
         "All returned IDs should be unique"
     );
-    
+
     assert_eq!(
         returned_ids.len(),
         NUM_THREADS,
@@ -121,8 +121,12 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
         .flatten()
         .collect();
 
-    assert_eq!(db_ids.len(), NUM_THREADS, "Database should have all records");
-    
+    assert_eq!(
+        db_ids.len(),
+        NUM_THREADS,
+        "Database should have all records"
+    );
+
     // Verify returned IDs match database IDs
     let mut db_ids_sorted = db_ids;
     db_ids_sorted.sort();

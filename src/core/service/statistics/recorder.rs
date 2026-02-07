@@ -5,8 +5,8 @@
 
 use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
-use diesel::OptionalExtension;
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::OptionalExtension;
 use diesel::SqliteConnection;
 use rust_decimal::Decimal;
 
@@ -15,10 +15,10 @@ use super::query::{summary_for_range, summary_for_today};
 use super::stat::{RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent};
 use tracing::{debug, warn};
 
+use crate::core::db;
 use crate::core::db::model::{
     DailyStatsRow, NewOpportunityRow, NewTradeRow, StrategyDailyStatsRow, TradeRow,
 };
-use crate::core::db;
 use crate::core::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
 
 /// Statistics recorder for persisting events to the database.
@@ -213,7 +213,10 @@ impl StatsRecorder {
             .first(&mut conn)
             .ok();
 
-        let strategy = trade.as_ref().map(|t| t.strategy.clone()).unwrap_or_default();
+        let strategy = trade
+            .as_ref()
+            .map(|t| t.strategy.clone())
+            .unwrap_or_default();
         let profit = decimal_to_f32(event.realized_profit);
         let is_win = event.realized_profit > Decimal::ZERO;
 
@@ -367,11 +370,10 @@ impl StatsRecorder {
         };
 
         // Delete old opportunities
-        let opp_deleted = diesel::delete(
-            opportunities::table.filter(opportunities::detected_at.lt(&cutoff_str)),
-        )
-        .execute(&mut conn)
-        .unwrap_or(0);
+        let opp_deleted =
+            diesel::delete(opportunities::table.filter(opportunities::detected_at.lt(&cutoff_str)))
+                .execute(&mut conn)
+                .unwrap_or(0);
 
         // Delete old trades (cascade would be nice but SQLite support varies)
         let trades_deleted =

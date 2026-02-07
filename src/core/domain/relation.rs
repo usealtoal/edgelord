@@ -361,9 +361,10 @@ mod tests {
             markets: vec![market("a"), market("b"), market("c")],
         };
 
-        let indices: HashMap<MarketId, usize> = [(market("a"), 0), (market("b"), 1), (market("c"), 2)]
-            .into_iter()
-            .collect();
+        let indices: HashMap<MarketId, usize> =
+            [(market("a"), 0), (market("b"), 1), (market("c"), 2)]
+                .into_iter()
+                .collect();
 
         let constraints = kind.to_solver_constraints(&indices);
 

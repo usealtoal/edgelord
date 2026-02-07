@@ -12,11 +12,15 @@ pub use config::{
     ClusterDetectionConfig, Config, ConnectionPoolConfig, DedupStrategyConfig, Environment,
     Exchange, ExchangeSpecificConfig, GovernorAppConfig, InferenceConfig, LatencyTargetsConfig,
     LlmConfig, LlmProvider, LoggingConfig, NetworkConfig, OutcomeBonusConfig, PolymarketConfig,
-    PolymarketConnectionConfig, PolymarketDedupConfig, PolymarketFilterConfig, PolymarketHttpConfig,
-    PolymarketScoringConfig, Profile, ReconnectionConfig, ResourceConfig, RiskConfig,
-    ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig, WalletConfig,
+    PolymarketConnectionConfig, PolymarketDedupConfig, PolymarketFilterConfig,
+    PolymarketHttpConfig, PolymarketScoringConfig, Profile, ReconnectionConfig, ResourceConfig,
+    RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
+    WalletConfig,
 };
-pub use orchestrator::{health_check, HealthCheck, HealthReport, HealthStatus};
+pub use orchestrator::{
+    health_check, process_market_event, EventProcessingContext, HealthCheck, HealthReport,
+    HealthStatus,
+};
 pub use state::{AppState, RiskLimits};
 pub use wallet::{ApprovalOutcome, SweepOutcome, WalletApprovalStatus, WalletService};
 
@@ -37,10 +41,7 @@ impl App {
     }
 
     /// Run the application with a shutdown signal.
-    pub async fn run_with_shutdown(
-        config: Config,
-        shutdown: watch::Receiver<bool>,
-    ) -> Result<()> {
+    pub async fn run_with_shutdown(config: Config, shutdown: watch::Receiver<bool>) -> Result<()> {
         Orchestrator::run_with_shutdown(config, shutdown).await
     }
 }

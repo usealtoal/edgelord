@@ -25,7 +25,9 @@ pub struct StatusSnapshot {
 
 pub fn load_status(db_path: &Path) -> Result<StatusSnapshot> {
     let pool = connect(db_path)?;
-    let mut conn = pool.get().map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
 
     let today = Utc::now().date_naive();
     let week_ago = today - Duration::days(7);

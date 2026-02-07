@@ -24,21 +24,21 @@
 
 mod approval;
 mod dedup;
+mod exchange_config;
 mod factory;
 mod filter;
 pub mod polymarket;
 mod reconnecting;
 mod scorer;
-mod exchange_config;
 mod types;
 
 pub use approval::{ApprovalResult, ApprovalStatus, TokenApproval};
 pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
+pub use exchange_config::ExchangeConfig;
 pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};
 pub use reconnecting::ReconnectingDataStream;
 pub use scorer::MarketScorer;
-pub use exchange_config::ExchangeConfig;
 pub use types::{
     ArbitrageExecutor, ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher, MarketInfo,
     OrderExecutor, OrderRequest, OrderSide, OutcomeInfo,

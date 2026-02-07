@@ -80,7 +80,10 @@ pub fn execute_show(path: &Path) -> Result<()> {
     );
     println!("    Max Exposure:  ${}", config.risk.max_total_exposure);
     println!("    Min Profit:    ${}", config.risk.min_profit_threshold);
-    println!("    Max Slippage:  {:.1}%", config.risk.max_slippage.to_f64().unwrap_or(0.0) * 100.0);
+    println!(
+        "    Max Slippage:  {:.1}%",
+        config.risk.max_slippage.to_f64().unwrap_or(0.0) * 100.0
+    );
     println!();
 
     // Wallet
@@ -96,16 +99,33 @@ pub fn execute_show(path: &Path) -> Result<()> {
     // Notifications
     println!("  Notifications");
     println!("  ─────────────────────────────────────────────────────────");
-    println!("    Telegram:      {}", if config.telegram.enabled { "✓ enabled" } else { "✗ disabled" });
+    println!(
+        "    Telegram:      {}",
+        if config.telegram.enabled {
+            "✓ enabled"
+        } else {
+            "✗ disabled"
+        }
+    );
     println!();
 
     // LLM
     println!("  LLM (Relation Inference)");
     println!("  ─────────────────────────────────────────────────────────");
     println!("    Provider:      {:?}", config.llm.provider);
-    println!("    Inference:     {}", if config.inference.enabled { "✓ enabled" } else { "✗ disabled" });
+    println!(
+        "    Inference:     {}",
+        if config.inference.enabled {
+            "✓ enabled"
+        } else {
+            "✗ disabled"
+        }
+    );
     if config.inference.enabled {
-        println!("    Min Confidence: {:.0}%", config.inference.min_confidence * 100.0);
+        println!(
+            "    Min Confidence: {:.0}%",
+            config.inference.min_confidence * 100.0
+        );
         println!("    TTL:           {}s", config.inference.ttl_seconds);
     }
     println!();
@@ -113,10 +133,23 @@ pub fn execute_show(path: &Path) -> Result<()> {
     // Cluster Detection
     println!("  Cluster Detection");
     println!("  ─────────────────────────────────────────────────────────");
-    println!("    Enabled:       {}", if config.cluster_detection.enabled { "✓" } else { "✗" });
+    println!(
+        "    Enabled:       {}",
+        if config.cluster_detection.enabled {
+            "✓"
+        } else {
+            "✗"
+        }
+    );
     if config.cluster_detection.enabled {
-        println!("    Debounce:      {}ms", config.cluster_detection.debounce_ms);
-        println!("    Min Gap:       {:.1}%", config.cluster_detection.min_gap.to_f64().unwrap_or(0.0) * 100.0);
+        println!(
+            "    Debounce:      {}ms",
+            config.cluster_detection.debounce_ms
+        );
+        println!(
+            "    Min Gap:       {:.1}%",
+            config.cluster_detection.min_gap.to_f64().unwrap_or(0.0) * 100.0
+        );
     }
     println!();
 
@@ -171,7 +204,10 @@ pub fn execute_validate(path: &Path) -> Result<()> {
                 println!();
             }
 
-            println!("Run 'edgelord config show -c {}' to see resolved values", path.display());
+            println!(
+                "Run 'edgelord config show -c {}' to see resolved values",
+                path.display()
+            );
         }
         Err(e) => {
             return Err(e);

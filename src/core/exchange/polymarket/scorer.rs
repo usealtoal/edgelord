@@ -54,11 +54,7 @@ impl PolymarketScorer {
     /// Returns 0.5 (neutral) if price data is unavailable.
     #[must_use]
     pub fn opportunity_score(&self, market: &MarketInfo) -> f64 {
-        let prices: Vec<f64> = market
-            .outcomes
-            .iter()
-            .filter_map(|o| o.price)
-            .collect();
+        let prices: Vec<f64> = market.outcomes.iter().filter_map(|o| o.price).collect();
 
         // No price data or incomplete data - return neutral score
         if prices.is_empty() || prices.len() != market.outcomes.len() {
@@ -115,11 +111,11 @@ impl MarketScorer for PolymarketScorer {
         // Phase 1: Only use factors we can calculate from REST API data
         // Set others to neutral 0.5 (won't affect relative ranking with zero weights)
         let factors = ScoreFactors::new(
-            0.5,          // liquidity - needs order book (Phase 2)
-            0.5,          // spread - needs order book (Phase 2)
-            opportunity,  // from price imbalance
+            0.5,         // liquidity - needs order book (Phase 2)
+            0.5,         // spread - needs order book (Phase 2)
+            opportunity, // from price imbalance
             outcome_score,
-            0.5,          // activity - needs trade data (Phase 2)
+            0.5, // activity - needs trade data (Phase 2)
         );
 
         let market_id = MarketId::from(market.id.as_str());

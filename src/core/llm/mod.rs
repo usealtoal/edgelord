@@ -31,7 +31,9 @@ pub mod tests {
 
     impl MockLlm {
         pub fn new(response: impl Into<String>) -> Self {
-            Self { response: response.into() }
+            Self {
+                response: response.into(),
+            }
         }
     }
 

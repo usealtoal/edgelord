@@ -9,13 +9,33 @@ use rust_decimal_macros::dec;
 
 use edgelord::core::cache::{ClusterCache, OrderBookCache};
 use edgelord::core::domain::{MarketId, MarketRegistry, Relation, RelationKind};
-use edgelord::core::service::cluster::{ClusterDetectionConfig, ClusterDetectionService, ClusterDetector};
+use edgelord::core::service::cluster::{
+    ClusterDetectionConfig, ClusterDetectionService, ClusterDetector,
+};
 
 fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
     let markets = vec![
-        support::market::make_binary_market("market-a", "Will market-a happen?", "yes-a", "no-a", dec!(1.00)),
-        support::market::make_binary_market("market-b", "Will market-b happen?", "yes-b", "no-b", dec!(1.00)),
-        support::market::make_binary_market("market-c", "Will market-c happen?", "yes-c", "no-c", dec!(1.00)),
+        support::market::make_binary_market(
+            "market-a",
+            "Will market-a happen?",
+            "yes-a",
+            "no-a",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "market-b",
+            "Will market-b happen?",
+            "yes-b",
+            "no-b",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "market-c",
+            "Will market-c happen?",
+            "yes-c",
+            "no-c",
+            dec!(1.00),
+        ),
     ];
 
     let registry = support::registry::make_registry(markets);
@@ -27,24 +47,17 @@ fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<Mark
 
     let cluster_cache = ClusterCache::new(Duration::hours(1));
 
-    let relation = support::relation::mutually_exclusive(
-        &["market-a", "market-b"],
-        0.95,
-        "Test relation",
-    );
+    let relation =
+        support::relation::mutually_exclusive(&["market-a", "market-b"], 0.95, "Test relation");
     cluster_cache.put_relations(vec![relation]);
 
-    (
-        Arc::new(cache),
-        Arc::new(cluster_cache),
-        Arc::new(registry),
-    )
+    (Arc::new(cache), Arc::new(cluster_cache), Arc::new(registry))
 }
 
 #[test]
 fn test_detector_with_valid_cluster() {
     let (cache, cluster_cache, registry) = setup_test_environment();
-    
+
     let config = ClusterDetectionConfig {
         min_gap: dec!(0.001), // Very low threshold to detect anything
         ..Default::default()
@@ -58,14 +71,30 @@ fn test_detector_with_valid_cluster() {
     let result = detector.detect(cluster, &cache, &registry);
 
     // Should succeed (either Some or None depending on gap)
-    assert!(result.is_ok(), "Detection should not error: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Detection should not error: {:?}",
+        result.err()
+    );
 }
 
 #[test]
 fn test_detector_missing_price_data() {
     let markets = vec![
-        support::market::make_binary_market("market-x", "Will market-x happen?", "yes-x", "no-x", dec!(1.00)),
-        support::market::make_binary_market("market-y", "Will market-y happen?", "yes-y", "no-y", dec!(1.00)),
+        support::market::make_binary_market(
+            "market-x",
+            "Will market-x happen?",
+            "yes-x",
+            "no-x",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "market-y",
+            "Will market-y happen?",
+            "yes-y",
+            "no-y",
+            dec!(1.00),
+        ),
     ];
     let registry = Arc::new(support::registry::make_registry(markets));
 
@@ -98,7 +127,10 @@ fn test_detector_gap_below_threshold() {
     let result = detector.detect(cluster, &cache, &registry);
 
     assert!(result.is_ok());
-    assert!(result.unwrap().is_none(), "Should return None when gap below threshold");
+    assert!(
+        result.unwrap().is_none(),
+        "Should return None when gap below threshold"
+    );
 }
 
 #[test]
@@ -126,12 +158,8 @@ async fn test_service_with_notifications() {
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig::default();
-    let service = ClusterDetectionService::new(
-        config,
-        Arc::clone(&order_cache),
-        cluster_cache,
-        registry,
-    );
+    let service =
+        ClusterDetectionService::new(config, Arc::clone(&order_cache), cluster_cache, registry);
 
     let (handle, _opp_rx) = service.start(update_rx);
 
@@ -148,9 +176,27 @@ async fn test_service_with_notifications() {
 #[test]
 fn test_cluster_with_three_markets() {
     let markets = vec![
-        support::market::make_binary_market("trump", "Will trump happen?", "yes-trump", "no-trump", dec!(1.00)),
-        support::market::make_binary_market("biden", "Will biden happen?", "yes-biden", "no-biden", dec!(1.00)),
-        support::market::make_binary_market("other", "Will other happen?", "yes-other", "no-other", dec!(1.00)),
+        support::market::make_binary_market(
+            "trump",
+            "Will trump happen?",
+            "yes-trump",
+            "no-trump",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "biden",
+            "Will biden happen?",
+            "yes-biden",
+            "no-biden",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "other",
+            "Will other happen?",
+            "yes-other",
+            "no-other",
+            dec!(1.00),
+        ),
     ];
     let registry = Arc::new(support::registry::make_registry(markets));
 
@@ -163,7 +209,8 @@ fn test_cluster_with_three_markets() {
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
     // Exactly one must win (should sum to 1)
-    let relation = support::relation::exactly_one(&["trump", "biden", "other"], 0.98, "Presidential election");
+    let relation =
+        support::relation::exactly_one(&["trump", "biden", "other"], 0.98, "Presidential election");
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig {
@@ -182,8 +229,20 @@ fn test_cluster_with_three_markets() {
 #[test]
 fn test_implies_relation() {
     let markets = vec![
-        support::market::make_binary_market("pa-win", "Will PA win?", "yes-pa", "no-pa", dec!(1.00)),
-        support::market::make_binary_market("swing-win", "Will swing win?", "yes-swing", "no-swing", dec!(1.00)),
+        support::market::make_binary_market(
+            "pa-win",
+            "Will PA win?",
+            "yes-pa",
+            "no-pa",
+            dec!(1.00),
+        ),
+        support::market::make_binary_market(
+            "swing-win",
+            "Will swing win?",
+            "yes-swing",
+            "no-swing",
+            dec!(1.00),
+        ),
     ];
     let registry = Arc::new(support::registry::make_registry(markets));
 

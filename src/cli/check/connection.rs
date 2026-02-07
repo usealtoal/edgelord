@@ -25,7 +25,9 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
         }
         Ok(response) => {
             println!("✗ HTTP {}", response.status());
-            return Err(Error::Connection("API returned non-success status".to_string()));
+            return Err(Error::Connection(
+                "API returned non-success status".to_string(),
+            ));
         }
         Err(e) => {
             println!("✗ Failed");

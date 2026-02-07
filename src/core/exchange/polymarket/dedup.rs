@@ -123,9 +123,8 @@ impl MessageDeduplicator for PolymarketDeduplicator {
         let ttl = self.ttl;
 
         // Remove expired entries
-        self.cache.retain(|_, inserted| {
-            now.duration_since(*inserted) < ttl
-        });
+        self.cache
+            .retain(|_, inserted| now.duration_since(*inserted) < ttl);
 
         // If still over limit after TTL cleanup, remove oldest entries
         if self.cache.len() > self.max_entries {
@@ -182,7 +181,10 @@ mod tests {
             dec!(100),
         )];
         let book = OrderBook::with_levels(token.clone(), bids, asks);
-        MarketEvent::OrderBookSnapshot { token_id: token, book }
+        MarketEvent::OrderBookSnapshot {
+            token_id: token,
+            book,
+        }
     }
 
     fn make_delta(token_id: &str, bid_price: f64, ask_price: f64) -> MarketEvent {
@@ -196,7 +198,10 @@ mod tests {
             dec!(100),
         )];
         let book = OrderBook::with_levels(token.clone(), bids, asks);
-        MarketEvent::OrderBookDelta { token_id: token, book }
+        MarketEvent::OrderBookDelta {
+            token_id: token,
+            book,
+        }
     }
 
     #[test]
@@ -361,9 +366,11 @@ mod tests {
     #[test]
     fn test_make_key_connection_events_none() {
         assert!(PolymarketDeduplicator::make_key(&MarketEvent::Connected).is_none());
-        assert!(PolymarketDeduplicator::make_key(&MarketEvent::Disconnected {
-            reason: "test".into()
-        })
-        .is_none());
+        assert!(
+            PolymarketDeduplicator::make_key(&MarketEvent::Disconnected {
+                reason: "test".into()
+            })
+            .is_none()
+        );
     }
 }

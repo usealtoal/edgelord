@@ -5,9 +5,7 @@ use crate::core::domain::Opportunity;
 use crate::core::strategy::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use crate::core::strategy::condition::{SingleConditionConfig, SingleConditionStrategy};
 use crate::core::strategy::context::DetectionContext;
-use crate::core::strategy::rebalancing::{
-    MarketRebalancingConfig, MarketRebalancingStrategy,
-};
+use crate::core::strategy::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
 use crate::core::strategy::traits::Strategy;
 
 /// Registry of enabled strategies.

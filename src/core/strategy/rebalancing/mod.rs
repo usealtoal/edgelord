@@ -484,9 +484,11 @@ mod tests {
             max_outcomes: 10,
         });
 
-        let tokens = [TokenId::from("candidate-a"),
+        let tokens = [
+            TokenId::from("candidate-a"),
             TokenId::from("candidate-b"),
-            TokenId::from("candidate-c")];
+            TokenId::from("candidate-c"),
+        ];
 
         // Create market with $1 payout
         let outcomes_1 = vec![

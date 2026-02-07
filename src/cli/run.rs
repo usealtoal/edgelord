@@ -73,7 +73,8 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     #[cfg(feature = "polymarket")]
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
-        let mut app_handle = tokio::spawn(async move { App::run_with_shutdown(config, shutdown_rx).await });
+        let mut app_handle =
+            tokio::spawn(async move { App::run_with_shutdown(config, shutdown_rx).await });
 
         tokio::select! {
             result = &mut app_handle => {

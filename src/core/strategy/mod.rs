@@ -28,17 +28,17 @@
 //! ```
 
 pub mod combinatorial;
+pub mod condition;
 mod context;
 pub mod rebalancing;
-pub mod condition;
 mod registry;
 mod traits;
 
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
+pub use condition::{SingleConditionConfig, SingleConditionStrategy};
 pub use context::{DetectionContext, DetectionResult, MarketContext};
 pub use rebalancing::{
     MarketRebalancingConfig, MarketRebalancingStrategy, RebalancingLeg, RebalancingOpportunity,
 };
-pub use condition::{SingleConditionConfig, SingleConditionStrategy};
 pub use registry::{StrategyRegistry, StrategyRegistryBuilder};
 pub use traits::Strategy;

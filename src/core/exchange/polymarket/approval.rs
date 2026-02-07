@@ -142,21 +142,21 @@ impl PolymarketApproval {
 
     /// Get USDC balance for the wallet.
     pub async fn usdc_balance(&self) -> Result<Decimal> {
-        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
-            ConfigError::InvalidValue {
-                field: "rpc_url",
-                reason: e.to_string(),
-            }
-        })?;
+        let rpc_url: url::Url =
+            self.rpc_url()
+                .parse()
+                .map_err(|e: url::ParseError| ConfigError::InvalidValue {
+                    field: "rpc_url",
+                    reason: e.to_string(),
+                })?;
         let provider = ProviderBuilder::new().connect_http(rpc_url);
 
         let usdc = IERC20::new(self.usdc_address()?, &provider);
         let owner = self.signer.address();
-        let balance: U256 = usdc
-            .balanceOf(owner)
-            .call()
-            .await
-            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to get balance: {e}")))?;
+        let balance: U256 =
+            usdc.balanceOf(owner).call().await.map_err(|e| {
+                ExecutionError::SubmissionFailed(format!("Failed to get balance: {e}"))
+            })?;
 
         Ok(Self::from_usdc_units(balance))
     }
@@ -169,22 +169,21 @@ impl PolymarketApproval {
         }
 
         let wallet = alloy_provider::network::EthereumWallet::from(self.signer.clone());
-        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
-            ConfigError::InvalidValue {
-                field: "rpc_url",
-                reason: e.to_string(),
-            }
-        })?;
+        let rpc_url: url::Url =
+            self.rpc_url()
+                .parse()
+                .map_err(|e: url::ParseError| ConfigError::InvalidValue {
+                    field: "rpc_url",
+                    reason: e.to_string(),
+                })?;
         let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
         let usdc = IERC20::new(self.usdc_address()?, &provider);
         let amount_units = Self::to_usdc_units(balance);
 
-        let pending_tx = usdc
-            .transfer(to, amount_units)
-            .send()
-            .await
-            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to send transfer: {e}")))?;
+        let pending_tx = usdc.transfer(to, amount_units).send().await.map_err(|e| {
+            ExecutionError::SubmissionFailed(format!("Failed to send transfer: {e}"))
+        })?;
 
         let receipt = pending_tx
             .get_receipt()
@@ -203,12 +202,13 @@ impl PolymarketApproval {
 #[async_trait]
 impl TokenApproval for PolymarketApproval {
     async fn get_approval_status(&self) -> Result<ApprovalStatus> {
-        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
-            ConfigError::InvalidValue {
-                field: "rpc_url",
-                reason: e.to_string(),
-            }
-        })?;
+        let rpc_url: url::Url =
+            self.rpc_url()
+                .parse()
+                .map_err(|e: url::ParseError| ConfigError::InvalidValue {
+                    field: "rpc_url",
+                    reason: e.to_string(),
+                })?;
         let provider = ProviderBuilder::new().connect_http(rpc_url);
 
         let usdc = IERC20::new(self.usdc_address()?, &provider);
@@ -216,11 +216,9 @@ impl TokenApproval for PolymarketApproval {
         let spender = self.spender_address()?;
 
         // Get current allowance
-        let allowance: U256 = usdc
-            .allowance(owner, spender)
-            .call()
-            .await
-            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to get allowance: {e}")))?;
+        let allowance: U256 = usdc.allowance(owner, spender).call().await.map_err(|e| {
+            ExecutionError::SubmissionFailed(format!("Failed to get allowance: {e}"))
+        })?;
 
         let allowance_decimal = Self::from_usdc_units(allowance);
 
@@ -250,12 +248,13 @@ impl TokenApproval for PolymarketApproval {
 
         // Build provider with signer for transactions
         let wallet = alloy_provider::network::EthereumWallet::from(self.signer.clone());
-        let rpc_url: url::Url = self.rpc_url().parse().map_err(|e: url::ParseError| {
-            ConfigError::InvalidValue {
-                field: "rpc_url",
-                reason: e.to_string(),
-            }
-        })?;
+        let rpc_url: url::Url =
+            self.rpc_url()
+                .parse()
+                .map_err(|e: url::ParseError| ConfigError::InvalidValue {
+                    field: "rpc_url",
+                    reason: e.to_string(),
+                })?;
         let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
 
         let usdc = IERC20::new(self.usdc_address()?, &provider);
@@ -267,7 +266,9 @@ impl TokenApproval for PolymarketApproval {
             .approve(spender, amount_units)
             .send()
             .await
-            .map_err(|e| ExecutionError::SubmissionFailed(format!("Failed to send approval: {e}")))?;
+            .map_err(|e| {
+                ExecutionError::SubmissionFailed(format!("Failed to send approval: {e}"))
+            })?;
 
         let receipt = pending_tx
             .get_receipt()
@@ -278,10 +279,7 @@ impl TokenApproval for PolymarketApproval {
 
         info!(tx_hash = %tx_hash, "Approval transaction confirmed");
 
-        Ok(ApprovalResult::Approved {
-            tx_hash,
-            amount,
-        })
+        Ok(ApprovalResult::Approved { tx_hash, amount })
     }
 
     fn exchange_name(&self) -> &'static str {

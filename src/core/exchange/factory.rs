@@ -10,8 +10,8 @@ use crate::error::Result;
 
 use super::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
 use super::{
-    ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter,
-    MarketScorer, MessageDeduplicator, OrderExecutor,
+    ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter, MarketScorer,
+    MessageDeduplicator, OrderExecutor,
 };
 
 /// Factory for creating exchange components.

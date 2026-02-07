@@ -119,7 +119,6 @@ impl RiskManager {
         Ok(())
     }
 
-
     /// Check if position in this market would exceed limit.
     fn check_position_limit(&self, opportunity: &Opportunity) -> Result<(), RiskError> {
         let market_id = opportunity.market_id();
