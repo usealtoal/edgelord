@@ -9,6 +9,20 @@ use tokio::signal;
 use tokio::sync::watch;
 use tracing::{error, info};
 
+fn map_app_result(result: std::result::Result<Result<()>, tokio::task::JoinError>) -> Result<()> {
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => {
+            error!(error = %e, "Application exited with error");
+            Err(e)
+        }
+        Err(e) => {
+            error!(error = %e, "Application task join failed");
+            Err(Error::Connection(e.to_string()))
+        }
+    }
+}
+
 /// Execute the run command.
 pub async fn execute(args: &RunArgs) -> Result<()> {
     // Load and merge configuration
@@ -78,37 +92,17 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
 
         tokio::select! {
             result = &mut app_handle => {
-                match result {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => {
-                        error!(error = %e, "Fatal error");
-                        return Err(e);
-                    }
-                    Err(e) => {
-                        error!(error = %e, "Application task failed");
-                        return Err(Error::Connection(e.to_string()));
-                    }
-                }
+                map_app_result(result)?;
                 info!("edgelord stopped");
                 return Ok(());
             }
             _ = signal::ctrl_c() => {
-                info!("Shutdown signal received");
+                info!("Shutdown signal received (Ctrl+C)");
                 let _ = shutdown_tx.send(true);
             }
         }
 
-        match app_handle.await {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
-                error!(error = %e, "Fatal error");
-                return Err(e);
-            }
-            Err(e) => {
-                error!(error = %e, "Application task failed");
-                return Err(Error::Connection(e.to_string()));
-            }
-        }
+        map_app_result(app_handle.await)?;
     }
 
     #[cfg(not(feature = "polymarket"))]
@@ -117,7 +111,7 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
         info!("No exchange features enabled - exiting");
         tokio::select! {
             _ = signal::ctrl_c() => {
-                info!("Shutdown signal received");
+                info!("Shutdown signal received (Ctrl+C)");
             }
         }
     }

@@ -4,6 +4,7 @@ use std::path::Path;
 use rust_decimal::Decimal;
 
 use crate::app::{Config, Exchange, SweepOutcome, WalletService};
+use crate::cli::output;
 use crate::error::{ConfigError, Result};
 
 /// Sweep the full USDC balance to the provided address.
@@ -21,19 +22,15 @@ pub async fn execute_sweep(
     let balance = WalletService::usdc_balance(&config).await?;
     let from_address = WalletService::wallet_address(&config)?;
 
-    println!();
-    println!("Wallet Sweep");
-    println!("\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}");
-    println!("From:    {from_address}");
-    println!("To:      {to}");
-    println!("Asset:   {}", asset.to_uppercase());
-    println!("Network: {}", network.to_lowercase());
-    println!("Balance: ${balance}");
-    println!();
+    output::section("Wallet Sweep");
+    output::key_value("From", from_address);
+    output::key_value("To", to);
+    output::key_value("Asset", asset.to_uppercase());
+    output::key_value("Network", network.to_lowercase());
+    output::key_value("Balance", format!("${balance}"));
 
     if balance <= Decimal::ZERO {
-        println!("No balance to sweep.");
-        println!();
+        output::warn("No balance available to sweep");
         return Ok(());
     }
 
@@ -45,11 +42,9 @@ pub async fn execute_sweep(
         io::stdin().read_line(&mut input).ok();
 
         if !input.trim().eq_ignore_ascii_case("y") {
-            println!("Aborted.");
-            println!();
+            output::warn("Sweep cancelled by user");
             return Ok(());
         }
-        println!();
     }
 
     print!("Submitting transaction... ");
@@ -57,17 +52,14 @@ pub async fn execute_sweep(
 
     match WalletService::sweep_usdc(&config, to).await? {
         SweepOutcome::NoBalance { .. } => {
-            println!("done");
-            println!();
-            println!("No balance to sweep.");
+            println!("ok");
+            output::warn("No balance available to sweep");
         }
         SweepOutcome::Transferred { tx_hash, amount } => {
-            println!("done");
-            println!();
-            println!("\u{2713} Sweep successful");
-            println!("  Amount:      ${amount}");
-            println!("  Transaction: {tx_hash}");
-            println!();
+            println!("ok");
+            output::ok("Sweep transaction submitted");
+            output::key_value("Amount", format!("${amount}"));
+            output::key_value("Transaction", tx_hash);
         }
     }
 

@@ -1,33 +1,34 @@
 use std::path::Path;
 
 use crate::app::Config;
+use crate::cli::output;
 use crate::error::Result;
 
 /// Validate configuration file without starting the bot.
 pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let path = config_path.as_ref();
-    println!("Checking configuration: {}", path.display());
-    println!();
+    output::section("Configuration Check");
+    output::key_value("Config", path.display());
 
     // Try to load and validate
     match Config::load(path) {
         Ok(config) => {
-            println!("✓ Configuration file is valid");
-            println!();
-            println!("Summary:");
-            println!("  Exchange: {:?}", config.exchange);
-            println!("  Environment: {}", config.network().environment);
-            println!("  Chain ID: {}", config.network().chain_id);
-            println!("  Strategies: {:?}", config.strategies.enabled);
-            println!("  Dry-run: {}", config.dry_run);
-            println!();
+            output::ok("Configuration file is valid");
+
+            output::section("Summary");
+            output::key_value("Exchange", format!("{:?}", config.exchange));
+            output::key_value("Environment", config.network().environment);
+            output::key_value("Chain ID", config.network().chain_id);
+            output::key_value("Strategies", format!("{:?}", config.strategies.enabled));
+            output::key_value("Dry run", config.dry_run);
 
             // Check wallet
             if config.wallet.private_key.is_some() {
-                println!("✓ Wallet private key found (from WALLET_PRIVATE_KEY env var)");
+                output::ok("Wallet credentials detected");
             } else {
-                println!("⚠ No wallet private key configured");
-                println!("  Set WALLET_PRIVATE_KEY environment variable for trading");
+                output::warn(
+                    "Wallet credentials not configured (set WALLET_PRIVATE_KEY for trading)",
+                );
             }
 
             // Check telegram
@@ -36,22 +37,21 @@ pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {
 
             if config.telegram.enabled {
                 if telegram_token.is_some() && telegram_chat.is_some() {
-                    println!("✓ Telegram configured and enabled");
+                    output::ok("Telegram integration configured");
                 } else {
-                    println!("⚠ Telegram enabled but missing environment variables:");
+                    output::warn("Telegram enabled but environment variables are missing");
                     if telegram_token.is_none() {
-                        println!("    - TELEGRAM_BOT_TOKEN");
+                        output::key_value("Missing", "TELEGRAM_BOT_TOKEN");
                     }
                     if telegram_chat.is_none() {
-                        println!("    - TELEGRAM_CHAT_ID");
+                        output::key_value("Missing", "TELEGRAM_CHAT_ID");
                     }
                 }
             } else {
-                println!("  Telegram: disabled");
+                output::key_value("Telegram", "disabled");
             }
 
-            println!();
-            println!("Configuration is ready to use.");
+            output::ok("Configuration check complete");
         }
         Err(e) => {
             return Err(e);

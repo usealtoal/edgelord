@@ -4,6 +4,7 @@ use std::path::Path;
 use rust_decimal::Decimal;
 
 use crate::app::{ApprovalOutcome, Config, WalletService};
+use crate::cli::output;
 use crate::error::{ExecutionError, Result};
 
 /// Approve token spending for trading.
@@ -20,35 +21,28 @@ pub async fn execute_approve(
 ) -> Result<()> {
     let config = Config::load(config_path)?;
 
-    println!();
-    println!("Token Approval");
-    println!("\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}");
+    output::section("Wallet Approval");
 
     print!("Fetching current allowance... ");
     io::stdout().flush().ok();
 
     let status = WalletService::get_approval_status(&config).await?;
 
-    println!("done");
-    println!();
-    println!("Exchange:    {}", status.exchange);
-    println!("Wallet:      {}", status.wallet_address);
-    println!("Token:       {}", status.token);
-    println!("Allowance:   ${}", status.allowance);
-    println!("Spender:     {}", status.spender);
-    println!();
+    println!("ok");
+    output::key_value("Exchange", status.exchange);
+    output::key_value("Wallet", status.wallet_address);
+    output::key_value("Token", status.token);
+    output::key_value("Allowance", format!("${}", status.allowance));
+    output::key_value("Spender", status.spender);
+    output::key_value("Requested", format!("${amount}"));
 
     if !status.needs_approval && status.allowance >= amount {
-        println!(
-            "\u{2713} Already approved for ${} (current: ${})",
-            amount, status.allowance
-        );
-        println!();
+        output::ok(&format!(
+            "Approval already satisfied (requested ${amount}, current ${})",
+            status.allowance
+        ));
         return Ok(());
     }
-
-    println!("Requested:   ${}", amount);
-    println!();
 
     if !skip_confirm {
         print!("Proceed with approval? [y/N] ");
@@ -58,11 +52,9 @@ pub async fn execute_approve(
         io::stdin().read_line(&mut input).ok();
 
         if !input.trim().eq_ignore_ascii_case("y") {
-            println!("Aborted.");
-            println!();
+            output::warn("Approval cancelled by user");
             return Ok(());
         }
-        println!();
     }
 
     print!("Submitting transaction... ");
@@ -72,24 +64,20 @@ pub async fn execute_approve(
 
     match outcome {
         ApprovalOutcome::Approved { tx_hash, amount } => {
-            println!("done");
-            println!();
-            println!("\u{2713} Approval successful");
-            println!("  Amount:      ${amount}");
-            println!("  Transaction: {tx_hash}");
-            println!();
+            println!("ok");
+            output::ok("Approval successful");
+            output::key_value("Amount", format!("${amount}"));
+            output::key_value("Transaction", tx_hash);
         }
         ApprovalOutcome::AlreadyApproved { current_allowance } => {
-            println!("done");
-            println!();
-            println!("\u{2713} Already approved for ${current_allowance}");
-            println!();
+            println!("ok");
+            output::ok(&format!(
+                "Allowance already sufficient (current ${current_allowance})"
+            ));
         }
         ApprovalOutcome::Failed { reason } => {
             println!("failed");
-            println!();
-            eprintln!("\u{2717} Approval failed: {reason}");
-            println!();
+            output::error(&format!("Approval failed: {reason}"));
             return Err(ExecutionError::OrderRejected(reason).into());
         }
     }

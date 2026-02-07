@@ -26,7 +26,7 @@ use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use super::message::{PolymarketSubscribeMessage, PolymarketWsMessage};
 use crate::core::domain::TokenId;
@@ -170,7 +170,7 @@ impl PolymarketWebSocketHandler {
         Self::subscribe(&mut ws, asset_ids).await?;
 
         // Phase 3: Enter message loop
-        info!("Listening for messages...");
+        debug!("Entering WebSocket message loop");
 
         // The message loop processes incoming WebSocket frames until:
         // - The server sends a Close frame
@@ -180,7 +180,7 @@ impl PolymarketWebSocketHandler {
             match msg_result {
                 // Text message: Parse and dispatch to callback
                 Ok(Message::Text(text)) => {
-                    debug!(raw = %text, "Received message");
+                    trace!(bytes = text.len(), "Received WebSocket text frame");
 
                     match serde_json::from_str::<PolymarketWsMessage>(&text) {
                         Ok(ws_msg) => on_message(ws_msg),
@@ -189,7 +189,7 @@ impl PolymarketWebSocketHandler {
                             // This allows the stream to recover from malformed messages
                             warn!(
                                 error = %e,
-                                raw = %text,
+                                bytes = text.len(),
                                 "Failed to parse message"
                             );
                         }
@@ -199,7 +199,7 @@ impl PolymarketWebSocketHandler {
                 // The WebSocket protocol requires pong responses to contain
                 // the same application data as the ping frame
                 Ok(Message::Ping(data)) => {
-                    debug!("Received ping");
+                    trace!("Received WebSocket ping");
                     ws.send(Message::Pong(data)).await?;
                 }
                 // Close frame: Server is closing the connection
@@ -276,7 +276,7 @@ impl MarketDataStream for PolymarketDataStream {
         loop {
             match ws.next().await? {
                 Ok(Message::Text(text)) => {
-                    debug!(raw = %text, "Received message");
+                    trace!(bytes = text.len(), "Received WebSocket text frame");
                     match serde_json::from_str::<PolymarketWsMessage>(&text) {
                         Ok(PolymarketWsMessage::Book(book)) => {
                             let order_book = book.to_orderbook();
@@ -292,13 +292,13 @@ impl MarketDataStream for PolymarketDataStream {
                         }
                         Ok(_) => continue,
                         Err(e) => {
-                            warn!(error = %e, raw = %text, "Failed to parse message");
+                            warn!(error = %e, bytes = text.len(), "Failed to parse message");
                             continue;
                         }
                     }
                 }
                 Ok(Message::Ping(data)) => {
-                    debug!("Received ping");
+                    trace!("Received WebSocket ping");
                     if ws.send(Message::Pong(data)).await.is_err() {
                         return Some(MarketEvent::Disconnected {
                             reason: "Failed to send pong".into(),

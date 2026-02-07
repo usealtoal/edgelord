@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::app::Config;
+use crate::cli::output;
 use crate::error::{Error, Result};
 
 /// Test Telegram notification by sending a test message.
@@ -18,15 +19,15 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
             field: "TELEGRAM_CHAT_ID environment variable",
         })?;
 
-    println!("Sending test message to Telegram...");
+    output::section("Telegram Check");
+    println!("Sending Telegram test message...");
     let masked_token = if token.len() >= 15 {
         format!("{}...{}", &token[..10], &token[token.len() - 5..])
     } else {
         format!("{}...", &token[..token.len().min(10)])
     };
-    println!("  Bot token: {masked_token}");
-    println!("  Chat ID: {chat_id}");
-    println!();
+    output::key_value("Bot token", masked_token);
+    output::key_value("Chat ID", &chat_id);
 
     // Build the message
     let message = format!(
@@ -56,9 +57,8 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
         .map_err(|e| Error::Connection(e.to_string()))?;
 
     if response.status().is_success() {
-        println!("✓ Test message sent successfully!");
-        println!();
-        println!("Check your Telegram for the message.");
+        output::ok("Telegram test message sent");
+        println!("Check Telegram for the message.");
     } else {
         let status = response.status();
         let body: String = response
