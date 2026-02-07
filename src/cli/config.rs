@@ -6,6 +6,7 @@ use std::path::Path;
 use rust_decimal::prelude::ToPrimitive;
 
 use crate::app::{Config, Environment};
+use crate::cli::output;
 use crate::error::{ConfigError, Result};
 
 /// Default config template with documentation.
@@ -22,13 +23,14 @@ pub fn execute_init(path: &Path, force: bool) -> Result<()> {
     }
 
     fs::write(path, CONFIG_TEMPLATE)?;
-    println!("Created config file: {}", path.display());
-    println!();
-    println!("Next steps:");
-    println!("  1. Edit {} with your settings", path.display());
-    println!("  2. Set WALLET_PRIVATE_KEY environment variable");
-    println!("  3. Run: edgelord check config {}", path.display());
-    println!("  4. Run: edgelord run -c {}", path.display());
+    output::section("Config Initialized");
+    output::ok("Created configuration file");
+    output::key_value("Path", path.display());
+    output::section("Next Steps");
+    output::note(&format!("1. Edit {} with your settings", path.display()));
+    output::note("2. Set WALLET_PRIVATE_KEY environment variable");
+    output::note(&format!("3. Run: edgelord check config {}", path.display()));
+    output::note(&format!("4. Run: edgelord run -c {}", path.display()));
     Ok(())
 }
 
@@ -158,14 +160,13 @@ pub fn execute_show(path: &Path) -> Result<()> {
 
 /// Execute `config validate`.
 pub fn execute_validate(path: &Path) -> Result<()> {
-    println!("Validating: {}", path.display());
-    println!();
+    output::section("Config Validation");
+    output::key_value("Path", path.display());
 
     // Try to load
     match Config::load(path) {
         Ok(config) => {
-            println!("✓ Config file is valid");
-            println!();
+            output::ok("Config file is valid");
 
             // Additional checks
             let mut warnings = Vec::new();
@@ -197,16 +198,15 @@ pub fn execute_validate(path: &Path) -> Result<()> {
             }
 
             if !warnings.is_empty() {
-                println!("Warnings:");
+                output::section("Warnings");
                 for w in warnings {
-                    println!("  ⚠ {w}");
+                    output::warn(w);
                 }
-                println!();
             }
 
-            println!(
-                "Run 'edgelord config show -c {}' to see resolved values",
-                path.display()
+            output::key_value(
+                "Next",
+                format!("edgelord config show -c {}", path.display()),
             );
         }
         Err(e) => {

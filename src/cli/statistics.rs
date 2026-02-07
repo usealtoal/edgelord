@@ -5,6 +5,7 @@ use std::path::Path;
 use rust_decimal::Decimal;
 
 use crate::app::statistics;
+use crate::cli::output;
 use crate::error::Result;
 
 /// Execute `statistics` (default: today).
@@ -198,13 +199,15 @@ fn print_open_positions(open_count: i64) {
 }
 
 /// Execute `statistics export [--days N] [--output FILE]`.
-pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Result<()> {
+pub fn execute_export(db_path: &Path, days: u32, output_path: Option<&Path>) -> Result<()> {
     let (from, to, _) = statistics::date_range_history(days);
     let csv = statistics::export_daily_csv(db_path, from, to)?;
 
-    if let Some(path) = output {
+    if let Some(path) = output_path {
         std::fs::write(path, &csv)?;
-        println!("Exported {} days of statistics to {}", days, path.display());
+        output::ok("Statistics export complete");
+        output::key_value("Days", days);
+        output::key_value("Path", path.display());
     } else {
         print!("{csv}");
     }
@@ -215,10 +218,8 @@ pub fn execute_export(db_path: &Path, days: u32, output: Option<&Path>) -> Resul
 /// Execute `statistics prune [--days N]`.
 pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
     statistics::prune_old_records(db_path, retention_days)?;
-    println!(
-        "Pruned opportunities and trades older than {} days",
-        retention_days
-    );
-    println!("Note: Aggregated daily statistics are preserved.");
+    output::ok("Pruned historical opportunities and trades");
+    output::key_value("Retention", format!("{retention_days} days"));
+    output::note("Aggregated daily statistics are preserved.");
     Ok(())
 }

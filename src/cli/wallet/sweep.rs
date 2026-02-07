@@ -47,16 +47,23 @@ pub async fn execute_sweep(
         }
     }
 
-    print!("Submitting transaction... ");
-    io::stdout().flush().ok();
+    output::progress("Submitting transaction");
 
-    match WalletService::sweep_usdc(&config, to).await? {
+    let outcome = match WalletService::sweep_usdc(&config, to).await {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            output::progress_done(false);
+            return Err(e);
+        }
+    };
+
+    match outcome {
         SweepOutcome::NoBalance { .. } => {
-            println!("ok");
+            output::progress_done(true);
             output::warn("No balance available to sweep");
         }
         SweepOutcome::Transferred { tx_hash, amount } => {
-            println!("ok");
+            output::progress_done(true);
             output::ok("Sweep transaction submitted");
             output::key_value("Amount", format!("${amount}"));
             output::key_value("Transaction", tx_hash);

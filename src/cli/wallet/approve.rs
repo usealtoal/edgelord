@@ -23,12 +23,17 @@ pub async fn execute_approve(
 
     output::section("Wallet Approval");
 
-    print!("Fetching current allowance... ");
-    io::stdout().flush().ok();
-
-    let status = WalletService::get_approval_status(&config).await?;
-
-    println!("ok");
+    output::progress("Fetching current allowance");
+    let status = match WalletService::get_approval_status(&config).await {
+        Ok(status) => {
+            output::progress_done(true);
+            status
+        }
+        Err(e) => {
+            output::progress_done(false);
+            return Err(e);
+        }
+    };
     output::key_value("Exchange", status.exchange);
     output::key_value("Wallet", status.wallet_address);
     output::key_value("Token", status.token);
@@ -57,26 +62,30 @@ pub async fn execute_approve(
         }
     }
 
-    print!("Submitting transaction... ");
-    io::stdout().flush().ok();
-
-    let outcome = WalletService::approve(&config, amount).await?;
+    output::progress("Submitting transaction");
+    let outcome = match WalletService::approve(&config, amount).await {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            output::progress_done(false);
+            return Err(e);
+        }
+    };
 
     match outcome {
         ApprovalOutcome::Approved { tx_hash, amount } => {
-            println!("ok");
+            output::progress_done(true);
             output::ok("Approval successful");
             output::key_value("Amount", format!("${amount}"));
             output::key_value("Transaction", tx_hash);
         }
         ApprovalOutcome::AlreadyApproved { current_allowance } => {
-            println!("ok");
+            output::progress_done(true);
             output::ok(&format!(
                 "Allowance already sufficient (current ${current_allowance})"
             ));
         }
         ApprovalOutcome::Failed { reason } => {
-            println!("failed");
+            output::progress_done(false);
             output::error(&format!("Approval failed: {reason}"));
             return Err(ExecutionError::OrderRejected(reason).into());
         }

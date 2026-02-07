@@ -15,11 +15,11 @@ pub fn execute_health<P: AsRef<Path>>(config_path: P) -> Result<()> {
             HealthStatus::Healthy => "✓",
             HealthStatus::Unhealthy(_) => "✗",
         };
-        println!(
+        output::note(&format!(
             "  {status} {}{}",
             check.name(),
             if check.critical() { " (critical)" } else { "" }
-        );
+        ));
     }
 
     if !report.is_healthy() {

@@ -16,35 +16,35 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
     output::key_value("Environment", network.environment);
 
     // Test REST API connectivity
-    print!("REST API connectivity... ");
+    output::progress("REST API connectivity");
     let client = reqwest::Client::new();
     let api_url = format!("{}/markets", network.api_url);
 
     match client.get(&api_url).send().await {
         Ok(response) if response.status().is_success() => {
-            println!("ok");
+            output::progress_done(true);
         }
         Ok(response) => {
-            println!("failed");
+            output::progress_done(false);
             return Err(Error::Connection(format!(
                 "REST API returned non-success status: {}",
                 response.status()
             )));
         }
         Err(e) => {
-            println!("failed");
+            output::progress_done(false);
             return Err(Error::Connection(e.to_string()));
         }
     }
 
     // Test WebSocket connectivity
-    print!("WebSocket connectivity... ");
+    output::progress("WebSocket connectivity");
     match tokio_tungstenite::connect_async(&network.ws_url).await {
         Ok((_, _)) => {
-            println!("ok");
+            output::progress_done(true);
         }
         Err(e) => {
-            println!("failed");
+            output::progress_done(false);
             return Err(Error::Connection(e.to_string()));
         }
     }

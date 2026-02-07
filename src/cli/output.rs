@@ -1,6 +1,7 @@
 //! Shared CLI output helpers for consistent operator-facing text.
 
 use std::fmt::Display;
+use std::io::{self, Write};
 
 const RULE_WIDTH: usize = 56;
 
@@ -29,4 +30,20 @@ pub fn warn(message: &str) {
 /// Print an error status line.
 pub fn error(message: &str) {
     eprintln!("✗ {message}");
+}
+
+/// Print a single-line note.
+pub fn note(message: &str) {
+    println!("{message}");
+}
+
+/// Start a progress line in the format `Label... `.
+pub fn progress(label: &str) {
+    print!("{label}... ");
+    let _ = io::stdout().flush();
+}
+
+/// Finish a progress line.
+pub fn progress_done(success: bool) {
+    println!("{}", if success { "ok" } else { "failed" });
 }

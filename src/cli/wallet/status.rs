@@ -1,4 +1,3 @@
-use std::io::{self, Write};
 use std::path::Path;
 
 use crate::app::{Config, WalletService};
@@ -13,12 +12,17 @@ pub async fn execute_status(config_path: &Path) -> Result<()> {
 
     output::section("Wallet Status");
 
-    print!("Fetching approval status... ");
-    io::stdout().flush().ok();
-
-    let status = WalletService::get_approval_status(&config).await?;
-
-    println!("ok");
+    output::progress("Fetching approval status");
+    let status = match WalletService::get_approval_status(&config).await {
+        Ok(status) => {
+            output::progress_done(true);
+            status
+        }
+        Err(e) => {
+            output::progress_done(false);
+            return Err(e);
+        }
+    };
     output::key_value("Exchange", status.exchange);
     output::key_value("Wallet", status.wallet_address);
     output::key_value("Token", status.token);
@@ -27,7 +31,7 @@ pub async fn execute_status(config_path: &Path) -> Result<()> {
 
     if status.needs_approval {
         output::warn("Approval required");
-        println!("Run `edgelord wallet approve` to approve token spending.");
+        output::note("Run `edgelord wallet approve` to approve token spending.");
     } else {
         output::ok("Token approval is in place");
     }

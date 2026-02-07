@@ -20,7 +20,7 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
         })?;
 
     output::section("Telegram Check");
-    println!("Sending Telegram test message...");
+    output::note("Sending Telegram test message...");
     let masked_token = if token.len() >= 15 {
         format!("{}...{}", &token[..10], &token[token.len() - 5..])
     } else {
@@ -58,7 +58,7 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
 
     if response.status().is_success() {
         output::ok("Telegram test message sent");
-        println!("Check Telegram for the message.");
+        output::note("Check Telegram for the message.");
     } else {
         let status = response.status();
         let body: String = response
