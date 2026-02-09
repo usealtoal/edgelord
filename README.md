@@ -38,19 +38,35 @@ cargo build --release
 cp config.toml.example config.toml
 ```
 
-Provision wallet (recommended):
+### Secrets
+
+Secrets are managed by [dugout](https://github.com/usealtoal/dugout). No plaintext keys in source.
 
 ```bash
-export EDGELORD_KEYSTORE_PASSWORD="change-me"
-./target/release/edgelord provision polymarket --config config.toml
+# Install dugout
+curl -LsSf https://raw.githubusercontent.com/usealtoal/dugout/main/scripts/install.sh | sh
+
+# Set up identity + initialize vault
+dugout setup
+dugout init
+
+# Store secrets
+dugout set WALLET_PRIVATE_KEY "your-key"
+dugout set ANTHROPIC_API_KEY "sk-ant-..."
+dugout set OPENAI_API_KEY "sk-..."
+dugout set TELEGRAM_BOT_TOKEN "your-token"
+dugout set TELEGRAM_CHAT_ID "your-chat-id"
+
+# Run with secrets injected
+dugout run -- ./target/release/edgelord run --config config.toml
 ```
 
-Validate and run:
+### Provision & Validate
 
 ```bash
-./target/release/edgelord check config --config config.toml
-./target/release/edgelord check connection --config config.toml
-./target/release/edgelord run --config config.toml
+dugout run -- ./target/release/edgelord provision polymarket --config config.toml
+dugout run -- ./target/release/edgelord check config --config config.toml
+dugout run -- ./target/release/edgelord check connection --config config.toml
 ```
 
 ## Production Readiness Flow
