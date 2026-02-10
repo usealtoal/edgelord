@@ -17,8 +17,12 @@
 //!
 //! - `polymarket` - Enable Polymarket exchange support (default)
 //! - `telegram` - Enable Telegram notifications
+//! - `testkit` - Reusable test helpers (mock streams, factories, domain builders)
 
 pub mod app;
 pub mod cli;
 pub mod core;
 pub mod error;
+
+#[cfg(any(test, feature = "testkit"))]
+pub mod testkit;

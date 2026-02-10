@@ -15,8 +15,9 @@
 //! - **Silent death**: detects connections that stopped receiving events
 //! - **Task crashes**: restarts connections whose tasks finished unexpectedly
 //!
-//! Replacements use true zero-gap handoff: a new connection is spawned and
-//! must deliver its first event before the old connection is aborted.
+//! Replacements use true zero-gap handoff: new connections are spawned
+//! concurrently and must deliver their first event before old connections
+//! are drained and aborted.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -36,8 +37,11 @@ use crate::error::{ConfigError, Result};
 /// Used by the connection pool to create new connections on demand.
 pub type StreamFactory = Arc<dyn Fn() -> Box<dyn MarketDataStream> + Send + Sync>;
 
-/// Default event channel capacity (bounded to prevent unbounded memory growth).
-const DEFAULT_CHANNEL_CAPACITY: usize = 10_000;
+/// Duration to drain events from an old connection before aborting it.
+const DRAIN_GRACE_PERIOD: Duration = Duration::from_millis(100);
+
+/// Polling interval during handoff (checking for first event).
+const HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // ---------------------------------------------------------------------------
 // Pool statistics
@@ -52,7 +56,7 @@ pub struct PoolStats {
     pub total_rotations: u64,
     /// Total number of restarts (crash/silence-triggered).
     pub total_restarts: u64,
-    /// Total number of events that were dropped due to a full channel.
+    /// Total number of events dropped due to a full channel.
     pub events_dropped: u64,
 }
 
@@ -101,6 +105,14 @@ fn epoch_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// Lock a mutex, recovering from poisoning.
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
 
 /// Spawn a connection task that reads events and forwards them to `event_tx`.
@@ -197,41 +209,141 @@ fn new_connection(
 // Management task
 // ---------------------------------------------------------------------------
 
-/// Descriptor for a connection that needs replacement.
-struct ReplacementJob {
-    index: usize,
-    tokens: Vec<TokenId>,
-    reason: ReplacementReason,
-}
-
-#[derive(Debug)]
-enum ReplacementReason {
-    Ttl,
-    Silent,
-    Crashed,
-}
-
-/// Background task that monitors connection health and performs rotations.
+/// Shared resources passed to the management and replacement tasks.
 ///
-/// Runs on a fixed interval. Uses a 3-phase approach:
-/// 1. **Identify** — lock briefly to find connections needing replacement
-/// 2. **Spawn** — create replacements without holding the lock
-/// 3. **Handoff** — wait for replacement's first event, then swap + abort old
-async fn management_task(
+/// Bundles all the dependencies that `replace_connection` needs, avoiding
+/// long parameter lists and making it easy to add new shared state.
+struct ManagementContext {
     connections: Arc<Mutex<Vec<ConnectionState>>>,
     config: ConnectionPoolConfig,
     reconnection_config: ReconnectionConfig,
     factory: StreamFactory,
     event_tx: mpsc::Sender<MarketEvent>,
     counters: Arc<SharedCounters>,
-    exchange_name: &'static str,
+}
+
+/// Descriptor for a connection that needs replacement.
+struct ReplacementJob {
+    index: usize,
+    reason: ReplacementReason,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ReplacementReason {
+    Ttl,
+    Silent,
+    Crashed,
+}
+
+impl ReplacementReason {
+    fn is_rotation(self) -> bool {
+        matches!(self, Self::Ttl)
+    }
+}
+
+/// Wait for a connection's first event, returning true on success.
+async fn await_handoff(
+    state: &ConnectionState,
+    initial_ts: u64,
+    timeout: Duration,
+) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        tokio::time::sleep(HANDOFF_POLL_INTERVAL).await;
+        if state.last_event_at.load(Ordering::Relaxed) > initial_ts {
+            return true;
+        }
+        if state.handle.is_finished() {
+            warn!(connection_id = state.id, "Replacement died during handoff");
+            return false;
+        }
+        if Instant::now() >= deadline {
+            warn!(connection_id = state.id, "Handoff timeout — swapping anyway");
+            return true; // old connection is stale, swap regardless
+        }
+    }
+}
+
+/// Replace a single connection: spawn, handoff, drain, swap.
+async fn replace_connection(
+    ctx: &ManagementContext,
+    index: usize,
+    reason: ReplacementReason,
+    new_id: u64,
+    handoff_timeout: Duration,
 ) {
-    let check_interval = Duration::from_secs(config.health_check_interval_secs);
-    let ttl_threshold = Duration::from_secs(
-        config.connection_ttl_secs.saturating_sub(config.preemptive_reconnect_secs),
+    // Read tokens from the existing connection.
+    let tokens = {
+        let conns = lock_or_recover(&ctx.connections);
+        match conns.get(index) {
+            Some(c) => c.tokens.clone(),
+            None => {
+                warn!(index, "Connection index out of bounds, skipping");
+                return;
+            }
+        }
+    };
+
+    // Capture timestamp before spawning so we can detect the first event
+    // from the replacement, even if it arrives before we start polling.
+    // Subtract 1ms to handle same-millisecond races between capture and spawn.
+    let initial_ts = epoch_millis().saturating_sub(1);
+
+    let state = new_connection(
+        new_id,
+        tokens,
+        &ctx.factory,
+        ctx.reconnection_config.clone(),
+        ctx.event_tx.clone(),
+        ctx.counters.clone(),
     );
-    let max_silent_ms = config.max_silent_secs * 1000;
-    let handoff_timeout = Duration::from_secs(config.connection_ttl_secs.max(30));
+    if !await_handoff(&state, initial_ts, handoff_timeout).await {
+        state.handle.abort();
+        return; // management will retry next tick
+    }
+
+    // Swap: extract old handle under lock, then drain + abort outside lock.
+    let swap_result = {
+        let mut conns = lock_or_recover(&ctx.connections);
+        if index < conns.len() {
+            let old_id = conns[index].id;
+            let old_handle = std::mem::replace(&mut conns[index], state).handle;
+            Some((old_id, old_handle))
+        } else {
+            state.handle.abort();
+            warn!(index, "Connection index shifted, skipping swap");
+            None
+        }
+    }; // MutexGuard dropped here, before any .await
+
+    if let Some((old_id, old_handle)) = swap_result {
+        // Graceful drain: let old connection flush in-flight events.
+        tokio::time::sleep(DRAIN_GRACE_PERIOD).await;
+        old_handle.abort();
+
+        if reason.is_rotation() {
+            ctx.counters.rotations.fetch_add(1, Ordering::Relaxed);
+            info!(old_connection_id = old_id, new_connection_id = new_id, "TTL rotation complete");
+        } else {
+            ctx.counters.restarts.fetch_add(1, Ordering::Relaxed);
+            info!(old_connection_id = old_id, new_connection_id = new_id, reason = ?reason, "Restart complete");
+        }
+    }
+}
+
+/// Background task that monitors connection health and performs rotations.
+///
+/// Runs on a fixed interval. Replacements are processed concurrently via
+/// `join_all` so one slow handoff doesn't block others.
+async fn management_task(ctx: ManagementContext, exchange_name: &'static str) {
+    let check_interval = Duration::from_secs(ctx.config.health_check_interval_secs);
+    let ttl_threshold = Duration::from_secs(
+        ctx.config
+            .connection_ttl_secs
+            .saturating_sub(ctx.config.preemptive_reconnect_secs),
+    );
+    let max_silent_ms = ctx.config.max_silent_secs * 1000;
+    let handoff_timeout = Duration::from_secs(ctx.config.connection_ttl_secs.max(30));
 
     let mut interval = tokio::time::interval(check_interval);
     let mut next_id: u64 = 1_000_000;
@@ -245,10 +357,7 @@ async fn management_task(
 
         // Phase 1: identify connections needing replacement (brief lock).
         let jobs: Vec<ReplacementJob> = {
-            let conns = match connections.lock() {
-                Ok(c) => c,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let conns = lock_or_recover(&ctx.connections);
             conns
                 .iter()
                 .enumerate()
@@ -257,7 +366,6 @@ async fn management_task(
                         warn!(connection_id = c.id, "Task finished unexpectedly");
                         return Some(ReplacementJob {
                             index: i,
-                            tokens: c.tokens.clone(),
                             reason: ReplacementReason::Crashed,
                         });
                     }
@@ -269,7 +377,6 @@ async fn management_task(
                         );
                         return Some(ReplacementJob {
                             index: i,
-                            tokens: c.tokens.clone(),
                             reason: ReplacementReason::Ttl,
                         });
                     }
@@ -282,7 +389,6 @@ async fn management_task(
                         );
                         return Some(ReplacementJob {
                             index: i,
-                            tokens: c.tokens.clone(),
                             reason: ReplacementReason::Silent,
                         });
                     }
@@ -295,73 +401,16 @@ async fn management_task(
             continue;
         }
 
-        // Phase 2 + 3: for each job, spawn replacement, wait for handoff, swap.
-        for job in jobs {
-            next_id += 1;
-            let new_id = next_id;
+        // Phase 2: process replacements concurrently.
+        let futures: Vec<_> = jobs
+            .into_iter()
+            .map(|job| {
+                next_id += 1;
+                replace_connection(&ctx, job.index, job.reason, next_id, handoff_timeout)
+            })
+            .collect();
 
-            let state = new_connection(
-                new_id,
-                job.tokens,
-                &factory,
-                reconnection_config.clone(),
-                event_tx.clone(),
-                counters.clone(),
-            );
-
-            // Wait for the replacement to deliver its first event (or timeout).
-            let started = Instant::now();
-            let initial_ts = state.last_event_at.load(Ordering::Relaxed);
-            let handoff_ok = loop {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                let current_ts = state.last_event_at.load(Ordering::Relaxed);
-                if current_ts > initial_ts {
-                    break true;
-                }
-                if state.handle.is_finished() {
-                    warn!(connection_id = new_id, "Replacement task died during handoff");
-                    break false;
-                }
-                if started.elapsed() > handoff_timeout {
-                    warn!(connection_id = new_id, "Handoff timeout — swapping anyway");
-                    break true; // swap anyway, old connection is stale
-                }
-            };
-
-            if !handoff_ok {
-                // Replacement died, abort it and skip — management will retry next tick.
-                state.handle.abort();
-                continue;
-            }
-
-            // Swap in replacement, abort old.
-            {
-                let mut conns = match connections.lock() {
-                    Ok(c) => c,
-                    Err(poisoned) => poisoned.into_inner(),
-                };
-                if job.index < conns.len() {
-                    let old_id = conns[job.index].id;
-                    conns[job.index].handle.abort();
-                    conns[job.index] = state;
-
-                    match job.reason {
-                        ReplacementReason::Ttl => {
-                            counters.rotations.fetch_add(1, Ordering::Relaxed);
-                            info!(old_connection_id = old_id, new_connection_id = new_id, "TTL rotation complete");
-                        }
-                        ReplacementReason::Silent | ReplacementReason::Crashed => {
-                            counters.restarts.fetch_add(1, Ordering::Relaxed);
-                            info!(old_connection_id = old_id, new_connection_id = new_id, reason = ?job.reason, "Restart complete");
-                        }
-                    }
-                } else {
-                    // Index shifted (shouldn't happen, but be defensive)
-                    state.handle.abort();
-                    warn!(old_index = job.index, "Connection index out of bounds, skipping swap");
-                }
-            }
-        }
+        futures_util::future::join_all(futures).await;
     }
 }
 
@@ -375,8 +424,8 @@ async fn management_task(
 /// event stream. Connections are automatically rotated on TTL expiry and
 /// restarted if they go silent or crash.
 ///
-/// The event channel is bounded (default 10,000) to prevent unbounded memory
-/// growth under backpressure. Events are dropped with a warning when full.
+/// The event channel is bounded (configurable via `channel_capacity`) to
+/// prevent unbounded memory growth under backpressure.
 pub struct ConnectionPool {
     pool_config: ConnectionPoolConfig,
     reconnection_config: ReconnectionConfig,
@@ -405,6 +454,8 @@ impl ConnectionPool {
     /// - `subscriptions_per_connection` must be > 0
     /// - `health_check_interval_secs` must be > 0
     /// - `max_silent_secs` must be > 0
+    /// - `channel_capacity` must be > 0
+    #[must_use = "returns Result that must be checked"]
     pub fn new(
         pool_config: ConnectionPoolConfig,
         reconnection_config: ReconnectionConfig,
@@ -413,7 +464,7 @@ impl ConnectionPool {
     ) -> Result<Self> {
         Self::validate_config(&pool_config)?;
 
-        let (event_tx, event_rx) = mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
+        let (event_tx, event_rx) = mpsc::channel(pool_config.channel_capacity);
         Ok(Self {
             pool_config,
             reconnection_config,
@@ -459,15 +510,15 @@ impl ConnectionPool {
         if config.max_silent_secs == 0 {
             return Err(invalid("max_silent_secs", "must be > 0"));
         }
+        if config.channel_capacity == 0 {
+            return Err(invalid("channel_capacity", "must be > 0"));
+        }
         Ok(())
     }
 
     /// Runtime statistics for observability (e.g. Telegram `/health` command).
     pub fn stats(&self) -> PoolStats {
-        let active = match self.connections.lock() {
-            Ok(c) => c.len(),
-            Err(p) => p.into_inner().len(),
-        };
+        let active = lock_or_recover(&self.connections).len();
         PoolStats {
             active_connections: active,
             total_rotations: self.counters.rotations.load(Ordering::Relaxed),
@@ -539,6 +590,7 @@ impl MarketDataStream for ConnectionPool {
             connections = chunks.len(),
             per_conn = self.pool_config.subscriptions_per_connection,
             max_connections = self.pool_config.max_connections,
+            channel_capacity = self.pool_config.channel_capacity,
             "Creating connection pool"
         );
 
@@ -558,24 +610,20 @@ impl MarketDataStream for ConnectionPool {
             ));
         }
 
-        {
-            let mut conns = match self.connections.lock() {
-                Ok(c) => c,
-                Err(p) => p.into_inner(),
-            };
-            *conns = states;
-        }
+        *lock_or_recover(&self.connections) = states;
 
         // Start management task
-        self.management_handle = Some(tokio::spawn(management_task(
-            self.connections.clone(),
-            self.pool_config.clone(),
-            self.reconnection_config.clone(),
-            self.stream_factory.clone(),
-            self.event_tx.clone(),
-            self.counters.clone(),
-            self.exchange_name,
-        )));
+        let ctx = ManagementContext {
+            connections: self.connections.clone(),
+            config: self.pool_config.clone(),
+            reconnection_config: self.reconnection_config.clone(),
+            factory: self.stream_factory.clone(),
+            event_tx: self.event_tx.clone(),
+            counters: self.counters.clone(),
+        };
+        self.management_handle = Some(tokio::spawn(
+            management_task(ctx, self.exchange_name),
+        ));
 
         Ok(())
     }
@@ -602,225 +650,142 @@ impl Drop for ConnectionPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::VecDeque;
     use std::sync::atomic::AtomicU32;
-    use std::sync::Mutex as StdMutex;
 
-    use crate::core::domain::OrderBook;
-
-    // -- Mock stream ---------------------------------------------------------
-
-    struct MockDataStream {
-        events: Arc<StdMutex<VecDeque<Option<MarketEvent>>>>,
-        cycle_source: Arc<StdMutex<Vec<Option<MarketEvent>>>>,
-        cycle: bool,
-        connect_count: Arc<AtomicU32>,
-        subscribe_count: Arc<AtomicU32>,
-    }
-
-    impl MockDataStream {
-        fn new() -> Self {
-            Self {
-                events: Arc::new(StdMutex::new(VecDeque::new())),
-                cycle_source: Arc::new(StdMutex::new(Vec::new())),
-                cycle: false,
-                connect_count: Arc::new(AtomicU32::new(0)),
-                subscribe_count: Arc::new(AtomicU32::new(0)),
-            }
-        }
-
-        fn with_events(self, events: Vec<Option<MarketEvent>>) -> Self {
-            *self.events.lock().unwrap() = events.clone().into();
-            *self.cycle_source.lock().unwrap() = events;
-            self
-        }
-
-        fn with_cycle(mut self, events: Vec<Option<MarketEvent>>) -> Self {
-            *self.events.lock().unwrap() = events.clone().into();
-            *self.cycle_source.lock().unwrap() = events;
-            self.cycle = true;
-            self
-        }
-    }
-
-    #[async_trait]
-    impl MarketDataStream for MockDataStream {
-        async fn connect(&mut self) -> Result<()> {
-            self.connect_count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }
-
-        async fn subscribe(&mut self, _token_ids: &[TokenId]) -> Result<()> {
-            self.subscribe_count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }
-
-        async fn next_event(&mut self) -> Option<MarketEvent> {
-            let event = {
-                let mut q = self.events.lock().unwrap();
-                let ev = q.pop_front().flatten();
-                if self.cycle && q.is_empty() {
-                    let src = self.cycle_source.lock().unwrap();
-                    *q = src.clone().into();
-                }
-                ev
-            };
-            if event.is_some() {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-            event
-        }
-
-        fn exchange_name(&self) -> &'static str {
-            "mock"
-        }
-    }
+    use crate::testkit;
+    use crate::testkit::stream::{CyclingStream, OneEventThenSilentStream, ScriptedStream};
 
     // -- Helpers --------------------------------------------------------------
 
-    fn pool_config(max_connections: usize, subs_per_conn: usize) -> ConnectionPoolConfig {
-        ConnectionPoolConfig {
-            max_connections,
-            subscriptions_per_connection: subs_per_conn,
-            connection_ttl_secs: 120,
-            preemptive_reconnect_secs: 30,
-            health_check_interval_secs: 30,
-            max_silent_secs: 60,
-        }
-    }
-
-    fn reconnect_config() -> ReconnectionConfig {
-        ReconnectionConfig {
-            initial_delay_ms: 10,
-            max_delay_ms: 100,
-            backoff_multiplier: 2.0,
-            max_consecutive_failures: 3,
-            circuit_breaker_cooldown_ms: 50,
-        }
-    }
-
+    /// Wraps [`testkit::domain::snapshot_event`] in `Option` for use with
+    /// event lists.
     fn snapshot_event(token: &str) -> Option<MarketEvent> {
-        Some(MarketEvent::OrderBookSnapshot {
-            token_id: TokenId::from(token.to_string()),
-            book: OrderBook::new(TokenId::from(token.to_string())),
-        })
+        Some(testkit::domain::snapshot_event(token))
     }
 
-    fn make_tokens(n: usize) -> Vec<TokenId> {
-        (0..n).map(|i| TokenId::from(format!("t{i}"))).collect()
-    }
-
+    /// Factory that creates mock streams sharing a connect counter.
+    ///
+    /// When `cycle` is true, uses [`CyclingStream`] (events repeat forever).
+    /// When false, uses [`ScriptedStream`] (events delivered once, then stream
+    /// ends — useful for crash/silence detection tests).
     fn counting_factory(
         connect_count: Arc<AtomicU32>,
         events: Vec<Option<MarketEvent>>,
         cycle: bool,
     ) -> StreamFactory {
         Arc::new(move || {
-            let mut m = MockDataStream::new();
-            m.connect_count = Arc::clone(&connect_count);
-            let m = if cycle {
-                m.with_cycle(events.clone())
+            let cc = Arc::clone(&connect_count);
+            if cycle {
+                let evts: Vec<MarketEvent> = events.iter().filter_map(|e| e.clone()).collect();
+                Box::new(CyclingStream::new(evts, Duration::from_millis(10), cc))
             } else {
-                m.with_events(events.clone())
-            };
-            Box::new(m)
+                let mut s = ScriptedStream::new().with_events(events.clone());
+                s.set_connect_count(cc);
+                Box::new(s)
+            }
         })
     }
 
     // -- Config validation ----------------------------------------------------
 
     #[test]
-    fn test_config_validation_rejects_zero_ttl() {
-        let mut cfg = pool_config(10, 500);
+    fn test_config_rejects_zero_ttl() {
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 0;
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
-    fn test_config_validation_rejects_preemptive_gte_ttl() {
-        let mut cfg = pool_config(10, 500);
-        cfg.preemptive_reconnect_secs = 120; // equal to TTL
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    fn test_config_rejects_preemptive_gte_ttl() {
+        let mut cfg = testkit::config::pool(10, 500);
+        cfg.preemptive_reconnect_secs = 120;
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
-    fn test_config_validation_rejects_zero_max_connections() {
-        let cfg = pool_config(0, 500);
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    fn test_config_rejects_zero_max_connections() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(0, 500), testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
-    fn test_config_validation_rejects_zero_subs_per_conn() {
-        let cfg = pool_config(10, 0);
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    fn test_config_rejects_zero_subs_per_conn() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(10, 0), testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
-    fn test_config_validation_accepts_valid_config() {
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").is_ok());
+    fn test_config_rejects_zero_channel_capacity() {
+        let mut cfg = testkit::config::pool(10, 500);
+        cfg.channel_capacity = 0;
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
-    // -- Distribution tests ---------------------------------------------------
+    #[test]
+    fn test_config_accepts_valid() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").is_ok());
+    }
+
+    // -- Distribution ---------------------------------------------------------
 
     #[tokio::test]
-    async fn test_pool_single_connection() {
+    async fn test_single_connection() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, vec![], false);
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let conns = pool.connections.lock().unwrap();
+        let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 1);
         assert_eq!(conns[0].tokens.len(), 10);
     }
 
     #[tokio::test]
-    async fn test_pool_multiple_connections() {
+    async fn test_multiple_connections() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, vec![], false);
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let conns = pool.connections.lock().unwrap();
+        let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 2);
         assert_eq!(conns[0].tokens.len(), 500);
         assert_eq!(conns[1].tokens.len(), 500);
     }
 
     #[tokio::test]
-    async fn test_pool_respects_max_connections() {
+    async fn test_respects_max_connections() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(3, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, vec![], false);
+        let mut pool = ConnectionPool::new(testkit::config::pool(3, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(5000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let conns = pool.connections.lock().unwrap();
+        let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 3);
         let total: usize = conns.iter().map(|c| c.tokens.len()).sum();
         assert_eq!(total, 5000);
     }
 
     #[tokio::test]
-    async fn test_pool_distributes_evenly() {
+    async fn test_distributes_evenly() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, vec![], false);
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1250)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1250)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let conns = pool.connections.lock().unwrap();
+        let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 3);
         assert_eq!(conns[0].tokens.len(), 500);
         assert_eq!(conns[1].tokens.len(), 500);
@@ -830,166 +795,175 @@ mod tests {
     // -- Event merging --------------------------------------------------------
 
     #[tokio::test]
-    async fn test_pool_merges_events() {
+    async fn test_merges_events() {
         let events = vec![snapshot_event("t1"), snapshot_event("t2")];
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc, events, false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, events, false);
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         assert!(matches!(pool.next_event().await, Some(MarketEvent::OrderBookSnapshot { .. })));
         assert!(matches!(pool.next_event().await, Some(MarketEvent::OrderBookSnapshot { .. })));
     }
 
-    // -- Identity -------------------------------------------------------------
+    // -- Identity / edge cases ------------------------------------------------
 
     #[tokio::test]
-    async fn test_pool_exchange_name() {
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let cfg = pool_config(10, 500);
+    async fn test_exchange_name() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let cfg = testkit::config::pool(10, 500);
 
-        let p1 = ConnectionPool::new(cfg.clone(), reconnect_config(), factory.clone(), "polymarket").unwrap();
+        let p1 = ConnectionPool::new(cfg.clone(), testkit::config::reconnection(), f.clone(), "polymarket").unwrap();
         assert_eq!(p1.exchange_name(), "polymarket");
 
-        let p2 = ConnectionPool::new(cfg, reconnect_config(), factory, "kalshi").unwrap();
+        let p2 = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "kalshi").unwrap();
         assert_eq!(p2.exchange_name(), "kalshi");
     }
 
-    // -- Edge cases -----------------------------------------------------------
-
     #[tokio::test]
-    async fn test_pool_connect_is_noop() {
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+    async fn test_connect_is_noop() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
         assert!(pool.connect().await.is_ok());
-        assert!(pool.connections.lock().unwrap().is_empty());
+        assert!(lock_or_recover(&pool.connections).is_empty());
     }
 
     #[tokio::test]
-    async fn test_pool_empty_subscribe() {
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+    async fn test_empty_subscribe() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
         assert!(pool.subscribe(&[]).await.is_ok());
-        assert!(pool.connections.lock().unwrap().is_empty());
+        assert!(lock_or_recover(&pool.connections).is_empty());
     }
 
     #[tokio::test]
-    async fn test_pool_resubscribe_tears_down_old() {
+    async fn test_resubscribe_tears_down_old() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let f = counting_factory(cc, vec![snapshot_event("t1")], true);
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(5)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
-        assert_eq!(pool.connections.lock().unwrap().len(), 1);
+        assert_eq!(lock_or_recover(&pool.connections).len(), 1);
 
-        // Re-subscribe should tear down old and create new
-        pool.subscribe(&make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
-        assert_eq!(pool.connections.lock().unwrap().len(), 1);
-        assert_eq!(pool.connections.lock().unwrap()[0].tokens.len(), 10);
+        let conns = lock_or_recover(&pool.connections);
+        assert_eq!(conns.len(), 1);
+        assert_eq!(conns[0].tokens.len(), 10);
     }
 
     // -- Stats ----------------------------------------------------------------
 
     #[tokio::test]
-    async fn test_pool_stats_initial() {
-        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
-        let stats = pool.stats();
-
-        assert_eq!(stats.active_connections, 0);
-        assert_eq!(stats.total_rotations, 0);
-        assert_eq!(stats.total_restarts, 0);
-        assert_eq!(stats.events_dropped, 0);
+    async fn test_stats_initial() {
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let s = pool.stats();
+        assert_eq!(s.active_connections, 0);
+        assert_eq!(s.total_rotations, 0);
+        assert_eq!(s.total_restarts, 0);
+        assert_eq!(s.events_dropped, 0);
     }
 
     // -- Health monitoring ----------------------------------------------------
 
     #[tokio::test]
-    async fn test_pool_ttl_rotation() {
+    async fn test_ttl_rotation() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
+        let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 2;
         cfg.preemptive_reconnect_secs = 1;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(4)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected TTL rotation");
-        assert!(pool.stats().total_rotations > 0, "Expected rotation counter > 0");
+        assert!(pool.stats().total_rotations > 0);
     }
 
     #[tokio::test]
-    async fn test_pool_preemptive_reconnect() {
+    async fn test_preemptive_reconnect() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
+        let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 4;
-        cfg.preemptive_reconnect_secs = 3; // threshold = 4 - 3 = 1s
+        cfg.preemptive_reconnect_secs = 3;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
-        assert!(cc.load(Ordering::SeqCst) > 1, "Expected preemptive reconnect at ~1s");
+        assert!(cc.load(Ordering::SeqCst) > 1, "Expected preemptive reconnect");
     }
 
     #[tokio::test]
-    async fn test_pool_silent_death_detection() {
+    async fn test_silent_death_detection() {
+        // Each stream delivers one event then blocks forever (alive but silent).
+        // After max_silent_secs, the pool should detect silence and replace it.
+        // The replacement also delivers one event (enabling handoff) then goes silent.
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], false);
+        let factory: StreamFactory = {
+            let cc = cc.clone();
+            Arc::new(move || {
+                Box::new(OneEventThenSilentStream::new(
+                    testkit::domain::snapshot_event("t1"),
+                    cc.clone(),
+                )) as Box<dyn MarketDataStream>
+            })
+        };
 
-        let mut cfg = pool_config(10, 500);
-        cfg.max_silent_secs = 2;
+        let mut cfg = testkit::config::pool(10, 500);
+        cfg.max_silent_secs = 1;
         cfg.health_check_interval_secs = 1;
         cfg.connection_ttl_secs = 120;
+        cfg.preemptive_reconnect_secs = 30;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected restart after silence");
-        assert!(pool.stats().total_restarts > 0, "Expected restart counter > 0");
+        assert!(pool.stats().total_restarts > 0);
     }
 
     #[tokio::test]
-    async fn test_pool_crashed_task_restart() {
+    async fn test_crashed_task_restart() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![], false);
+        let f = counting_factory(cc.clone(), vec![], false);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected crashed task restart");
     }
 
     #[tokio::test]
-    async fn test_pool_healthy_connection_not_replaced() {
+    async fn test_healthy_connection_not_replaced() {
         let cc = Arc::new(AtomicU32::new(0));
-        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
+        let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 120;
         cfg.max_silent_secs = 60;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
         assert_eq!(cc.load(Ordering::SeqCst), 1, "Healthy connection should not be replaced");

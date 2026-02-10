@@ -298,6 +298,9 @@ pub struct ConnectionPoolConfig {
     /// Maximum seconds with no events before considering a connection unhealthy.
     #[serde(default = "default_pool_max_silent_secs")]
     pub max_silent_secs: u64,
+    /// Event channel capacity (bounded to prevent unbounded memory growth).
+    #[serde(default = "default_pool_channel_capacity")]
+    pub channel_capacity: usize,
 }
 
 const fn default_pool_max_connections() -> usize {
@@ -324,6 +327,10 @@ const fn default_pool_max_silent_secs() -> u64 {
     60
 }
 
+const fn default_pool_channel_capacity() -> usize {
+    10_000
+}
+
 impl Default for ConnectionPoolConfig {
     fn default() -> Self {
         Self {
@@ -333,6 +340,7 @@ impl Default for ConnectionPoolConfig {
             preemptive_reconnect_secs: default_pool_preemptive_reconnect_secs(),
             health_check_interval_secs: default_pool_health_check_interval_secs(),
             max_silent_secs: default_pool_max_silent_secs(),
+            channel_capacity: default_pool_channel_capacity(),
         }
     }
 }

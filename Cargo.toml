@@ -16,6 +16,7 @@ polymarket = [
     "dep:alloy-sol-types",
 ]
 telegram = ["dep:teloxide"]
+testkit = []
 
 [dependencies]
 # Async runtime
@@ -95,4 +96,5 @@ dashmap = "6.1.0"
 rand = "0.8"
 
 [dev-dependencies]
+edgelord = { path = ".", features = ["testkit"] }
 tokio-test = "0.4"
