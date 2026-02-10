@@ -48,15 +48,16 @@ fn generate_service_file(args: &InstallArgs, binary_path: &str) -> String {
 
     let (exec_start, extra_env) = if args.dugout {
         // Use dugout to inject secrets at runtime
-        // Include cargo bin in PATH so systemd can find dugout
+        // Use full path to dugout since systemd doesn't inherit user PATH
         let home_dir = if args.user == "root" {
             "/root".to_string()
         } else {
             format!("/home/{}", args.user)
         };
+        let dugout_path = format!("{}/.cargo/bin/dugout", home_dir);
         (
-            format!("dugout run -- {}", edgelord_cmd),
-            format!("Environment=\"PATH={}/.cargo/bin:/usr/local/bin:/usr/bin:/bin\"\n", home_dir),
+            format!("{} run -- {}", dugout_path, edgelord_cmd),
+            String::new(),
         )
     } else {
         // Use traditional .env file
