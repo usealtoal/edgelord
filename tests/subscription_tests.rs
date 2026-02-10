@@ -27,6 +27,8 @@ fn make_market(id: &str, outcomes: usize) -> MarketInfo {
         question: format!("Question for {id}?"),
         outcomes: outcome_infos,
         active: true,
+        volume_24h: None,
+        liquidity: None,
     }
 }
 
@@ -180,6 +182,8 @@ async fn test_filter_excludes_inactive_markets() {
                 },
             ],
             active: true,
+        volume_24h: None,
+        liquidity: None,
         },
         MarketInfo {
             id: "inactive-1".to_string(),
@@ -197,6 +201,8 @@ async fn test_filter_excludes_inactive_markets() {
                 },
             ],
             active: false,
+        volume_24h: None,
+        liquidity: None,
         },
     ];
 

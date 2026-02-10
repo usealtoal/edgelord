@@ -17,6 +17,12 @@ pub struct PolymarketMarket {
     pub tokens: Vec<PolymarketToken>,
     pub active: bool,
     pub closed: bool,
+    /// 24-hour trading volume in USD (from Gamma API or CLOB extended fields).
+    #[serde(default, alias = "volume_num_24hr")]
+    pub volume_24h: Option<f64>,
+    /// Current liquidity depth in USD.
+    #[serde(default)]
+    pub liquidity: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]

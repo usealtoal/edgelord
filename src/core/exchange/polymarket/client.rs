@@ -169,6 +169,8 @@ impl From<PolymarketMarket> for MarketInfo {
                 })
                 .collect(),
             active: m.active && !m.closed,
+            volume_24h: m.volume_24h,
+            liquidity: m.liquidity,
         }
     }
 }
