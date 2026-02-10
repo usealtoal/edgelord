@@ -13,10 +13,10 @@ use edgelord::core::exchange::polymarket::PolymarketClient;
 use edgelord::core::exchange::ExchangeFactory;
 use edgelord::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
 use edgelord::error::{ConfigError, Error};
+use edgelord::testkit;
+use edgelord::testkit::stream::ScriptedStream;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
-
-use support::stream::ScriptedStream;
 
 #[test]
 fn factory_returns_error_when_exchange_config_missing() {
@@ -65,17 +65,12 @@ async fn reconnect_retries_on_subscribe_failure() {
             Ok(()),
         ])
         .with_events(vec![
-            Some(MarketEvent::Disconnected {
-                reason: "test disconnect".into(),
-            }),
-            Some(MarketEvent::OrderBookSnapshot {
-                token_id: TokenId::from("token-1".to_string()),
-                book: OrderBook::new(TokenId::from("token-1".to_string())),
-            }),
+            Some(testkit::domain::disconnect_event("test disconnect")),
+            Some(testkit::domain::snapshot_event("token-1")),
         ]);
     let (connect_count, subscribe_count) = mock.counts();
 
-    let mut stream = ReconnectingDataStream::new(mock, support::config::test_reconnection_config());
+    let mut stream = ReconnectingDataStream::new(mock, testkit::config::reconnection());
     stream.connect().await.unwrap();
     stream
         .subscribe(&[TokenId::from("token-1".to_string())])

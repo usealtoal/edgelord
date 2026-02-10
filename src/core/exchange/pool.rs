@@ -284,6 +284,11 @@ async fn replace_connection(
         }
     };
 
+    // Capture timestamp before spawning so we can detect the first event
+    // from the replacement, even if it arrives before we start polling.
+    // Subtract 1ms to handle same-millisecond races between capture and spawn.
+    let initial_ts = epoch_millis().saturating_sub(1);
+
     let state = new_connection(
         new_id,
         tokens,
@@ -292,8 +297,6 @@ async fn replace_connection(
         ctx.event_tx.clone(),
         ctx.counters.clone(),
     );
-
-    let initial_ts = state.last_event_at.load(Ordering::Relaxed);
     if !await_handoff(&state, initial_ts, handoff_timeout).await {
         state.handle.abort();
         return; // management will retry next tick
@@ -647,129 +650,39 @@ impl Drop for ConnectionPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::VecDeque;
     use std::sync::atomic::AtomicU32;
-    use std::sync::Mutex as StdMutex;
 
-    use crate::core::domain::OrderBook;
-
-    // -- Mock stream ---------------------------------------------------------
-
-    struct MockDataStream {
-        events: Arc<StdMutex<VecDeque<Option<MarketEvent>>>>,
-        cycle_source: Arc<StdMutex<Vec<Option<MarketEvent>>>>,
-        cycle: bool,
-        connect_count: Arc<AtomicU32>,
-        subscribe_count: Arc<AtomicU32>,
-    }
-
-    impl MockDataStream {
-        fn new() -> Self {
-            Self {
-                events: Arc::new(StdMutex::new(VecDeque::new())),
-                cycle_source: Arc::new(StdMutex::new(Vec::new())),
-                cycle: false,
-                connect_count: Arc::new(AtomicU32::new(0)),
-                subscribe_count: Arc::new(AtomicU32::new(0)),
-            }
-        }
-
-        fn with_events(self, events: Vec<Option<MarketEvent>>) -> Self {
-            *self.events.lock().unwrap() = events.clone().into();
-            *self.cycle_source.lock().unwrap() = events;
-            self
-        }
-
-        fn with_cycle(mut self, events: Vec<Option<MarketEvent>>) -> Self {
-            *self.events.lock().unwrap() = events.clone().into();
-            *self.cycle_source.lock().unwrap() = events;
-            self.cycle = true;
-            self
-        }
-    }
-
-    #[async_trait]
-    impl MarketDataStream for MockDataStream {
-        async fn connect(&mut self) -> Result<()> {
-            self.connect_count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }
-
-        async fn subscribe(&mut self, _token_ids: &[TokenId]) -> Result<()> {
-            self.subscribe_count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }
-
-        async fn next_event(&mut self) -> Option<MarketEvent> {
-            let event = {
-                let mut q = self.events.lock().unwrap();
-                let ev = q.pop_front().flatten();
-                if self.cycle && q.is_empty() {
-                    let src = self.cycle_source.lock().unwrap();
-                    *q = src.clone().into();
-                }
-                ev
-            };
-            if event.is_some() {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-            event
-        }
-
-        fn exchange_name(&self) -> &'static str {
-            "mock"
-        }
-    }
+    use crate::testkit;
+    use crate::testkit::stream::{CyclingStream, OneEventThenSilentStream, ScriptedStream};
 
     // -- Helpers --------------------------------------------------------------
 
-    fn pool_config(max_connections: usize, subs_per_conn: usize) -> ConnectionPoolConfig {
-        ConnectionPoolConfig {
-            max_connections,
-            subscriptions_per_connection: subs_per_conn,
-            connection_ttl_secs: 120,
-            preemptive_reconnect_secs: 30,
-            health_check_interval_secs: 30,
-            max_silent_secs: 60,
-            channel_capacity: 10_000,
-        }
-    }
-
-    fn reconnect_config() -> ReconnectionConfig {
-        ReconnectionConfig {
-            initial_delay_ms: 10,
-            max_delay_ms: 100,
-            backoff_multiplier: 2.0,
-            max_consecutive_failures: 3,
-            circuit_breaker_cooldown_ms: 50,
-        }
-    }
-
+    /// Wraps [`testkit::domain::snapshot_event`] in `Option` for use with
+    /// event lists.
     fn snapshot_event(token: &str) -> Option<MarketEvent> {
-        Some(MarketEvent::OrderBookSnapshot {
-            token_id: TokenId::from(token.to_string()),
-            book: OrderBook::new(TokenId::from(token.to_string())),
-        })
+        Some(testkit::domain::snapshot_event(token))
     }
 
-    fn make_tokens(n: usize) -> Vec<TokenId> {
-        (0..n).map(|i| TokenId::from(format!("t{i}"))).collect()
-    }
-
+    /// Factory that creates mock streams sharing a connect counter.
+    ///
+    /// When `cycle` is true, uses [`CyclingStream`] (events repeat forever).
+    /// When false, uses [`ScriptedStream`] (events delivered once, then stream
+    /// ends — useful for crash/silence detection tests).
     fn counting_factory(
         connect_count: Arc<AtomicU32>,
         events: Vec<Option<MarketEvent>>,
         cycle: bool,
     ) -> StreamFactory {
         Arc::new(move || {
-            let mut m = MockDataStream::new();
-            m.connect_count = Arc::clone(&connect_count);
-            let m = if cycle {
-                m.with_cycle(events.clone())
+            let cc = Arc::clone(&connect_count);
+            if cycle {
+                let evts: Vec<MarketEvent> = events.iter().filter_map(|e| e.clone()).collect();
+                Box::new(CyclingStream::new(evts, Duration::from_millis(10), cc))
             } else {
-                m.with_events(events.clone())
-            };
-            Box::new(m)
+                let mut s = ScriptedStream::new().with_events(events.clone());
+                s.set_connect_count(cc);
+                Box::new(s)
+            }
         })
     }
 
@@ -777,44 +690,44 @@ mod tests {
 
     #[test]
     fn test_config_rejects_zero_ttl() {
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 0;
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), f, "t").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
     fn test_config_rejects_preemptive_gte_ttl() {
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.preemptive_reconnect_secs = 120;
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), f, "t").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
     fn test_config_rejects_zero_max_connections() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(pool_config(0, 500), reconnect_config(), f, "t").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(0, 500), testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
     fn test_config_rejects_zero_subs_per_conn() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(pool_config(10, 0), reconnect_config(), f, "t").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(10, 0), testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
     fn test_config_rejects_zero_channel_capacity() {
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.channel_capacity = 0;
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(cfg, reconnect_config(), f, "t").is_err());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").is_err());
     }
 
     #[test]
     fn test_config_accepts_valid() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        assert!(ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").is_ok());
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        assert!(ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").is_ok());
     }
 
     // -- Distribution ---------------------------------------------------------
@@ -823,9 +736,9 @@ mod tests {
     async fn test_single_connection() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -837,9 +750,9 @@ mod tests {
     async fn test_multiple_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -852,9 +765,9 @@ mod tests {
     async fn test_respects_max_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(3, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(3, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(5000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -867,9 +780,9 @@ mod tests {
     async fn test_distributes_evenly() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1250)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1250)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -886,9 +799,9 @@ mod tests {
         let events = vec![snapshot_event("t1"), snapshot_event("t2")];
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, events, false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         assert!(matches!(pool.next_event().await, Some(MarketEvent::OrderBookSnapshot { .. })));
@@ -899,20 +812,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_exchange_name() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let cfg = pool_config(10, 500);
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let cfg = testkit::config::pool(10, 500);
 
-        let p1 = ConnectionPool::new(cfg.clone(), reconnect_config(), f.clone(), "polymarket").unwrap();
+        let p1 = ConnectionPool::new(cfg.clone(), testkit::config::reconnection(), f.clone(), "polymarket").unwrap();
         assert_eq!(p1.exchange_name(), "polymarket");
 
-        let p2 = ConnectionPool::new(cfg, reconnect_config(), f, "kalshi").unwrap();
+        let p2 = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "kalshi").unwrap();
         assert_eq!(p2.exchange_name(), "kalshi");
     }
 
     #[tokio::test]
     async fn test_connect_is_noop() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
         assert!(pool.connect().await.is_ok());
         assert!(lock_or_recover(&pool.connections).is_empty());
@@ -920,8 +833,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_subscribe() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
         assert!(pool.subscribe(&[]).await.is_ok());
         assert!(lock_or_recover(&pool.connections).is_empty());
@@ -931,13 +844,13 @@ mod tests {
     async fn test_resubscribe_tears_down_old() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![snapshot_event("t1")], true);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
 
-        pool.subscribe(&make_tokens(5)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(lock_or_recover(&pool.connections).len(), 1);
 
-        pool.subscribe(&make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 1);
@@ -948,8 +861,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_stats_initial() {
-        let f: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), f, "t").unwrap();
+        let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
+        let pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
         let s = pool.stats();
         assert_eq!(s.active_connections, 0);
         assert_eq!(s.total_rotations, 0);
@@ -964,13 +877,13 @@ mod tests {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 2;
         cfg.preemptive_reconnect_secs = 1;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), f, "t").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(4)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected TTL rotation");
@@ -982,13 +895,13 @@ mod tests {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 4;
         cfg.preemptive_reconnect_secs = 3;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), f, "t").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected preemptive reconnect");
@@ -996,16 +909,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_silent_death_detection() {
+        // Each stream delivers one event then blocks forever (alive but silent).
+        // After max_silent_secs, the pool should detect silence and replace it.
+        // The replacement also delivers one event (enabling handoff) then goes silent.
         let cc = Arc::new(AtomicU32::new(0));
-        let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], false);
+        let factory: StreamFactory = {
+            let cc = cc.clone();
+            Arc::new(move || {
+                Box::new(OneEventThenSilentStream::new(
+                    testkit::domain::snapshot_event("t1"),
+                    cc.clone(),
+                )) as Box<dyn MarketDataStream>
+            })
+        };
 
-        let mut cfg = pool_config(10, 500);
-        cfg.max_silent_secs = 2;
+        let mut cfg = testkit::config::pool(10, 500);
+        cfg.max_silent_secs = 1;
         cfg.health_check_interval_secs = 1;
         cfg.connection_ttl_secs = 120;
+        cfg.preemptive_reconnect_secs = 30;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), f, "t").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected restart after silence");
@@ -1017,11 +942,11 @@ mod tests {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc.clone(), vec![], false);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), f, "t").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected crashed task restart");
@@ -1032,13 +957,13 @@ mod tests {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
-        let mut cfg = pool_config(10, 500);
+        let mut cfg = testkit::config::pool(10, 500);
         cfg.connection_ttl_secs = 120;
         cfg.max_silent_secs = 60;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), f, "t").unwrap();
-        pool.subscribe(&make_tokens(1)).await.unwrap();
+        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
         assert_eq!(cc.load(Ordering::SeqCst), 1, "Healthy connection should not be replaced");
