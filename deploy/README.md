@@ -50,7 +50,7 @@ dugout setup
 dugout whoami  # Copy this public key
 
 # (locally)
-dugout team add <vps-public-key>
+dugout team add vps <vps-public-key>
 dugout sync
 git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
 ```
