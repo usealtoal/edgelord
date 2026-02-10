@@ -303,9 +303,12 @@ pub struct PolymarketConfig {
     /// WebSocket URL for market data.
     #[serde(default = "default_polymarket_ws_url")]
     pub ws_url: String,
-    /// REST API URL.
+    /// CLOB REST API URL (order execution, order book queries).
     #[serde(default = "default_polymarket_api_url")]
     pub api_url: String,
+    /// Gamma REST API URL (market discovery, volume/liquidity metadata).
+    #[serde(default = "default_polymarket_gamma_url")]
+    pub gamma_api_url: String,
     /// Chain ID: 80002 for Amoy testnet, 137 for Polygon mainnet.
     #[serde(default = "default_polymarket_chain_id")]
     pub chain_id: u64,
@@ -334,6 +337,10 @@ fn default_polymarket_api_url() -> String {
     "https://clob.polymarket.com".into()
 }
 
+fn default_polymarket_gamma_url() -> String {
+    "https://gamma-api.polymarket.com".into()
+}
+
 /// Default chain ID is Amoy testnet (80002) for safety
 const fn default_polymarket_chain_id() -> u64 {
     80002
@@ -345,6 +352,7 @@ impl Default for PolymarketConfig {
             environment: Environment::default(),
             ws_url: default_polymarket_ws_url(),
             api_url: default_polymarket_api_url(),
+            gamma_api_url: default_polymarket_gamma_url(),
             chain_id: default_polymarket_chain_id(),
             connections: ConnectionPoolConfig::default(),
             http: PolymarketHttpConfig::default(),
