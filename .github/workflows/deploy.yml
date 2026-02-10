@@ -246,6 +246,9 @@ jobs:
             # Ensure directories exist
             mkdir -p "$DEPLOY_PATH"/{config,releases,data}
 
+            # Change to deploy directory so dugout can find .dugout.toml
+            cd "$DEPLOY_PATH"
+
             # Update dugout vault (always sync from repo)
             if [[ -f "/tmp/dugout-$RELEASE_SHA.toml" ]]; then
               mv "/tmp/dugout-$RELEASE_SHA.toml" "$DUGOUT_PATH"
@@ -261,12 +264,20 @@ jobs:
             fi
 
             run_checks() {
+              # Config check doesn't need secrets
               "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
+
+              # Connection and live checks need secrets via dugout
+              local CMD_PREFIX=""
+              if [[ "$DUGOUT" == "true" && -f "$DUGOUT_PATH" ]]; then
+                CMD_PREFIX="dugout run --"
+              fi
+
               if [[ "$RUN_CONNECTION_CHECK" == "true" ]]; then
-                "$CURRENT_LINK/edgelord" check connection --config "$CONFIG_PATH"
+                $CMD_PREFIX "$CURRENT_LINK/edgelord" check connection --config "$CONFIG_PATH"
               fi
               if [[ "$RUN_LIVE_CHECK" == "true" ]]; then
-                "$CURRENT_LINK/edgelord" check live --config "$CONFIG_PATH"
+                $CMD_PREFIX "$CURRENT_LINK/edgelord" check live --config "$CONFIG_PATH"
               fi
             }
 

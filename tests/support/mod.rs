@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod assertions;
 pub mod config;
 pub mod market;
