@@ -18,11 +18,11 @@ format = "json"
 enabled = ["single_condition", "market_rebalancing"]
 
 [strategies.single_condition]
-min_edge = 0.02
+min_edge = 0.03
 min_profit = 0.10
 
 [strategies.market_rebalancing]
-min_edge = 0.01
+min_edge = 0.03
 min_profit = 0.25
 max_outcomes = 10
 

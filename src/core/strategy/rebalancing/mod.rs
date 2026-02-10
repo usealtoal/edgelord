@@ -27,7 +27,7 @@ pub struct MarketRebalancingConfig {
 }
 
 fn default_min_edge() -> Decimal {
-    Decimal::new(1, 2) // 0.01 (1%)
+    Decimal::new(3, 2) // 0.03 (accounts for gas costs)
 }
 
 fn default_min_profit() -> Decimal {
