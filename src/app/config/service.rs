@@ -222,9 +222,12 @@ impl Default for GovernorAppConfig {
     }
 }
 
-/// Connection pool configuration for WebSocket shard management.
+/// Shard pool configuration for WebSocket shard management.
+/// 
+/// NOTE: This configuration is currently unused but reserved for future sharding implementations.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
-pub struct ConnectionPoolConfig {
+pub struct ShardPoolConfig {
     /// Number of shards to distribute connections across.
     #[serde(default = "default_num_shards")]
     pub num_shards: usize,
@@ -262,7 +265,7 @@ const fn default_max_silent_secs() -> u64 {
     10
 }
 
-impl Default for ConnectionPoolConfig {
+impl Default for ShardPoolConfig {
     fn default() -> Self {
         Self {
             num_shards: default_num_shards(),
@@ -274,7 +277,8 @@ impl Default for ConnectionPoolConfig {
     }
 }
 
-impl ConnectionPoolConfig {
+#[allow(dead_code)]
+impl ShardPoolConfig {
     /// Configuration for local development with minimal resources.
     #[must_use]
     pub fn local() -> Self {
@@ -340,6 +344,53 @@ impl Default for ReconnectionConfig {
             backoff_multiplier: default_backoff_multiplier(),
             max_consecutive_failures: default_max_consecutive_failures(),
             circuit_breaker_cooldown_ms: default_circuit_breaker_cooldown_ms(),
+        }
+    }
+}
+
+/// Connection pool configuration for WebSocket multiplexing.
+///
+/// These settings control how multiple WebSocket connections are managed
+/// to distribute subscriptions across connections.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConnectionPoolConfig {
+    /// Maximum number of connections in the pool.
+    #[serde(default = "default_pool_max_connections")]
+    pub max_connections: usize,
+    /// Maximum subscriptions per connection.
+    #[serde(default = "default_pool_subscriptions_per_connection")]
+    pub subscriptions_per_connection: usize,
+    /// Connection time-to-live in seconds.
+    #[serde(default = "default_pool_connection_ttl_secs")]
+    pub connection_ttl_secs: u64,
+    /// Seconds before TTL to preemptively reconnect.
+    #[serde(default = "default_pool_preemptive_reconnect_secs")]
+    pub preemptive_reconnect_secs: u64,
+}
+
+const fn default_pool_max_connections() -> usize {
+    10
+}
+
+const fn default_pool_subscriptions_per_connection() -> usize {
+    500
+}
+
+const fn default_pool_connection_ttl_secs() -> u64 {
+    120
+}
+
+const fn default_pool_preemptive_reconnect_secs() -> u64 {
+    30
+}
+
+impl Default for ConnectionPoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: default_pool_max_connections(),
+            subscriptions_per_connection: default_pool_subscriptions_per_connection(),
+            connection_ttl_secs: default_pool_connection_ttl_secs(),
+            preemptive_reconnect_secs: default_pool_preemptive_reconnect_secs(),
         }
     }
 }

@@ -12,10 +12,9 @@ pub use config::{
     ClusterDetectionConfig, Config, ConnectionPoolConfig, DedupStrategyConfig, Environment,
     Exchange, ExchangeSpecificConfig, GovernorAppConfig, InferenceConfig, LatencyTargetsConfig,
     LlmConfig, LlmProvider, LoggingConfig, NetworkConfig, OutcomeBonusConfig, PolymarketConfig,
-    PolymarketConnectionConfig, PolymarketDedupConfig, PolymarketFilterConfig,
-    PolymarketHttpConfig, PolymarketScoringConfig, Profile, ReconnectionConfig, ResourceConfig,
-    RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
-    WalletConfig,
+    PolymarketDedupConfig, PolymarketFilterConfig, PolymarketHttpConfig, PolymarketScoringConfig,
+    Profile, ReconnectionConfig, ResourceConfig, RiskConfig, ScalingAppConfig,
+    ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig, WalletConfig,
 };
 pub use orchestrator::{
     health_check, process_market_event, EventProcessingContext, HealthCheck, HealthReport,
