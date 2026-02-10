@@ -145,6 +145,12 @@ jobs:
         if: ${{ inputs.mode == 'deploy' }}
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Cargo dependencies
+        if: ${{ inputs.mode == 'deploy' }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "deploy"
+
       - name: Build release binary
         if: ${{ inputs.mode == 'deploy' }}
         run: cargo build --release
