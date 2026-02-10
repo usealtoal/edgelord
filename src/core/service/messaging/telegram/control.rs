@@ -71,23 +71,34 @@ impl TelegramControl {
                 .circuit_breaker_reason()
                 .unwrap_or_else(|| "unknown".to_string())
         } else {
-            "inactive".to_string()
+            "Inactive".to_string()
         };
 
         format!(
-            "Edgelord status\n\
-            mode: {mode}\n\
-            circuit_breaker: {breaker}\n\
-            uptime: {}\n\
-            open_positions: {open_positions}\n\
-            exposure: {exposure}\n\
-            pending_exposure: {pending_exposure}\n\
-            pending_executions: {pending_executions}\n\
-            risk.min_profit: {}\n\
-            risk.max_slippage: {}\n\
-            risk.max_position: {}\n\
-            risk.max_exposure: {}",
+            "🤖 Edgelord Status\n\
+            \n\
+            📊 Mode: {}\n\
+            ⏱ Uptime: {}\n\
+            🔌 Circuit Breaker: {}\n\
+            \n\
+            💰 Portfolio\n\
+            ├ Open Positions: {}\n\
+            ├ Exposure: ${}\n\
+            ├ Pending: ${}\n\
+            └ Pending Executions: {}\n\
+            \n\
+            ⚙️ Risk Limits\n\
+            ├ Min Profit: {}\n\
+            ├ Max Slippage: {}\n\
+            ├ Max Position: ${}\n\
+            └ Max Exposure: ${}",
+            mode,
             format_uptime(self.started_at),
+            breaker,
+            open_positions,
+            exposure,
+            pending_exposure,
+            pending_executions,
             limits.min_profit_threshold,
             limits.max_slippage,
             limits.max_position_per_market,
@@ -99,28 +110,45 @@ impl TelegramControl {
         let limits = self.state.risk_limits();
         let exposure = self.state.total_exposure();
         let pending_exposure = self.state.pending_exposure();
-        let exposure_ok = exposure + pending_exposure <= limits.max_total_exposure;
+        let total_exposure = exposure + pending_exposure;
+        let exposure_ok = total_exposure <= limits.max_total_exposure;
         let breaker_ok = !self.state.is_circuit_breaker_active();
         let slippage_ok = limits.max_slippage >= rust_decimal::Decimal::ZERO
             && limits.max_slippage <= rust_decimal::Decimal::ONE;
 
         let healthy = exposure_ok && breaker_ok && slippage_ok;
-        let status = if healthy { "HEALTHY" } else { "DEGRADED" };
+        let status_emoji = if healthy { "✅" } else { "⚠️" };
+        let status_text = if healthy { "HEALTHY" } else { "DEGRADED" };
 
-        let circuit_detail = if breaker_ok {
-            "inactive".to_string()
+        let breaker_emoji = if breaker_ok { "✅" } else { "❌" };
+        let breaker_text = if breaker_ok {
+            "Inactive".to_string()
         } else {
             self.state
                 .circuit_breaker_reason()
-                .unwrap_or_else(|| "active (no reason)".to_string())
+                .unwrap_or_else(|| "Active (no reason)".to_string())
         };
 
+        let exposure_emoji = if exposure_ok { "✅" } else { "❌" };
+        let slippage_emoji = if slippage_ok { "✅" } else { "❌" };
+
         format!(
-            "Health: {status}\n\
-            circuit_breaker: {circuit_detail}\n\
-            exposure_ok: {exposure_ok} (current={}, pending={}, limit={})\n\
-            slippage_ok: {slippage_ok} (max_slippage={})",
-            exposure, pending_exposure, limits.max_total_exposure, limits.max_slippage
+            "🏥 Health Check\n\
+            \n\
+            Status: {} {}\n\
+            \n\
+            ├ 🔌 Circuit Breaker: {} {}\n\
+            ├ 💰 Exposure: {} OK (${}/${})\n\
+            └ 📊 Slippage: {} Valid ({})",
+            status_emoji,
+            status_text,
+            breaker_emoji,
+            breaker_text,
+            exposure_emoji,
+            total_exposure,
+            limits.max_total_exposure,
+            slippage_emoji,
+            limits.max_slippage
         )
     }
 
@@ -129,31 +157,61 @@ impl TelegramControl {
         let active: Vec<_> = positions
             .all()
             .filter(|p| !p.status().is_closed())
-            .take(10)
-            .map(|p| {
-                let status = match p.status() {
-                    PositionStatus::Open => "open",
-                    PositionStatus::PartialFill { .. } => "partial",
-                    PositionStatus::Closed { .. } => "closed",
-                };
-
-                format!(
-                    "{} market={} status={} entry_cost={} expected_profit={}",
-                    p.id(),
-                    p.market_id(),
-                    status,
-                    p.entry_cost(),
-                    p.expected_profit()
-                )
-            })
             .collect();
+        
+        let total_active = active.len();
+        let max_positions = 10; // Could come from config
 
         if active.is_empty() {
-            return "No active positions".to_string();
+            return "📈 Active Positions (0)".to_string();
         }
 
-        let mut response = String::from("Active positions (max 10 shown)\n");
-        response.push_str(&active.join("\n"));
+        let mut response = format!("📈 Active Positions ({}/{})\n\n", active.len(), max_positions);
+        
+        let display_count = active.len().min(10);
+        for (i, p) in active.iter().take(10).enumerate() {
+            let number = match i {
+                0 => "1️⃣",
+                1 => "2️⃣",
+                2 => "3️⃣",
+                3 => "4️⃣",
+                4 => "5️⃣",
+                5 => "6️⃣",
+                6 => "7️⃣",
+                7 => "8️⃣",
+                8 => "9️⃣",
+                9 => "🔟",
+                _ => "▪️",
+            };
+
+            let status = match p.status() {
+                PositionStatus::Open => "Open",
+                PositionStatus::PartialFill { .. } => "Partial",
+                PositionStatus::Closed { .. } => "Closed",
+            };
+
+            // Truncate market ID for display
+            let market_id = p.market_id().as_str();
+            let market_display = if market_id.len() > 10 {
+                format!("{}...", &market_id[..10])
+            } else {
+                market_id.to_string()
+            };
+
+            response.push_str(&format!(
+                "{} market={}\n   Status: {} | Cost: ${} | Expected: +${}\n\n",
+                number,
+                market_display,
+                status,
+                p.entry_cost(),
+                p.expected_profit()
+            ));
+        }
+
+        if total_active > display_count {
+            response.push_str(&format!("... and {} more positions", total_active - display_count));
+        }
+
         response
     }
 
@@ -246,7 +304,7 @@ mod tests {
 
         assert_eq!(
             control.execute(TelegramCommand::Positions),
-            "No active positions"
+            "📈 Active Positions (0)"
         );
     }
 }

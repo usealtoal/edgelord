@@ -174,55 +174,91 @@ fn command_response_for_message(
 
 fn format_event_message(event: &Event, config: &TelegramConfig) -> Option<String> {
     match event {
-        Event::OpportunityDetected(e) if config.notify_opportunities => Some(format!(
-            "🎯 *Opportunity Detected*\n\n\
-                 Market: `{}`\n\
-                 Question: {}\n\
-                 Edge: {:.2}%\n\
-                 Volume: ${:.2}\n\
-                 Expected Profit: ${:.2}",
-            e.market_id,
-            escape_markdown(&e.question),
-            e.edge * rust_decimal::Decimal::from(100),
-            e.volume,
-            e.expected_profit
-        )),
-        Event::ExecutionCompleted(e) if config.notify_executions => {
-            let emoji = if e.success { "✅" } else { "❌" };
+        Event::OpportunityDetected(e) if config.notify_opportunities => {
+            // Truncate question if too long
+            let question = if e.question.len() > 60 {
+                format!("{}...", &e.question[..60])
+            } else {
+                e.question.clone()
+            };
+
             Some(format!(
-                "{} *Execution {}*\n\n\
-                 Market: `{}`\n\
-                 Details: {}",
+                "🎯 *Opportunity Found\\!*\n\
+                \n\
+                📊 {}\n\
+                💎 Edge: {:.2}%\n\
+                📦 Volume: ${:.2}\n\
+                💰 Expected: \\+${:.2}",
+                escape_markdown(&question),
+                e.edge * rust_decimal::Decimal::from(100),
+                e.volume,
+                e.expected_profit
+            ))
+        }
+        Event::ExecutionCompleted(e) if config.notify_executions => {
+            let (emoji, title) = if e.success {
+                ("✅", "Trade Executed\\!")
+            } else {
+                ("❌", "Execution Failed")
+            };
+
+            // Truncate market ID for display
+            let market_display = if e.market_id.len() > 12 {
+                format!("{}\\.\\.\\.", &e.market_id[..12])
+            } else {
+                escape_markdown(&e.market_id)
+            };
+
+            Some(format!(
+                "{} *{}*\n\
+                \n\
+                📊 market: {}\n\
+                💰 Details: {}",
                 emoji,
-                if e.success { "Success" } else { "Failed" },
-                e.market_id,
+                title,
+                market_display,
                 escape_markdown(&e.details)
             ))
         }
-        Event::RiskRejected(e) if config.notify_risk_rejections => Some(format!(
-            "⚠️ *Risk Rejected*\n\n\
-                 Market: `{}`\n\
-                 Reason: {}",
-            e.market_id,
-            escape_markdown(&e.reason)
-        )),
+        Event::RiskRejected(e) if config.notify_risk_rejections => {
+            // Truncate market ID for display
+            let market_display = if e.market_id.len() > 12 {
+                format!("{}\\.\\.\\.", &e.market_id[..12])
+            } else {
+                escape_markdown(&e.market_id)
+            };
+
+            Some(format!(
+                "🛑 *Risk Check Failed*\n\
+                \n\
+                📊 market: {}\n\
+                ⚠️ Reason: {}",
+                market_display,
+                escape_markdown(&e.reason)
+            ))
+        }
         Event::CircuitBreakerActivated { reason } => Some(format!(
-            "🚨 *CIRCUIT BREAKER ACTIVATED*\n\n\
-                 Reason: {}\n\n\
-                 All trading has been halted.",
+            "🚨 *CIRCUIT BREAKER ACTIVATED*\n\
+            \n\
+            ⚠️ Reason: {}\n\
+            ⛔ All trading halted",
             escape_markdown(reason)
         )),
-        Event::CircuitBreakerReset => {
-            Some("✅ *Circuit Breaker Reset*\n\nTrading has resumed.".to_string())
-        }
+        Event::CircuitBreakerReset => Some(
+            "✅ *Circuit Breaker Reset*\n\
+            \n\
+            Trading has resumed\\."
+                .to_string(),
+        ),
         Event::DailySummary(e) => Some(format!(
-            "📊 *Daily Summary - {}*\n\n\
-                 Opportunities: {}\n\
-                 Trades Executed: {}\n\
-                 Successful: {}\n\
-                 Total Profit: ${:.2}\n\
-                 Current Exposure: ${:.2}",
-            e.date,
+            "📊 *Daily Report — {}*\n\
+            \n\
+            🎯 Opportunities: {}\n\
+            📈 Trades: {}\n\
+            ✅ Successful: {}\n\
+            💰 Profit: \\+${:.2}\n\
+            💼 Exposure: ${:.2}",
+            escape_markdown(&e.date.to_string()),
             e.opportunities_detected,
             e.trades_executed,
             e.trades_successful,
@@ -275,7 +311,7 @@ mod tests {
         let chat = ChatId(42);
 
         let response = command_response_for_message("/status", chat, chat, &control).unwrap();
-        assert!(response.contains("Edgelord status"));
+        assert!(response.contains("Edgelord Status"));
     }
 
     #[test]

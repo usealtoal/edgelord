@@ -27,11 +27,11 @@ pub struct MarketRebalancingConfig {
 }
 
 fn default_min_edge() -> Decimal {
-    Decimal::new(3, 2) // 0.03 (3%)
+    Decimal::new(1, 2) // 0.01 (1%)
 }
 
-const fn default_min_profit() -> Decimal {
-    Decimal::ONE // $1.00
+fn default_min_profit() -> Decimal {
+    Decimal::new(25, 2) // $0.25
 }
 
 const fn default_max_outcomes() -> usize {

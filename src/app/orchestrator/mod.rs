@@ -218,13 +218,22 @@ impl Orchestrator {
             "Strategies loaded"
         );
 
+        // Extract max_markets from exchange config
+        let max_markets = match &config.exchange_config {
+            crate::app::ExchangeSpecificConfig::Polymarket(pm_config) => {
+                pm_config.market_filter.max_markets
+            }
+        };
+
         // Fetch markets using exchange-agnostic trait
         let market_fetcher = ExchangeFactory::create_market_fetcher(&config);
         info!(
             exchange = market_fetcher.exchange_name(),
+            max_markets,
             "Fetching markets"
         );
-        let market_infos = market_fetcher.get_markets(20).await?;
+        let market_infos = market_fetcher.get_markets(max_markets).await?;
+        let markets_fetched = market_infos.len();
 
         if market_infos.is_empty() {
             warn!("No active markets found");
@@ -234,6 +243,7 @@ impl Orchestrator {
         // Parse market info using exchange-specific configuration
         let exchange_config = ExchangeFactory::create_exchange_config(&config);
         let markets = exchange_config.parse_markets(&market_infos);
+        let markets_parsed = markets.len();
 
         // Build generic registry
         let mut registry = MarketRegistry::new();
@@ -242,9 +252,10 @@ impl Orchestrator {
         }
 
         info!(
-            total_markets = market_infos.len(),
+            markets_fetched,
+            markets_parsed,
             yes_no_pairs = registry.len(),
-            "Markets loaded"
+            "Market scan complete"
         );
 
         if registry.is_empty() {
@@ -342,6 +353,7 @@ impl Orchestrator {
         let cluster_handle = cluster_handle;
 
         // Create data stream with reconnection support
+        // TODO: connection pool for multi-WS support when max_connections > 1
         let inner_stream = ExchangeFactory::create_data_stream(&config);
         let mut data_stream =
             ReconnectingDataStream::new(inner_stream, config.reconnection.clone());
