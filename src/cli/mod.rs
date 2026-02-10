@@ -276,6 +276,39 @@ pub struct InstallArgs {
     /// Working directory for the service
     #[arg(long, default_value = "/opt/edgelord")]
     pub working_dir: PathBuf,
+
+    // Runtime overrides (baked into systemd unit)
+    /// Comma-separated list of strategies to enable
+    #[arg(long)]
+    pub strategies: Option<String>,
+
+    /// Minimum edge threshold
+    #[arg(long)]
+    pub min_edge: Option<Decimal>,
+
+    /// Minimum profit threshold
+    #[arg(long)]
+    pub min_profit: Option<Decimal>,
+
+    /// Maximum total exposure
+    #[arg(long)]
+    pub max_exposure: Option<Decimal>,
+
+    /// Maximum position per market
+    #[arg(long)]
+    pub max_position: Option<Decimal>,
+
+    /// Run in dry-run mode (detect but don't trade)
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Enable Telegram notifications
+    #[arg(long)]
+    pub telegram_enabled: bool,
+
+    /// Use dugout for secrets injection (no .env file needed)
+    #[arg(long)]
+    pub dugout: bool,
 }
 
 /// Arguments for the `wallet approve` subcommand.

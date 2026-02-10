@@ -8,7 +8,17 @@ Build with Telegram support enabled:
 cargo build --release --features telegram
 ```
 
-## Required Environment Variables
+## Required Secrets
+
+Set up Telegram credentials with dugout:
+
+```bash
+dugout set TELEGRAM_BOT_TOKEN    # Your bot token from @BotFather
+dugout set TELEGRAM_CHAT_ID      # Your chat ID
+git add .dugout.toml && git commit -m "chore: add telegram secrets"
+```
+
+Required environment variables (injected by dugout at runtime):
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
@@ -26,7 +36,7 @@ notify_risk_rejections = true
 ## Connectivity Check
 
 ```bash
-./target/release/edgelord check telegram --config config.toml
+dugout run -- edgelord check telegram --config config.toml
 ```
 
 ## Bot Commands

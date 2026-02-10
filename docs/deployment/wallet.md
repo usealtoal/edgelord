@@ -13,7 +13,19 @@ Edgelord requires an EVM wallet for Polygon-based execution paths.
 - USDC for position capital
 - MATIC for gas
 
-## Provisioning Flow (Preferred)
+## Secrets with Dugout (Recommended)
+
+Store your wallet private key securely with dugout:
+
+```bash
+dugout init                      # Initialize if not already done
+dugout set WALLET_PRIVATE_KEY    # Enter your private key securely
+git add .dugout.toml && git commit -m "chore: add wallet secret"
+```
+
+## Provisioning Flow (Alternative)
+
+If using keystore-based approach:
 
 ```bash
 export EDGELORD_KEYSTORE_PASSWORD="change-me"
@@ -31,8 +43,14 @@ export EDGELORD_KEYSTORE_PASSWORD="change-me"
 ## Verification
 
 ```bash
-./target/release/edgelord wallet address --config config.toml
-./target/release/edgelord wallet status --config config.toml
+# With dugout
+dugout run -- edgelord wallet address --config config.toml
+dugout run -- edgelord wallet status --config config.toml
+
+# Or in a dugout shell
+dugout env
+edgelord wallet address --config config.toml
+edgelord wallet status --config config.toml
 ```
 
 ## Capital Controls

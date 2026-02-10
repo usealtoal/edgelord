@@ -17,6 +17,9 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential pkg-config libssl-dev curl git
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
+
+# Install dugout for secrets management
+cargo install dugout
 ```
 
 ## Build and Configure
@@ -35,12 +38,47 @@ Validate:
 ./target/release/edgelord check connection --config config.toml
 ```
 
-## Systemd Service
+## Secrets Setup
 
-Install from CLI:
+Set up dugout identity on the VPS:
 
 ```bash
-./target/release/edgelord service install \
+# Option A: Copy your local identity
+scp ~/.dugout/identity user@vps:~/.dugout/identity
+
+# Option B: Generate new identity and add as recipient
+dugout setup
+dugout whoami  # Share this key with team to be added as recipient
+```
+
+Clone the repo to access the encrypted vault:
+
+```bash
+cd /opt/edgelord
+git clone https://github.com/usealtoal/edgelord.git repo
+```
+
+## Systemd Service
+
+Install from CLI with dugout integration:
+
+```bash
+sudo ./target/release/edgelord service install \
+  --config /opt/edgelord/config.toml \
+  --user edgelord \
+  --working-dir /opt/edgelord \
+  --dugout
+```
+
+This generates a systemd unit that runs:
+```
+ExecStart=dugout run -- /opt/edgelord/current/edgelord run --config ...
+```
+
+For legacy `.env` file approach (not recommended):
+
+```bash
+sudo ./target/release/edgelord service install \
   --config /opt/edgelord/config.toml \
   --user edgelord \
   --working-dir /opt/edgelord
@@ -49,7 +87,7 @@ Install from CLI:
 Uninstall:
 
 ```bash
-./target/release/edgelord service uninstall
+sudo ./target/release/edgelord service uninstall
 ```
 
 ## Deployment Validation

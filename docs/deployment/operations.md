@@ -4,11 +4,27 @@ This runbook focuses on operating edgelord safely in production.
 
 ## Routine Commands
 
+Commands that don't need secrets:
+
 ```bash
 systemctl status edgelord
 journalctl -u edgelord -f
-./target/release/edgelord status --db edgelord.db
-./target/release/edgelord statistics today --db edgelord.db
+edgelord status --db edgelord.db
+edgelord statistics today --db edgelord.db
+edgelord logs -f
+```
+
+Commands that need secrets (use dugout):
+
+```bash
+# Option A: Spawn shell with secrets loaded
+dugout env
+edgelord wallet status
+edgelord check live --config /opt/edgelord/config/config.toml
+
+# Option B: Run individual commands
+dugout run -- edgelord wallet status
+dugout run -- edgelord check connection --config /opt/edgelord/config/config.toml
 ```
 
 ## Incident Triage Order
@@ -21,7 +37,8 @@ journalctl -u edgelord -f
 ## Hardening Checklist
 
 - Service runs as non-root user
-- Secret files are restricted (`chmod 600`)
+- Secrets managed via dugout (no plaintext `.env` files)
+- Dugout identity file restricted (`chmod 600 ~/.dugout/identity`)
 - SSH is key-based and hardened
 - Host firewall is enabled
 - Dependency and OS patch cadence is defined

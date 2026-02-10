@@ -44,6 +44,58 @@ on:
         required: false
         default: ""
         type: string
+      # Strategy toggles
+      strategy_single_condition:
+        description: "Enable single_condition strategy"
+        required: false
+        default: true
+        type: boolean
+      strategy_market_rebalancing:
+        description: "Enable market_rebalancing strategy"
+        required: false
+        default: true
+        type: boolean
+      strategy_combinatorial:
+        description: "Enable combinatorial strategy"
+        required: false
+        default: false
+        type: boolean
+      # Runtime overrides
+      min_edge:
+        description: "Minimum edge threshold (e.g., 0.05)"
+        required: false
+        default: ""
+        type: string
+      min_profit:
+        description: "Minimum profit threshold (e.g., 0.50)"
+        required: false
+        default: ""
+        type: string
+      max_exposure:
+        description: "Maximum total exposure (e.g., 5000)"
+        required: false
+        default: ""
+        type: string
+      max_position:
+        description: "Maximum position per market (e.g., 500)"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Dry run mode (detect but don't trade)"
+        required: false
+        default: false
+        type: boolean
+      telegram_enabled:
+        description: "Enable Telegram notifications"
+        required: false
+        default: false
+        type: boolean
+      dugout:
+        description: "Use dugout for secrets injection (requires dugout on VPS)"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -146,16 +198,34 @@ jobs:
           MODE: ${{ inputs.mode }}
           RUN_CONNECTION_CHECK: ${{ inputs.run_connection_check }}
           RUN_LIVE_CHECK: ${{ inputs.run_live_check }}
+          # Strategy toggles
+          STRATEGY_SINGLE_CONDITION: ${{ inputs.strategy_single_condition }}
+          STRATEGY_MARKET_REBALANCING: ${{ inputs.strategy_market_rebalancing }}
+          STRATEGY_COMBINATORIAL: ${{ inputs.strategy_combinatorial }}
+          # Runtime overrides
+          MIN_EDGE: ${{ inputs.min_edge }}
+          MIN_PROFIT: ${{ inputs.min_profit }}
+          MAX_EXPOSURE: ${{ inputs.max_exposure }}
+          MAX_POSITION: ${{ inputs.max_position }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TELEGRAM_ENABLED: ${{ inputs.telegram_enabled }}
+          DUGOUT: ${{ inputs.dugout }}
         run: |
           set -euo pipefail
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
 
+          # Build strategies list from toggles
+          STRATEGIES=""
+          [[ "$STRATEGY_SINGLE_CONDITION" == "true" ]] && STRATEGIES="single_condition"
+          [[ "$STRATEGY_MARKET_REBALANCING" == "true" ]] && STRATEGIES="${STRATEGIES:+$STRATEGIES,}market_rebalancing"
+          [[ "$STRATEGY_COMBINATORIAL" == "true" ]] && STRATEGIES="${STRATEGIES:+$STRATEGIES,}combinatorial"
+
           ssh \
             -i ~/.ssh/id_ed25519 \
             -p "$DEPLOY_SSH_PORT" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' MODE='$MODE' RUN_CONNECTION_CHECK='$RUN_CONNECTION_CHECK' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' bash -s" <<'REMOTE'
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' MODE='$MODE' RUN_CONNECTION_CHECK='$RUN_CONNECTION_CHECK' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' STRATEGIES='$STRATEGIES' MIN_EDGE='$MIN_EDGE' MIN_PROFIT='$MIN_PROFIT' MAX_EXPOSURE='$MAX_EXPOSURE' MAX_POSITION='$MAX_POSITION' DRY_RUN='$DRY_RUN' TELEGRAM_ENABLED='$TELEGRAM_ENABLED' DUGOUT='$DUGOUT' bash -s" <<'REMOTE'
             set -euo pipefail
 
             CONFIG_PATH="$DEPLOY_PATH/config/config.toml"
@@ -174,7 +244,18 @@ jobs:
             }
 
             restart_service() {
-              sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH"
+              # Build extra args for service install
+              EXTRA_ARGS=""
+              [[ -n "$STRATEGIES" ]] && EXTRA_ARGS="$EXTRA_ARGS --strategies $STRATEGIES"
+              [[ -n "$MIN_EDGE" ]] && EXTRA_ARGS="$EXTRA_ARGS --min-edge $MIN_EDGE"
+              [[ -n "$MIN_PROFIT" ]] && EXTRA_ARGS="$EXTRA_ARGS --min-profit $MIN_PROFIT"
+              [[ -n "$MAX_EXPOSURE" ]] && EXTRA_ARGS="$EXTRA_ARGS --max-exposure $MAX_EXPOSURE"
+              [[ -n "$MAX_POSITION" ]] && EXTRA_ARGS="$EXTRA_ARGS --max-position $MAX_POSITION"
+              [[ "$DRY_RUN" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+              [[ "$TELEGRAM_ENABLED" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --telegram-enabled"
+              [[ "$DUGOUT" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --dugout"
+
+              sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH" $EXTRA_ARGS
               sudo systemctl restart edgelord
               sleep 2
               sudo systemctl is-active edgelord
@@ -249,6 +330,9 @@ jobs:
               echo "Missing binary at $CURRENT_LINK/edgelord"
               exit 1
             fi
+
+            # Ensure edgelord is available in PATH
+            sudo ln -sf "$CURRENT_LINK/edgelord" /usr/local/bin/edgelord
 
             echo "Mode $MODE completed successfully"
           REMOTE

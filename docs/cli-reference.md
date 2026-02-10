@@ -2,6 +2,23 @@
 
 Use `edgelord --help` for full generated help.
 
+## Running Commands with Secrets
+
+Commands that require secrets (wallet key, API keys) should be run via dugout:
+
+```bash
+# Run a single command with secrets
+dugout run -- edgelord <command>
+
+# Or spawn a shell with secrets loaded
+dugout env
+edgelord <command>
+```
+
+Commands that **need secrets**: `run`, `check connection`, `check live`, `check telegram`, `wallet *`, `provision *`
+
+Commands that **don't need secrets**: `status`, `statistics *`, `logs`, `config *`, `service *`
+
 ## Core Commands
 
 ### `run`
@@ -9,7 +26,7 @@ Use `edgelord --help` for full generated help.
 Run the detector/executor in foreground mode.
 
 ```bash
-edgelord run --config config.toml
+dugout run -- edgelord run --config config.toml
 ```
 
 Useful flags:
@@ -52,37 +69,63 @@ edgelord config validate --config config.toml
 ## Diagnostics
 
 ```bash
+# Config validation (no secrets needed)
 edgelord check config --config config.toml
-edgelord check live --config config.toml
-edgelord check connection --config config.toml
-edgelord check telegram --config config.toml
+
+# These require secrets
+dugout run -- edgelord check live --config config.toml
+dugout run -- edgelord check connection --config config.toml
+dugout run -- edgelord check telegram --config config.toml
 ```
 
 `check telegram` validates delivery only. Interactive bot commands are documented in `docs/deployment/telegram.md`.
 
 ## Provisioning
 
-Provision exchange-specific wallet/config defaults.
+Provision exchange-specific wallet/config defaults (requires secrets):
 
 ```bash
-edgelord provision polymarket --config config.toml
-edgelord provision polymarket --wallet import --config config.toml
+dugout run -- edgelord provision polymarket --config config.toml
+dugout run -- edgelord provision polymarket --wallet import --config config.toml
 ```
 
 ## Wallet Commands
 
+All wallet commands require secrets:
+
 ```bash
-edgelord wallet address --config config.toml
-edgelord wallet status --config config.toml
-edgelord wallet approve --config config.toml --amount 1000 --yes
-edgelord wallet sweep --config config.toml --to 0x... --asset usdc --network polygon --yes
+dugout run -- edgelord wallet address --config config.toml
+dugout run -- edgelord wallet status --config config.toml
+dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
+dugout run -- edgelord wallet sweep --config config.toml --to 0x... --asset usdc --network polygon --yes
 ```
 
 ## Service Management
 
+Install with dugout for secrets injection (recommended):
+
 ```bash
-edgelord service install --config /opt/edgelord/config.toml --user edgelord --working-dir /opt/edgelord
-edgelord service uninstall
+sudo edgelord service install \
+  --config /opt/edgelord/config.toml \
+  --user edgelord \
+  --working-dir /opt/edgelord \
+  --dugout
+```
+
+Additional runtime options for `service install`:
+
+- `--strategies <list>` - Comma-separated strategies
+- `--min-edge <decimal>` - Minimum edge threshold
+- `--min-profit <decimal>` - Minimum profit threshold
+- `--max-exposure <decimal>` - Maximum total exposure
+- `--max-position <decimal>` - Maximum position per market
+- `--dry-run` - Enable dry run mode
+- `--telegram-enabled` - Enable Telegram notifications
+
+Uninstall:
+
+```bash
+sudo edgelord service uninstall
 ```
 
 ## Logs

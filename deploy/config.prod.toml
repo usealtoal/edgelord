@@ -1,8 +1,7 @@
 # Production configuration for edgelord
-# Copy to /opt/edgelord/config.toml on deployment
+# Deployed to $DEPLOY_PATH/config/config.toml by deploy workflow
 
 exchange = "polymarket"
-status_file = "/var/run/edgelord/status.json"
 
 [exchange_config]
 type = "polymarket"

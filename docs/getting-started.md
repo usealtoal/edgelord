@@ -5,6 +5,7 @@ This guide gets edgelord running in a safe baseline configuration.
 ## 1. Prerequisites
 
 - Rust 1.75+
+- [dugout](https://crates.io/crates/dugout) for secrets management
 - Access to a Polymarket-compatible wallet setup
 - Polygon USDC + MATIC if you intend to trade live
 
@@ -42,9 +43,35 @@ chain_id = 80002
 enabled = ["single_condition", "market_rebalancing"]
 ```
 
-## 4. Provision Wallet (Recommended)
+## 4. Set Up Secrets with Dugout
 
-Provisioning creates or imports an encrypted keystore and updates config paths.
+edgelord uses dugout for secure secrets management. Secrets are encrypted at rest and injected at runtime.
+
+```bash
+# Install dugout (if not already installed)
+cargo install dugout
+
+# Initialize your identity (first time only)
+dugout setup
+
+# Initialize dugout in the project
+dugout init
+
+# Add your wallet private key
+dugout set WALLET_PRIVATE_KEY
+
+# Optional: Add Telegram credentials
+dugout set TELEGRAM_BOT_TOKEN
+dugout set TELEGRAM_CHAT_ID
+
+# Commit the encrypted vault
+git add .dugout.toml
+git commit -m "feat: add encrypted secrets vault"
+```
+
+## 5. Provision Wallet (Alternative)
+
+If you prefer the keystore-based approach instead of dugout:
 
 ```bash
 export EDGELORD_KEYSTORE_PASSWORD="change-me"
@@ -59,27 +86,36 @@ export EDGELORD_KEYSTORE_PASSWORD="change-me"
 ./target/release/edgelord provision polymarket --wallet import --config config.toml
 ```
 
-## 5. Validate Configuration and Connectivity
+## 6. Validate Configuration and Connectivity
 
 ```bash
-./target/release/edgelord check config --config config.toml
-./target/release/edgelord check connection --config config.toml
-./target/release/edgelord check live --config config.toml
+dugout run -- ./target/release/edgelord check config --config config.toml
+dugout run -- ./target/release/edgelord check connection --config config.toml
+dugout run -- ./target/release/edgelord check live --config config.toml
 ```
 
-## 6. Run
+## 7. Run
+
+Using dugout (recommended):
 
 ```bash
+dugout run -- ./target/release/edgelord run --config config.toml
+```
+
+Or spawn a shell with secrets loaded:
+
+```bash
+dugout env
 ./target/release/edgelord run --config config.toml
 ```
 
 Typical production flags:
 
 ```bash
-./target/release/edgelord run --config config.toml --no-banner --json-logs
+dugout run -- ./target/release/edgelord run --config config.toml --no-banner --json-logs
 ```
 
-## 7. Observe and Inspect
+## 8. Observe and Inspect
 
 ```bash
 ./target/release/edgelord status --db edgelord.db

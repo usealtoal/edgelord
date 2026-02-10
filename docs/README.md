@@ -27,5 +27,6 @@ Edgelord is a Rust CLI for detecting and executing prediction-market arbitrage w
 ## Conventions
 
 - Paths are shown relative to repository root unless noted.
+- Secrets are managed with [dugout](https://crates.io/crates/dugout) and injected at runtime.
 - Environment variables are uppercase (for example, `WALLET_PRIVATE_KEY`).
 - Commands assume a Unix-like shell.

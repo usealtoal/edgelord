@@ -38,19 +38,20 @@ cargo build --release
 cp config.toml.example config.toml
 ```
 
-Provision wallet (recommended):
+Set up secrets with [dugout](https://crates.io/crates/dugout):
 
 ```bash
-export EDGELORD_KEYSTORE_PASSWORD="change-me"
-./target/release/edgelord provision polymarket --config config.toml
+cargo install dugout
+dugout init
+dugout set WALLET_PRIVATE_KEY
 ```
 
 Validate and run:
 
 ```bash
-./target/release/edgelord check config --config config.toml
-./target/release/edgelord check connection --config config.toml
-./target/release/edgelord run --config config.toml
+dugout run -- ./target/release/edgelord check config --config config.toml
+dugout run -- ./target/release/edgelord check connection --config config.toml
+dugout run -- ./target/release/edgelord run --config config.toml
 ```
 
 ## Production Readiness Flow
@@ -74,18 +75,23 @@ Validate and run:
 ## Example Commands
 
 ```bash
-# Run
+# Run (with secrets via dugout)
+dugout run -- edgelord run --config config.toml
+
+# Or spawn a shell with secrets loaded
+dugout env
 edgelord run --config config.toml
 
 # Diagnostics
-edgelord check live --config config.toml
+dugout run -- edgelord check live --config config.toml
 
-# Wallet operations
-edgelord wallet address --config config.toml
-edgelord wallet approve --config config.toml --amount 1000 --yes
+# Wallet operations (need secrets)
+dugout run -- edgelord wallet address --config config.toml
+dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
 
-# Statistics
+# Statistics (no secrets needed)
 edgelord statistics today --db edgelord.db
+edgelord logs -f
 ```
 
 ## Project Structure

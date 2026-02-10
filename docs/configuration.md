@@ -112,18 +112,54 @@ min_gap = 0.02
 
 ## Secrets and Environment Variables
 
-Do not commit secrets to `config.toml`.
+Do not commit secrets to `config.toml`. Use [dugout](https://crates.io/crates/dugout) for secrets management.
 
-Common variables:
+### Dugout Setup (Recommended)
 
-- `WALLET_PRIVATE_KEY`
+```bash
+# Initialize dugout in the project
+dugout init
+
+# Add secrets interactively
+dugout set WALLET_PRIVATE_KEY
+dugout set TELEGRAM_BOT_TOKEN
+dugout set TELEGRAM_CHAT_ID
+
+# Commit encrypted vault
+git add .dugout.toml
+git commit -m "feat: add encrypted secrets vault"
+```
+
+Run commands with secrets injected:
+
+```bash
+dugout run -- edgelord run --config config.toml
+```
+
+Or spawn a shell with secrets loaded:
+
+```bash
+dugout env
+edgelord run --config config.toml
+```
+
+### Required Secrets
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `WALLET_PRIVATE_KEY` | Trading wallet private key | Yes |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | If telegram enabled |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID | If telegram enabled |
+| `ANTHROPIC_API_KEY` | Anthropic API key | If using LLM inference |
+| `OPENAI_API_KEY` | OpenAI API key | If using LLM inference |
+
+### Legacy Variables
+
+These are used by the provisioning system:
+
 - `EDGELORD_PRIVATE_KEY`
 - `EDGELORD_KEYSTORE_PASSWORD`
 - `EDGELORD_KEYSTORE_PASSWORD_FILE`
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
 
 ## Validation Workflow
 

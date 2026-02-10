@@ -8,6 +8,58 @@ use super::common::{is_root, run_systemctl, SERVICE_PATH};
 
 /// Generate the systemd service file content.
 fn generate_service_file(args: &InstallArgs, binary_path: &str) -> String {
+    // Build extra arguments from runtime overrides
+    let mut extra_args = Vec::new();
+
+    if let Some(ref strategies) = args.strategies {
+        extra_args.push(format!("--strategies {}", strategies));
+    }
+    if let Some(min_edge) = args.min_edge {
+        extra_args.push(format!("--min-edge {}", min_edge));
+    }
+    if let Some(min_profit) = args.min_profit {
+        extra_args.push(format!("--min-profit {}", min_profit));
+    }
+    if let Some(max_exposure) = args.max_exposure {
+        extra_args.push(format!("--max-exposure {}", max_exposure));
+    }
+    if let Some(max_position) = args.max_position {
+        extra_args.push(format!("--max-position {}", max_position));
+    }
+    if args.dry_run {
+        extra_args.push("--dry-run".to_string());
+    }
+    if args.telegram_enabled {
+        extra_args.push("--telegram-enabled".to_string());
+    }
+
+    let extra_args_str = if extra_args.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", extra_args.join(" "))
+    };
+
+    let edgelord_cmd = format!(
+        "{binary} run --no-banner --json-logs --config {config}{extra_args}",
+        binary = binary_path,
+        config = args.config.display(),
+        extra_args = extra_args_str,
+    );
+
+    let (exec_start, env_file_line) = if args.dugout {
+        // Use dugout to inject secrets at runtime
+        (
+            format!("dugout run -- {}", edgelord_cmd),
+            String::new(),
+        )
+    } else {
+        // Use traditional .env file
+        (
+            edgelord_cmd,
+            format!("EnvironmentFile=-{working_dir}/.env\n", working_dir = args.working_dir.display()),
+        )
+    };
+
     format!(
         r#"[Unit]
 Description=Multi-strategy arbitrage detection and execution system for prediction markets
@@ -19,18 +71,17 @@ Type=simple
 User={user}
 Group={user}
 WorkingDirectory={working_dir}
-ExecStart={binary} run --no-banner --json-logs --config {config}
+ExecStart={exec_start}
 Restart=on-failure
 RestartSec=5
-EnvironmentFile=-{working_dir}/.env
-
+{env_file}
 [Install]
 WantedBy=multi-user.target
 "#,
         user = args.user,
         working_dir = args.working_dir.display(),
-        binary = binary_path,
-        config = args.config.display(),
+        exec_start = exec_start,
+        env_file = env_file_line,
     )
 }
 

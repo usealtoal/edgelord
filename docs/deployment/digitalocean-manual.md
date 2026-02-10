@@ -5,7 +5,7 @@ This runbook describes an end-to-end, operator-driven deployment flow for runnin
 ## Goals
 
 - Keep deployment safe and repeatable.
-- Keep wallet secrets on the VPS only.
+- Keep secrets encrypted and injected at runtime via dugout.
 - Use manual workflow dispatch (no auto-deploy on push).
 - Keep USDC ingress/egress operationally simple.
 
@@ -16,6 +16,7 @@ This runbook describes an end-to-end, operator-driven deployment flow for runnin
   - A DigitalOcean Droplet you can SSH into.
   - A MetaMask-compatible wallet and funding source (for example Coinbase).
   - Access to this GitHub repository with Actions enabled.
+  - [dugout](https://crates.io/crates/dugout) installed locally.
 - Deployment is manual:
   - Triggered via `workflow_dispatch` from the GitHub Actions UI.
   - Protected with a GitHub Environment approval gate.
@@ -27,55 +28,119 @@ This runbook describes an end-to-end, operator-driven deployment flow for runnin
 
 - Start: `2 vCPU / 4 GB RAM` (cost-effective baseline).
 - Scale target: `4 vCPU / 8 GB RAM` if CPU pressure or latency degradation appears.
-- Region: choose the lowest-latency legally valid region for your operating model.
+- Region: London (LON1) for lowest latency to Polymarket.
 
-## Runtime Layout (Recommended)
+## Runtime Layout
 
 ```text
 /opt/edgelord/
-  current/                # active release symlink
+  current/                # active release symlink -> releases/<sha>
   releases/<git-sha>/     # immutable deployed releases
   config/config.toml      # persistent runtime config
-  secrets/keystore.json   # encrypted wallet keystore (600)
-  secrets/keystore.pass   # keystore password file (600)
+  repo/                   # git clone for dugout vault access
   data/edgelord.db        # runtime sqlite db
-  .env                    # runtime env file (600)
 ```
 
-## Phase 1: One-Time Host Bootstrap
+No `.env` file needed - secrets are injected by dugout at runtime.
+
+## Phase 1: Local Secrets Setup
+
+Before deploying, set up secrets locally with dugout:
+
+```bash
+# Install dugout if not already installed
+cargo install dugout
+
+# Initialize your identity (first time only)
+dugout setup
+
+# Initialize dugout in the project
+cd /path/to/edgelord
+dugout init
+
+# Add your secrets
+dugout set WALLET_PRIVATE_KEY      # Your trading wallet private key
+dugout set TELEGRAM_BOT_TOKEN      # Optional: Telegram bot token
+dugout set TELEGRAM_CHAT_ID        # Optional: Telegram chat ID
+dugout set ANTHROPIC_API_KEY       # Optional: For LLM inference
+dugout set OPENAI_API_KEY          # Optional: For LLM inference
+
+# Commit the encrypted vault
+git add .dugout.toml
+git commit -m "feat: add encrypted secrets vault"
+git push
+```
+
+## Phase 2: One-Time Host Bootstrap
+
+SSH to your Droplet and run:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y build-essential pkg-config libssl-dev curl git
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
+
+# Install dugout
+cargo install dugout
 ```
 
-Create directories and permissions:
+Create directories:
 
 ```bash
-sudo mkdir -p /opt/edgelord/{releases,config,secrets,data}
+sudo mkdir -p /opt/edgelord/{releases,config,data}
 sudo chown -R "$USER":"$USER" /opt/edgelord
-chmod 700 /opt/edgelord/secrets
 ```
 
-Clone and initial build:
+Clone repo for dugout vault access:
 
 ```bash
-git clone https://github.com/usealtoal/edgelord.git /opt/edgelord/src
-cd /opt/edgelord/src
-cargo build --release
+git clone https://github.com/usealtoal/edgelord.git /opt/edgelord/repo
 ```
 
-## Phase 2: Production Config
+Set up dugout identity on VPS:
+
+```bash
+# Option A: Copy your local identity (simpler)
+# Run this from your local machine:
+scp ~/.dugout/identity user@droplet:~/.dugout/identity
+
+# Option B: Generate new identity and add as recipient
+dugout setup
+dugout whoami  # Copy this public key
+
+# Then locally:
+dugout team add <vps-public-key>
+dugout sync
+git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
+```
+
+Build initial release:
+
+```bash
+cd /opt/edgelord/repo
+cargo build --release
+mkdir -p /opt/edgelord/releases/initial
+cp target/release/edgelord /opt/edgelord/releases/initial/
+ln -sfn /opt/edgelord/releases/initial /opt/edgelord/current
+sudo ln -sf /opt/edgelord/current/edgelord /usr/local/bin/edgelord
+```
+
+## Phase 3: Production Config
 
 Create the runtime config:
 
 ```bash
-cp /opt/edgelord/src/config.toml.example /opt/edgelord/config/config.toml
+cp /opt/edgelord/repo/deploy/config.prod.toml /opt/edgelord/config/config.toml
 ```
 
-For live mode, set:
+Edit for your environment:
+
+```bash
+nano /opt/edgelord/config/config.toml
+```
+
+Key settings for live mode:
 
 ```toml
 dry_run = false
@@ -83,66 +148,55 @@ dry_run = false
 [exchange_config]
 environment = "mainnet"
 chain_id = 137
-```
 
-Point database to persistent storage:
-
-```toml
 database = "/opt/edgelord/data/edgelord.db"
-```
 
-Keep conservative initial risk settings:
-
-```toml
 [risk]
 max_position_per_market = 100.0
 max_total_exposure = 500.0
 ```
 
-## Phase 3: Wallet Provisioning (On VPS)
+## Phase 4: Validate and Install Service
 
-### Option A: Import Existing Wallet Key
+Pull latest vault and validate:
 
 ```bash
-export EDGELORD_PRIVATE_KEY="0x..."
-export EDGELORD_KEYSTORE_PASSWORD="strong-password"
-/opt/edgelord/src/target/release/edgelord provision polymarket \
-  --wallet import \
+cd /opt/edgelord/repo && git pull
+
+# Validate config (no secrets needed)
+edgelord check config --config /opt/edgelord/config/config.toml
+
+# Validate connectivity (needs secrets)
+dugout run -- edgelord check connection --config /opt/edgelord/config/config.toml
+dugout run -- edgelord check live --config /opt/edgelord/config/config.toml
+```
+
+Install service with dugout:
+
+```bash
+sudo edgelord service install \
   --config /opt/edgelord/config/config.toml \
-  --keystore-path /opt/edgelord/secrets/keystore.json
-unset EDGELORD_PRIVATE_KEY
+  --user "$USER" \
+  --working-dir /opt/edgelord/repo \
+  --dugout
 ```
 
-### Option B: Generate New Wallet
+Note: `--working-dir` points to the repo clone so dugout can find `.dugout.toml`.
+
+Start and verify:
 
 ```bash
-export EDGELORD_KEYSTORE_PASSWORD="strong-password"
-/opt/edgelord/src/target/release/edgelord provision polymarket \
-  --config /opt/edgelord/config/config.toml \
-  --keystore-path /opt/edgelord/secrets/keystore.json
+sudo systemctl start edgelord
+sudo systemctl status edgelord --no-pager
+edgelord logs --follow
 ```
 
-Persist keystore password via file:
+## Phase 5: Fund the Wallet
+
+Get your wallet address:
 
 ```bash
-printf '%s\n' "strong-password" > /opt/edgelord/secrets/keystore.pass
-chmod 600 /opt/edgelord/secrets/keystore.pass
-```
-
-Set runtime env:
-
-```bash
-cat > /opt/edgelord/.env <<'EOF'
-EDGELORD_KEYSTORE_PASSWORD_FILE=/opt/edgelord/secrets/keystore.pass
-EOF
-chmod 600 /opt/edgelord/.env
-```
-
-Verify wallet:
-
-```bash
-/opt/edgelord/src/target/release/edgelord wallet address --config /opt/edgelord/config/config.toml
-/opt/edgelord/src/target/release/edgelord wallet status --config /opt/edgelord/config/config.toml
+dugout run -- edgelord wallet address --config /opt/edgelord/config/config.toml
 ```
 
 Fund manually:
@@ -150,128 +204,84 @@ Fund manually:
 - Send Polygon USDC to the wallet address for trading capital.
 - Send MATIC to the same wallet for gas.
 
-## Phase 4: Service Install and First Start
-
-Install service:
+Verify:
 
 ```bash
-sudo /opt/edgelord/src/target/release/edgelord service install \
-  --config /opt/edgelord/config/config.toml \
-  --user "$USER" \
-  --working-dir /opt/edgelord
+dugout run -- edgelord wallet status --config /opt/edgelord/config/config.toml
 ```
 
-Validate before starting:
+## Phase 6: GitHub Actions Deploy
 
-```bash
-/opt/edgelord/src/target/release/edgelord check config --config /opt/edgelord/config/config.toml
-/opt/edgelord/src/target/release/edgelord check connection --config /opt/edgelord/config/config.toml
-/opt/edgelord/src/target/release/edgelord check live --config /opt/edgelord/config/config.toml
-```
+### Required GitHub Secrets
 
-Start and verify:
+Configure in Settings → Secrets → Actions:
 
-```bash
-sudo systemctl start edgelord
-sudo systemctl status edgelord --no-pager
-/opt/edgelord/src/target/release/edgelord logs --follow
-```
+| Secret | Description |
+|--------|-------------|
+| `DEPLOY_HOST` | Droplet IP or hostname |
+| `DEPLOY_USER` | SSH user |
+| `DEPLOY_SSH_PORT` | SSH port (usually 22) |
+| `DEPLOY_SSH_KEY` | Private SSH key (ed25519) |
+| `DEPLOY_KNOWN_HOSTS` | Output of `ssh-keyscan -p PORT HOST` |
+| `DEPLOY_PATH` | `/opt/edgelord` |
 
-## Phase 5: Manual GitHub Actions Deploy Model
-
-This runbook assumes the repository deploy workflow at `.github/workflows/deploy.yml` with:
-
-- Trigger: `workflow_dispatch` only.
-- Inputs:
-  - `ref` (branch/tag/sha to deploy)
-  - `environment` (for example `production`)
-  - `mode` (`deploy`, `validate_only`, `restart_only`, `rollback_previous`)
-  - `confirm` (must equal `deploy-production` for prod)
-  - `run_connection_check` (optional boolean)
-  - `run_live_check` (optional boolean)
-  - `change_note` (optional free text)
-- Environment protection:
-  - Required reviewer approval before production deploy.
-
-### Required GitHub Secrets/Variables
-
-Deploy-only values (safe for GitHub):
-
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_PORT`
-- `DEPLOY_SSH_KEY`
-- `DEPLOY_KNOWN_HOSTS` (pinned host key entry)
-- `DEPLOY_PATH` (for example `/opt/edgelord`)
-
-Do not store in GitHub:
-
+Do NOT store in GitHub:
 - Wallet private key
-- Keystore password
-- Keystore file
+- API keys
+- Any secrets (these are in dugout vault)
 
-### Expected Deploy Workflow Behavior
-
-On manual click-run:
-
-1. Validate confirmation phrase and environment gate.
-2. Execute action by mode:
-   - `deploy`: build/test binary, upload release, switch symlink, run checks, restart service.
-   - `validate_only`: run remote checks only (no binary change, no restart).
-   - `restart_only`: reinstall/restart service from current release only.
-   - `rollback_previous`: switch symlink to previous release, run checks, restart service.
-3. Verify health:
-   - `systemctl is-active edgelord`
-
-If verification fails:
-
-1. Restore previous symlink.
-2. Restart service on previous release.
-3. Mark workflow failed.
-
-## Operator Deploy Procedure (Click Path)
+### Deploy Procedure
 
 1. Push code to `main` (or chosen branch/tag).
-2. Open GitHub -> Actions -> `Manual Deploy`.
+2. Open GitHub → Actions → `Manual Deploy`.
 3. Click `Run workflow`.
-4. Choose:
+4. Configure:
    - `mode = deploy`
    - `ref = <target git ref>`
    - `environment = production`
    - `confirm = deploy-production`
-5. (Optional) set `run_connection_check` / `run_live_check`.
-6. Approve environment gate.
-7. Watch workflow to completion.
-8. Verify on host:
-   - `systemctl status edgelord`
-   - `edgelord status --db /opt/edgelord/data/edgelord.db`
-   - `edgelord logs --follow`
+   - Strategy toggles as needed
+   - `dugout = true` (default)
+5. Approve environment gate.
+6. Watch workflow to completion.
+7. Verify on host:
 
-## Rollback Procedure (Manual)
+```bash
+systemctl status edgelord
+edgelord status --db /opt/edgelord/data/edgelord.db
+edgelord logs --follow
+```
 
-Preferred:
+### Rollback Procedure
 
-1. Re-run `Manual Deploy` with `mode = rollback_previous`.
+Preferred (via GitHub Actions):
+
+1. Run `Manual Deploy` with `mode = rollback_previous`.
 2. Set `confirm = deploy-production`.
 3. Approve and complete workflow.
 
 Emergency host-side rollback:
 
-1. Point `/opt/edgelord/current` to previous release.
-2. Restart `edgelord`.
-3. Validate status/logs.
+```bash
+# List available releases
+ls -lt /opt/edgelord/releases/
 
-## USDC Ingress/Egress Model
+# Point to previous release
+sudo ln -sfn /opt/edgelord/releases/<previous-sha> /opt/edgelord/current
+sudo systemctl restart edgelord
+```
+
+## USDC Ingress/Egress
 
 Keep this manual unless you have additional controls:
 
-- Ingress:
-  - Send USDC + MATIC manually from your custody wallet.
-- Egress:
-  - Use explicit operator command:
+**Ingress:**
+- Send USDC + MATIC manually from your custody wallet.
+
+**Egress:**
 
 ```bash
-edgelord wallet sweep \
+dugout run -- edgelord wallet sweep \
   --to <destination_address> \
   --asset usdc \
   --network polygon \
@@ -279,10 +289,27 @@ edgelord wallet sweep \
   --config /opt/edgelord/config/config.toml
 ```
 
+## Operational Commands
+
+```bash
+# Start a shell with secrets loaded
+dugout env
+
+# Then run any command
+edgelord wallet status --config /opt/edgelord/config/config.toml
+edgelord check live --config /opt/edgelord/config/config.toml
+
+# Commands that don't need secrets
+edgelord status --db /opt/edgelord/data/edgelord.db
+edgelord statistics today --db /opt/edgelord/data/edgelord.db
+edgelord logs --follow
+```
+
 ## Operational Guardrails
 
 - Start new environments in `dry_run = true`.
 - Use low exposure caps initially.
 - Review logs and daily stats before raising limits.
-- Keep secret files `chmod 600`.
+- Keep dugout identity file `chmod 600 ~/.dugout/identity`.
 - Keep SSH access key-only and restricted.
+- Update vault recipients when team changes: `dugout team remove <key>`.
