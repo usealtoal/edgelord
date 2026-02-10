@@ -3,5 +3,3 @@
 *.log
 .worktrees/
 /data/
-.env.*
-!.env.example
