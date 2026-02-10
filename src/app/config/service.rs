@@ -292,6 +292,12 @@ pub struct ConnectionPoolConfig {
     /// Seconds before TTL to preemptively reconnect.
     #[serde(default = "default_pool_preemptive_reconnect_secs")]
     pub preemptive_reconnect_secs: u64,
+    /// Health check interval in seconds.
+    #[serde(default = "default_pool_health_check_interval_secs")]
+    pub health_check_interval_secs: u64,
+    /// Maximum seconds with no events before considering a connection unhealthy.
+    #[serde(default = "default_pool_max_silent_secs")]
+    pub max_silent_secs: u64,
 }
 
 const fn default_pool_max_connections() -> usize {
@@ -310,6 +316,14 @@ const fn default_pool_preemptive_reconnect_secs() -> u64 {
     30
 }
 
+const fn default_pool_health_check_interval_secs() -> u64 {
+    30
+}
+
+const fn default_pool_max_silent_secs() -> u64 {
+    60
+}
+
 impl Default for ConnectionPoolConfig {
     fn default() -> Self {
         Self {
@@ -317,6 +331,8 @@ impl Default for ConnectionPoolConfig {
             subscriptions_per_connection: default_pool_subscriptions_per_connection(),
             connection_ttl_secs: default_pool_connection_ttl_secs(),
             preemptive_reconnect_secs: default_pool_preemptive_reconnect_secs(),
+            health_check_interval_secs: default_pool_health_check_interval_secs(),
+            max_silent_secs: default_pool_max_silent_secs(),
         }
     }
 }
