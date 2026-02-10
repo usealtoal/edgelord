@@ -138,13 +138,14 @@ impl ExchangeFactory {
     /// Create a connection pool for the configured exchange.
     ///
     /// Returns `None` if `max_connections` is 1 (use single connection instead).
-    pub fn create_connection_pool(config: &Config) -> Option<super::ConnectionPool> {
+    /// Returns an error if the pool configuration is invalid.
+    pub fn create_connection_pool(config: &Config) -> Result<Option<super::ConnectionPool>> {
         let pool_config = match &config.exchange_config {
             crate::app::ExchangeSpecificConfig::Polymarket(pm) => pm.connections.clone(),
         };
 
         if pool_config.max_connections <= 1 {
-            return None;
+            return Ok(None);
         }
 
         let exchange_name = match config.exchange {
@@ -153,12 +154,14 @@ impl ExchangeFactory {
 
         let stream_factory = Self::create_stream_factory(config);
 
-        Some(super::ConnectionPool::new(
+        let pool = super::ConnectionPool::new(
             pool_config,
             config.reconnection.clone(),
             stream_factory,
             exchange_name,
-        ))
+        )?;
+
+        Ok(Some(pool))
     }
 
     /// Create a stream factory for the configured exchange.

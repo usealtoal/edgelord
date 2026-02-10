@@ -354,7 +354,7 @@ impl Orchestrator {
 
         // Create data stream with optional connection pooling
         let mut data_stream: Box<dyn MarketDataStream> =
-            if let Some(pool) = ExchangeFactory::create_connection_pool(&config) {
+            if let Some(pool) = ExchangeFactory::create_connection_pool(&config)? {
                 info!(
                     exchange = pool.exchange_name(),
                     "Using connection pool"

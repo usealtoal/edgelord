@@ -7,16 +7,16 @@
 //! # Architecture
 //!
 //! Each connection runs as a separate tokio task that reads from its WebSocket
-//! and sends events into a shared `mpsc` channel. The pool merges events from
-//! all connections into a single stream via `next_event()`.
+//! and sends events into a shared bounded `mpsc` channel. The pool merges
+//! events from all connections into a single stream via `next_event()`.
 //!
 //! A background management task monitors all connections for:
-//! - **TTL expiry**: proactively replaces connections before they hit their lifetime limit
-//! - **Silent death**: detects connections that are "connected" but not receiving events
-//! - **Task crashes**: restarts connections whose tasks have unexpectedly finished
+//! - **TTL expiry**: proactively replaces connections before their lifetime limit
+//! - **Silent death**: detects connections that stopped receiving events
+//! - **Task crashes**: restarts connections whose tasks finished unexpectedly
 //!
-//! Replacements are preemptive — new connections are spawned and subscribed
-//! before old ones are aborted, ensuring zero-gap event flow.
+//! Replacements use true zero-gap handoff: a new connection is spawned and
+//! must deliver its first event before the old connection is aborted.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -29,12 +29,49 @@ use tracing::{debug, error, info, warn};
 use crate::app::{ConnectionPoolConfig, ReconnectionConfig};
 use crate::core::domain::TokenId;
 use crate::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
-use crate::error::Result;
+use crate::error::{ConfigError, Result};
 
 /// Factory function for creating new data stream instances.
 ///
 /// Used by the connection pool to create new connections on demand.
 pub type StreamFactory = Arc<dyn Fn() -> Box<dyn MarketDataStream> + Send + Sync>;
+
+/// Default event channel capacity (bounded to prevent unbounded memory growth).
+const DEFAULT_CHANNEL_CAPACITY: usize = 10_000;
+
+// ---------------------------------------------------------------------------
+// Pool statistics
+// ---------------------------------------------------------------------------
+
+/// Runtime statistics for the connection pool.
+#[derive(Debug, Clone, Default)]
+pub struct PoolStats {
+    /// Number of currently active connections.
+    pub active_connections: usize,
+    /// Total number of connection rotations (TTL-triggered).
+    pub total_rotations: u64,
+    /// Total number of restarts (crash/silence-triggered).
+    pub total_restarts: u64,
+    /// Total number of events that were dropped due to a full channel.
+    pub events_dropped: u64,
+}
+
+/// Shared counters updated atomically by connection and management tasks.
+struct SharedCounters {
+    rotations: AtomicU64,
+    restarts: AtomicU64,
+    events_dropped: AtomicU64,
+}
+
+impl SharedCounters {
+    fn new() -> Self {
+        Self {
+            rotations: AtomicU64::new(0),
+            restarts: AtomicU64::new(0),
+            events_dropped: AtomicU64::new(0),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Connection state
@@ -69,14 +106,15 @@ fn epoch_millis() -> u64 {
 /// Spawn a connection task that reads events and forwards them to `event_tx`.
 ///
 /// This is a free function (not a method) so both the pool and the management
-/// task can call it without borrowing `self`.
+/// task can call it without borrow conflicts on `self`.
 fn spawn_connection(
     factory: &StreamFactory,
     reconnection_config: ReconnectionConfig,
     tokens: Vec<TokenId>,
-    event_tx: mpsc::UnboundedSender<MarketEvent>,
+    event_tx: mpsc::Sender<MarketEvent>,
     connection_id: u64,
     last_event_at: Arc<AtomicU64>,
+    counters: Arc<SharedCounters>,
 ) -> tokio::task::JoinHandle<()> {
     let stream = factory();
     let mut stream = ReconnectingDataStream::new(stream, reconnection_config);
@@ -100,9 +138,16 @@ fn spawn_connection(
             match stream.next_event().await {
                 Some(event) => {
                     last_event_at.store(epoch_millis(), Ordering::Relaxed);
-                    if event_tx.send(event).is_err() {
-                        debug!(connection_id, "Channel closed, terminating");
-                        break;
+                    match event_tx.try_send(event) {
+                        Ok(()) => {}
+                        Err(mpsc::error::TrySendError::Full(_)) => {
+                            counters.events_dropped.fetch_add(1, Ordering::Relaxed);
+                            warn!(connection_id, "Event channel full — dropping event");
+                        }
+                        Err(mpsc::error::TrySendError::Closed(_)) => {
+                            debug!(connection_id, "Channel closed, terminating");
+                            break;
+                        }
                     }
                 }
                 None => {
@@ -116,15 +161,20 @@ fn spawn_connection(
     })
 }
 
-/// Build a fresh `ConnectionState`, spawning its task immediately.
+/// Build a fresh [`ConnectionState`], spawning its task immediately.
+///
+/// `last_event_at` is initialized to the current timestamp so that the
+/// silent-death detector doesn't flag a brand-new connection that hasn't
+/// received its first event yet.
 fn new_connection(
     id: u64,
     tokens: Vec<TokenId>,
     factory: &StreamFactory,
     reconnection_config: ReconnectionConfig,
-    event_tx: mpsc::UnboundedSender<MarketEvent>,
+    event_tx: mpsc::Sender<MarketEvent>,
+    counters: Arc<SharedCounters>,
 ) -> ConnectionState {
-    let last_event_at = Arc::new(AtomicU64::new(0));
+    let last_event_at = Arc::new(AtomicU64::new(epoch_millis()));
     let handle = spawn_connection(
         factory,
         reconnection_config,
@@ -132,6 +182,7 @@ fn new_connection(
         event_tx,
         id,
         last_event_at.clone(),
+        counters,
     );
     ConnectionState {
         id,
@@ -146,29 +197,44 @@ fn new_connection(
 // Management task
 // ---------------------------------------------------------------------------
 
+/// Descriptor for a connection that needs replacement.
+struct ReplacementJob {
+    index: usize,
+    tokens: Vec<TokenId>,
+    reason: ReplacementReason,
+}
+
+#[derive(Debug)]
+enum ReplacementReason {
+    Ttl,
+    Silent,
+    Crashed,
+}
+
 /// Background task that monitors connection health and performs rotations.
 ///
-/// Checks are performed every `health_check_interval_secs`. A connection is
-/// replaced when any of the following is true:
-///
-/// 1. Its age exceeds `connection_ttl_secs - preemptive_reconnect_secs`
-/// 2. It has received no events for longer than `max_silent_secs`
-/// 3. Its task handle has completed (unexpected crash)
+/// Runs on a fixed interval. Uses a 3-phase approach:
+/// 1. **Identify** — lock briefly to find connections needing replacement
+/// 2. **Spawn** — create replacements without holding the lock
+/// 3. **Handoff** — wait for replacement's first event, then swap + abort old
 async fn management_task(
     connections: Arc<Mutex<Vec<ConnectionState>>>,
     config: ConnectionPoolConfig,
     reconnection_config: ReconnectionConfig,
     factory: StreamFactory,
-    event_tx: mpsc::UnboundedSender<MarketEvent>,
+    event_tx: mpsc::Sender<MarketEvent>,
+    counters: Arc<SharedCounters>,
     exchange_name: &'static str,
 ) {
     let check_interval = Duration::from_secs(config.health_check_interval_secs);
-    let ttl_threshold =
-        Duration::from_secs(config.connection_ttl_secs.saturating_sub(config.preemptive_reconnect_secs));
+    let ttl_threshold = Duration::from_secs(
+        config.connection_ttl_secs.saturating_sub(config.preemptive_reconnect_secs),
+    );
     let max_silent_ms = config.max_silent_secs * 1000;
+    let handoff_timeout = Duration::from_secs(config.connection_ttl_secs.max(30));
 
     let mut interval = tokio::time::interval(check_interval);
-    let mut next_id: u64 = 1_000_000; // well above initial IDs
+    let mut next_id: u64 = 1_000_000;
 
     debug!(exchange = exchange_name, "Management task started");
 
@@ -177,68 +243,122 @@ async fn management_task(
         let now = Instant::now();
         let now_ms = epoch_millis();
 
-        // Phase 1: identify indices that need replacement (lock held briefly, no spawning).
-        let indices: Vec<usize> = {
-            let conns = connections.lock().unwrap();
+        // Phase 1: identify connections needing replacement (brief lock).
+        let jobs: Vec<ReplacementJob> = {
+            let conns = match connections.lock() {
+                Ok(c) => c,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             conns
                 .iter()
                 .enumerate()
                 .filter_map(|(i, c)| {
-                    // Crashed task
                     if c.handle.is_finished() {
                         warn!(connection_id = c.id, "Task finished unexpectedly");
-                        return Some(i);
+                        return Some(ReplacementJob {
+                            index: i,
+                            tokens: c.tokens.clone(),
+                            reason: ReplacementReason::Crashed,
+                        });
                     }
-                    // TTL expiry (preemptive)
                     if now.duration_since(c.spawned_at) >= ttl_threshold {
-                        info!(connection_id = c.id, age_secs = now.duration_since(c.spawned_at).as_secs(), "Approaching TTL");
-                        return Some(i);
+                        info!(
+                            connection_id = c.id,
+                            age_secs = now.duration_since(c.spawned_at).as_secs(),
+                            "Approaching TTL"
+                        );
+                        return Some(ReplacementJob {
+                            index: i,
+                            tokens: c.tokens.clone(),
+                            reason: ReplacementReason::Ttl,
+                        });
                     }
-                    // Silent death
                     let last = c.last_event_at.load(Ordering::Relaxed);
                     if last > 0 && now_ms.saturating_sub(last) > max_silent_ms {
-                        warn!(connection_id = c.id, silent_secs = now_ms.saturating_sub(last) / 1000, "No events, appears dead");
-                        return Some(i);
+                        warn!(
+                            connection_id = c.id,
+                            silent_secs = now_ms.saturating_sub(last) / 1000,
+                            "No events, appears dead"
+                        );
+                        return Some(ReplacementJob {
+                            index: i,
+                            tokens: c.tokens.clone(),
+                            reason: ReplacementReason::Silent,
+                        });
                     }
                     None
                 })
                 .collect()
         };
 
-        if indices.is_empty() {
+        if jobs.is_empty() {
             continue;
         }
 
-        // Phase 2: spawn replacements (no lock held during spawning).
-        let replacements: Vec<(usize, ConnectionState)> = indices
-            .into_iter()
-            .map(|i| {
-                next_id += 1;
-                let tokens = {
-                    let conns = connections.lock().unwrap();
-                    conns[i].tokens.clone()
-                };
-                let state = new_connection(
-                    next_id,
-                    tokens,
-                    &factory,
-                    reconnection_config.clone(),
-                    event_tx.clone(),
-                );
-                info!(old_index = i, new_connection_id = next_id, tokens = state.tokens.len(), "Replacement spawned");
-                (i, state)
-            })
-            .collect();
+        // Phase 2 + 3: for each job, spawn replacement, wait for handoff, swap.
+        for job in jobs {
+            next_id += 1;
+            let new_id = next_id;
 
-        // Phase 3: swap in replacements (brief lock, abort old tasks).
-        {
-            let mut conns = connections.lock().unwrap();
-            for (i, new_state) in replacements {
-                if i < conns.len() {
-                    let old_id = conns[i].id;
-                    conns[i].handle.abort();
-                    conns[i] = new_state;
-                    debug!(old_connection_id = old_id, new_connection_id = conns[i].id, "Swapped");
+            let state = new_connection(
+                new_id,
+                job.tokens,
+                &factory,
+                reconnection_config.clone(),
+                event_tx.clone(),
+                counters.clone(),
+            );
+
+            // Wait for the replacement to deliver its first event (or timeout).
+            let started = Instant::now();
+            let initial_ts = state.last_event_at.load(Ordering::Relaxed);
+            let handoff_ok = loop {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let current_ts = state.last_event_at.load(Ordering::Relaxed);
+                if current_ts > initial_ts {
+                    break true;
+                }
+                if state.handle.is_finished() {
+                    warn!(connection_id = new_id, "Replacement task died during handoff");
+                    break false;
+                }
+                if started.elapsed() > handoff_timeout {
+                    warn!(connection_id = new_id, "Handoff timeout — swapping anyway");
+                    break true; // swap anyway, old connection is stale
+                }
+            };
+
+            if !handoff_ok {
+                // Replacement died, abort it and skip — management will retry next tick.
+                state.handle.abort();
+                continue;
+            }
+
+            // Swap in replacement, abort old.
+            {
+                let mut conns = match connections.lock() {
+                    Ok(c) => c,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                if job.index < conns.len() {
+                    let old_id = conns[job.index].id;
+                    conns[job.index].handle.abort();
+                    conns[job.index] = state;
+
+                    match job.reason {
+                        ReplacementReason::Ttl => {
+                            counters.rotations.fetch_add(1, Ordering::Relaxed);
+                            info!(old_connection_id = old_id, new_connection_id = new_id, "TTL rotation complete");
+                        }
+                        ReplacementReason::Silent | ReplacementReason::Crashed => {
+                            counters.restarts.fetch_add(1, Ordering::Relaxed);
+                            info!(old_connection_id = old_id, new_connection_id = new_id, reason = ?job.reason, "Restart complete");
+                        }
+                    }
+                } else {
+                    // Index shifted (shouldn't happen, but be defensive)
+                    state.handle.abort();
+                    warn!(old_index = job.index, "Connection index out of bounds, skipping swap");
                 }
             }
         }
@@ -254,13 +374,17 @@ async fn management_task(
 /// Distributes subscriptions across connections and provides a single merged
 /// event stream. Connections are automatically rotated on TTL expiry and
 /// restarted if they go silent or crash.
+///
+/// The event channel is bounded (default 10,000) to prevent unbounded memory
+/// growth under backpressure. Events are dropped with a warning when full.
 pub struct ConnectionPool {
     pool_config: ConnectionPoolConfig,
     reconnection_config: ReconnectionConfig,
     stream_factory: StreamFactory,
-    event_rx: mpsc::UnboundedReceiver<MarketEvent>,
-    event_tx: mpsc::UnboundedSender<MarketEvent>,
+    event_rx: mpsc::Receiver<MarketEvent>,
+    event_tx: mpsc::Sender<MarketEvent>,
     connections: Arc<Mutex<Vec<ConnectionState>>>,
+    counters: Arc<SharedCounters>,
     management_handle: Option<tokio::task::JoinHandle<()>>,
     exchange_name: &'static str,
     next_conn_id: u64,
@@ -271,31 +395,91 @@ impl ConnectionPool {
     ///
     /// No connections are opened until [`subscribe`](MarketDataStream::subscribe)
     /// is called.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration is invalid:
+    /// - `connection_ttl_secs` must be > 0
+    /// - `preemptive_reconnect_secs` must be < `connection_ttl_secs`
+    /// - `max_connections` must be > 0
+    /// - `subscriptions_per_connection` must be > 0
+    /// - `health_check_interval_secs` must be > 0
+    /// - `max_silent_secs` must be > 0
     pub fn new(
         pool_config: ConnectionPoolConfig,
         reconnection_config: ReconnectionConfig,
         stream_factory: StreamFactory,
         exchange_name: &'static str,
-    ) -> Self {
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
-        Self {
+    ) -> Result<Self> {
+        Self::validate_config(&pool_config)?;
+
+        let (event_tx, event_rx) = mpsc::channel(DEFAULT_CHANNEL_CAPACITY);
+        Ok(Self {
             pool_config,
             reconnection_config,
             stream_factory,
             event_rx,
             event_tx,
             connections: Arc::new(Mutex::new(Vec::new())),
+            counters: Arc::new(SharedCounters::new()),
             management_handle: None,
             exchange_name,
             next_conn_id: 0,
+        })
+    }
+
+    /// Validate pool configuration values.
+    fn validate_config(config: &ConnectionPoolConfig) -> Result<()> {
+        let invalid = |field: &'static str, reason: &str| -> crate::error::Error {
+            ConfigError::InvalidValue {
+                field,
+                reason: reason.to_string(),
+            }
+            .into()
+        };
+
+        if config.connection_ttl_secs == 0 {
+            return Err(invalid("connection_ttl_secs", "must be > 0"));
+        }
+        if config.preemptive_reconnect_secs >= config.connection_ttl_secs {
+            return Err(invalid(
+                "preemptive_reconnect_secs",
+                "must be < connection_ttl_secs",
+            ));
+        }
+        if config.max_connections == 0 {
+            return Err(invalid("max_connections", "must be > 0"));
+        }
+        if config.subscriptions_per_connection == 0 {
+            return Err(invalid("subscriptions_per_connection", "must be > 0"));
+        }
+        if config.health_check_interval_secs == 0 {
+            return Err(invalid("health_check_interval_secs", "must be > 0"));
+        }
+        if config.max_silent_secs == 0 {
+            return Err(invalid("max_silent_secs", "must be > 0"));
+        }
+        Ok(())
+    }
+
+    /// Runtime statistics for observability (e.g. Telegram `/health` command).
+    pub fn stats(&self) -> PoolStats {
+        let active = match self.connections.lock() {
+            Ok(c) => c.len(),
+            Err(p) => p.into_inner().len(),
+        };
+        PoolStats {
+            active_connections: active,
+            total_rotations: self.counters.rotations.load(Ordering::Relaxed),
+            total_restarts: self.counters.restarts.load(Ordering::Relaxed),
+            events_dropped: self.counters.events_dropped.load(Ordering::Relaxed),
         }
     }
 
     /// Distribute `token_ids` into chunks respecting pool limits.
     ///
-    /// Returns a `Vec<Vec<TokenId>>` where each inner vec is a connection's
-    /// assigned tokens. Overflow tokens are appended to the last chunk.
+    /// Overflow tokens are appended to the last chunk when the number of
+    /// tokens exceeds `max_connections * subscriptions_per_connection`.
     fn distribute_tokens(&self, token_ids: &[TokenId]) -> Vec<Vec<TokenId>> {
         let per_conn = self.pool_config.subscriptions_per_connection;
         let max_conns = self.pool_config.max_connections;
@@ -307,7 +491,7 @@ impl ConnectionPool {
             .map(|c| c.to_vec())
             .collect();
 
-        // Overflow: tokens beyond (needed * per_conn) go to last chunk
+        // Overflow: remaining tokens go to last chunk
         let assigned: usize = chunks.iter().map(Vec::len).sum();
         if assigned < token_ids.len() {
             if let Some(last) = chunks.last_mut() {
@@ -316,6 +500,18 @@ impl ConnectionPool {
         }
 
         chunks
+    }
+
+    /// Tear down all existing connections and the management task.
+    fn shutdown(&mut self) {
+        if let Some(h) = self.management_handle.take() {
+            h.abort();
+        }
+        if let Ok(mut conns) = self.connections.lock() {
+            for c in conns.drain(..) {
+                c.handle.abort();
+            }
+        }
     }
 }
 
@@ -327,6 +523,9 @@ impl MarketDataStream for ConnectionPool {
     }
 
     async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<()> {
+        // Tear down any existing connections (safe to call multiple times).
+        self.shutdown();
+
         if token_ids.is_empty() {
             info!("No tokens to subscribe — pool remains empty");
             return Ok(());
@@ -343,7 +542,6 @@ impl MarketDataStream for ConnectionPool {
             "Creating connection pool"
         );
 
-        // Spawn connection tasks
         let mut states = Vec::with_capacity(chunks.len());
         for (i, tokens) in chunks.into_iter().enumerate() {
             self.next_conn_id += 1;
@@ -356,10 +554,17 @@ impl MarketDataStream for ConnectionPool {
                 &self.stream_factory,
                 self.reconnection_config.clone(),
                 self.event_tx.clone(),
+                self.counters.clone(),
             ));
         }
 
-        *self.connections.lock().unwrap() = states;
+        {
+            let mut conns = match self.connections.lock() {
+                Ok(c) => c,
+                Err(p) => p.into_inner(),
+            };
+            *conns = states;
+        }
 
         // Start management task
         self.management_handle = Some(tokio::spawn(management_task(
@@ -368,6 +573,7 @@ impl MarketDataStream for ConnectionPool {
             self.reconnection_config.clone(),
             self.stream_factory.clone(),
             self.event_tx.clone(),
+            self.counters.clone(),
             self.exchange_name,
         )));
 
@@ -385,14 +591,7 @@ impl MarketDataStream for ConnectionPool {
 
 impl Drop for ConnectionPool {
     fn drop(&mut self) {
-        if let Some(h) = &self.management_handle {
-            h.abort();
-        }
-        if let Ok(conns) = self.connections.try_lock() {
-            for c in conns.iter() {
-                c.handle.abort();
-            }
-        }
+        self.shutdown();
     }
 }
 
@@ -511,7 +710,6 @@ mod tests {
         (0..n).map(|i| TokenId::from(format!("t{i}"))).collect()
     }
 
-    /// Build a factory where every spawned mock shares the same connect counter.
     fn counting_factory(
         connect_count: Arc<AtomicU32>,
         events: Vec<Option<MarketEvent>>,
@@ -529,13 +727,51 @@ mod tests {
         })
     }
 
+    // -- Config validation ----------------------------------------------------
+
+    #[test]
+    fn test_config_validation_rejects_zero_ttl() {
+        let mut cfg = pool_config(10, 500);
+        cfg.connection_ttl_secs = 0;
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    }
+
+    #[test]
+    fn test_config_validation_rejects_preemptive_gte_ttl() {
+        let mut cfg = pool_config(10, 500);
+        cfg.preemptive_reconnect_secs = 120; // equal to TTL
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    }
+
+    #[test]
+    fn test_config_validation_rejects_zero_max_connections() {
+        let cfg = pool_config(0, 500);
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    }
+
+    #[test]
+    fn test_config_validation_rejects_zero_subs_per_conn() {
+        let cfg = pool_config(10, 0);
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        assert!(ConnectionPool::new(cfg, reconnect_config(), factory, "test").is_err());
+    }
+
+    #[test]
+    fn test_config_validation_accepts_valid_config() {
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        assert!(ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").is_ok());
+    }
+
     // -- Distribution tests ---------------------------------------------------
 
     #[tokio::test]
     async fn test_pool_single_connection() {
         let cc = Arc::new(AtomicU32::new(0));
         let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         pool.subscribe(&make_tokens(10)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -549,7 +785,7 @@ mod tests {
     async fn test_pool_multiple_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         pool.subscribe(&make_tokens(1000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -564,7 +800,7 @@ mod tests {
     async fn test_pool_respects_max_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(3, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(3, 500), reconnect_config(), factory, "test").unwrap();
 
         pool.subscribe(&make_tokens(5000)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -579,7 +815,7 @@ mod tests {
     async fn test_pool_distributes_evenly() {
         let cc = Arc::new(AtomicU32::new(0));
         let factory = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         pool.subscribe(&make_tokens(1250)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -598,7 +834,7 @@ mod tests {
         let events = vec![snapshot_event("t1"), snapshot_event("t2")];
         let cc = Arc::new(AtomicU32::new(0));
         let factory = counting_factory(cc, events, false);
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         pool.subscribe(&make_tokens(1)).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -614,10 +850,10 @@ mod tests {
         let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
         let cfg = pool_config(10, 500);
 
-        let p1 = ConnectionPool::new(cfg.clone(), reconnect_config(), factory.clone(), "polymarket");
+        let p1 = ConnectionPool::new(cfg.clone(), reconnect_config(), factory.clone(), "polymarket").unwrap();
         assert_eq!(p1.exchange_name(), "polymarket");
 
-        let p2 = ConnectionPool::new(cfg, reconnect_config(), factory, "kalshi");
+        let p2 = ConnectionPool::new(cfg, reconnect_config(), factory, "kalshi").unwrap();
         assert_eq!(p2.exchange_name(), "kalshi");
     }
 
@@ -626,7 +862,7 @@ mod tests {
     #[tokio::test]
     async fn test_pool_connect_is_noop() {
         let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         assert!(pool.connect().await.is_ok());
         assert!(pool.connections.lock().unwrap().is_empty());
@@ -635,10 +871,41 @@ mod tests {
     #[tokio::test]
     async fn test_pool_empty_subscribe() {
         let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
-        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
 
         assert!(pool.subscribe(&[]).await.is_ok());
         assert!(pool.connections.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_pool_resubscribe_tears_down_old() {
+        let cc = Arc::new(AtomicU32::new(0));
+        let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
+        let mut pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+
+        pool.subscribe(&make_tokens(5)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(pool.connections.lock().unwrap().len(), 1);
+
+        // Re-subscribe should tear down old and create new
+        pool.subscribe(&make_tokens(10)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(pool.connections.lock().unwrap().len(), 1);
+        assert_eq!(pool.connections.lock().unwrap()[0].tokens.len(), 10);
+    }
+
+    // -- Stats ----------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_pool_stats_initial() {
+        let factory: StreamFactory = Arc::new(|| Box::new(MockDataStream::new()));
+        let pool = ConnectionPool::new(pool_config(10, 500), reconnect_config(), factory, "test").unwrap();
+        let stats = pool.stats();
+
+        assert_eq!(stats.active_connections, 0);
+        assert_eq!(stats.total_rotations, 0);
+        assert_eq!(stats.total_restarts, 0);
+        assert_eq!(stats.events_dropped, 0);
     }
 
     // -- Health monitoring ----------------------------------------------------
@@ -649,15 +916,16 @@ mod tests {
         let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
         let mut cfg = pool_config(10, 500);
-        cfg.connection_ttl_secs = 1;
-        cfg.preemptive_reconnect_secs = 0;
+        cfg.connection_ttl_secs = 2;
+        cfg.preemptive_reconnect_secs = 1;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
         pool.subscribe(&make_tokens(1)).await.unwrap();
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected TTL rotation");
+        assert!(pool.stats().total_rotations > 0, "Expected rotation counter > 0");
     }
 
     #[tokio::test]
@@ -666,45 +934,44 @@ mod tests {
         let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], true);
 
         let mut cfg = pool_config(10, 500);
-        cfg.connection_ttl_secs = 3;
-        cfg.preemptive_reconnect_secs = 2; // threshold = 3 - 2 = 1s
+        cfg.connection_ttl_secs = 4;
+        cfg.preemptive_reconnect_secs = 3; // threshold = 4 - 3 = 1s
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
         pool.subscribe(&make_tokens(1)).await.unwrap();
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected preemptive reconnect at ~1s");
     }
 
     #[tokio::test]
     async fn test_pool_silent_death_detection() {
         let cc = Arc::new(AtomicU32::new(0));
-        // Sends 1 event then stops — goes silent
         let factory = counting_factory(cc.clone(), vec![snapshot_event("t1")], false);
 
         let mut cfg = pool_config(10, 500);
-        cfg.max_silent_secs = 1;
+        cfg.max_silent_secs = 2;
         cfg.health_check_interval_secs = 1;
         cfg.connection_ttl_secs = 120;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
         pool.subscribe(&make_tokens(1)).await.unwrap();
 
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected restart after silence");
+        assert!(pool.stats().total_restarts > 0, "Expected restart counter > 0");
     }
 
     #[tokio::test]
     async fn test_pool_crashed_task_restart() {
         let cc = Arc::new(AtomicU32::new(0));
-        // Empty events = stream returns None immediately = task finishes
         let factory = counting_factory(cc.clone(), vec![], false);
 
         let mut cfg = pool_config(10, 500);
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
         pool.subscribe(&make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -721,7 +988,7 @@ mod tests {
         cfg.max_silent_secs = 60;
         cfg.health_check_interval_secs = 1;
 
-        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test");
+        let mut pool = ConnectionPool::new(cfg, reconnect_config(), factory, "test").unwrap();
         pool.subscribe(&make_tokens(1)).await.unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
