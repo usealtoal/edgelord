@@ -304,8 +304,24 @@ jobs:
 
               sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH" $EXTRA_ARGS
               sudo systemctl restart edgelord
-              sleep 2
-              sudo systemctl is-active edgelord
+
+              # Wait for service to become active (up to 30s)
+              for i in {1..15}; do
+                sleep 2
+                STATUS=$(sudo systemctl is-active edgelord || true)
+                echo "Service status: $STATUS"
+                if [[ "$STATUS" == "active" ]]; then
+                  echo "Service started successfully"
+                  return 0
+                elif [[ "$STATUS" == "failed" ]]; then
+                  echo "Service failed to start. Logs:"
+                  sudo journalctl -u edgelord --no-pager -n 50
+                  return 1
+                fi
+              done
+              echo "Service did not become active within 30s"
+              sudo journalctl -u edgelord --no-pager -n 50
+              return 1
             }
 
             rollback() {
