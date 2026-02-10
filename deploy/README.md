@@ -62,7 +62,15 @@ git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
    sudo mkdir -p /opt/edgelord/{config,releases,data}
    ```
 
-2. Clone repo (for dugout vault access):
+2. Set up GitHub CLI (for private repo access):
+   ```bash
+   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+   sudo apt update && sudo apt install gh
+   gh auth login  # Choose HTTPS, follow prompts
+   ```
+
+3. Clone repo (for dugout vault access):
    ```bash
    git clone https://github.com/usealtoal/edgelord.git /opt/edgelord/repo
    ```
