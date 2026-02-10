@@ -6,7 +6,7 @@ description = "Polymarket arbitrage detection and execution"
 license = "UNLICENSED"
 
 [features]
-default = ["polymarket"]
+default = ["polymarket", "telegram"]
 polymarket = [
     "dep:polymarket-client-sdk",
     "dep:alloy-signer-local",
