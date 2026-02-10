@@ -245,6 +245,8 @@ mod tests {
                 })
                 .collect(),
             active,
+            volume_24h: None,
+            liquidity: None,
         }
     }
 

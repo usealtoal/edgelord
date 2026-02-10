@@ -1,7 +1,12 @@
 //! Polymarket REST API client.
 //!
-//! Provides HTTP client functionality for interacting with the Polymarket
-//! CLOB API to fetch market data and metadata.
+//! Supports two API surfaces:
+//! - **CLOB API** (`clob.polymarket.com`) — order execution, order book queries
+//! - **Gamma API** (`gamma-api.polymarket.com`) — market discovery with
+//!   volume, liquidity, and outcome metadata
+//!
+//! Market discovery uses the Gamma API for richer data (volume/liquidity).
+//! All other operations (WS streaming, order execution) use the CLOB API.
 
 use std::time::Duration;
 
@@ -10,18 +15,21 @@ use reqwest::Client as HttpClient;
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
-use super::response::{PolymarketMarket, PolymarketMarketsResponse};
+use super::response::{GammaMarket, PolymarketMarket, PolymarketMarketsResponse};
 use crate::app::PolymarketConfig;
 use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
 use crate::error::Result;
 
-/// HTTP client for the Polymarket REST API.
+/// HTTP client for the Polymarket REST APIs.
 ///
-/// Handles fetching market data from the Polymarket CLOB (Central Limit Order Book)
-/// API endpoints.
+/// Handles fetching market data from both the CLOB and Gamma APIs.
+/// Market discovery uses Gamma (richer metadata); trading uses CLOB.
 pub struct PolymarketClient {
     http: HttpClient,
+    /// CLOB API base URL (order execution, order book).
     base_url: String,
+    /// Gamma API base URL (market discovery, volume/liquidity).
+    gamma_url: String,
     retry_max_attempts: u32,
     retry_backoff_ms: u64,
 }
@@ -37,6 +45,7 @@ impl PolymarketClient {
     pub fn new(base_url: String) -> Self {
         Self {
             http: HttpClient::new(),
+            gamma_url: "https://gamma-api.polymarket.com".into(),
             base_url,
             retry_max_attempts: 1,
             retry_backoff_ms: 0,
@@ -57,6 +66,7 @@ impl PolymarketClient {
         Self {
             http,
             base_url: config.api_url.clone(),
+            gamma_url: config.gamma_api_url.clone(),
             retry_max_attempts: config.http.retry_max_attempts,
             retry_backoff_ms: config.http.retry_backoff_ms,
         }
@@ -117,26 +127,40 @@ impl PolymarketClient {
         }
     }
 
-    /// Fetch active markets from the Polymarket API.
+    /// Fetch active markets from the CLOB API.
     ///
-    /// Returns markets that are currently active and not closed, limited to
-    /// the specified count for resource management.
-    ///
-    /// # Arguments
-    ///
-    /// * `limit` - Maximum number of markets to fetch
+    /// Returns raw market data without volume/liquidity metadata.
+    /// Prefer [`get_gamma_markets`] for market discovery.
     pub async fn get_active_markets(&self, limit: usize) -> Result<Vec<PolymarketMarket>> {
         let url = format!(
             "{}/markets?active=true&closed=false&limit={}",
             self.base_url, limit
         );
 
-        info!(url = %url, "Fetching active markets");
+        info!(url = %url, "Fetching active markets (CLOB)");
 
         let response: PolymarketMarketsResponse = self.get_with_retry(&url).await?;
 
         let markets = response.data.unwrap_or_default();
-        debug!(count = markets.len(), "Fetched markets");
+        debug!(count = markets.len(), "Fetched markets from CLOB");
+
+        Ok(markets)
+    }
+
+    /// Fetch active markets from the Gamma API.
+    ///
+    /// Returns market data with volume, liquidity, and outcome metadata.
+    /// Used for market discovery and filtering.
+    pub async fn get_gamma_markets(&self, limit: usize) -> Result<Vec<GammaMarket>> {
+        let url = format!(
+            "{}/markets?active=true&closed=false&limit={}",
+            self.gamma_url, limit
+        );
+
+        info!(url = %url, "Fetching active markets (Gamma)");
+
+        let markets: Vec<GammaMarket> = self.get_with_retry(&url).await?;
+        debug!(count = markets.len(), "Fetched markets from Gamma");
 
         Ok(markets)
     }
@@ -145,7 +169,7 @@ impl PolymarketClient {
 #[async_trait]
 impl MarketFetcher for PolymarketClient {
     async fn get_markets(&self, limit: usize) -> Result<Vec<MarketInfo>> {
-        let markets = self.get_active_markets(limit).await?;
+        let markets = self.get_gamma_markets(limit).await?;
         Ok(markets.into_iter().map(MarketInfo::from).collect())
     }
 
@@ -153,6 +177,10 @@ impl MarketFetcher for PolymarketClient {
         "Polymarket"
     }
 }
+
+// ---------------------------------------------------------------------------
+// MarketInfo conversions
+// ---------------------------------------------------------------------------
 
 impl From<PolymarketMarket> for MarketInfo {
     fn from(m: PolymarketMarket) -> Self {
@@ -169,6 +197,35 @@ impl From<PolymarketMarket> for MarketInfo {
                 })
                 .collect(),
             active: m.active && !m.closed,
+            volume_24h: m.volume_24h,
+            liquidity: m.liquidity,
+        }
+    }
+}
+
+impl From<GammaMarket> for MarketInfo {
+    fn from(m: GammaMarket) -> Self {
+        let token_ids = m.token_ids();
+        let names = m.outcome_names();
+        let prices = m.outcome_prices();
+
+        let outcomes = token_ids
+            .into_iter()
+            .enumerate()
+            .map(|(i, token_id)| OutcomeInfo {
+                token_id,
+                name: names.get(i).cloned().unwrap_or_default(),
+                price: prices.get(i).copied(),
+            })
+            .collect();
+
+        Self {
+            id: m.condition_id,
+            question: m.question.unwrap_or_default(),
+            outcomes,
+            active: m.active && !m.closed,
+            volume_24h: m.volume_24hr,
+            liquidity: m.liquidity_num,
         }
     }
 }

@@ -36,6 +36,8 @@ fn test_exchange_config_parses_binary_markets() {
             },
         ],
         active: true,
+        volume_24h: None,
+        liquidity: None,
     }];
 
     let markets = config.parse_markets(&market_infos);

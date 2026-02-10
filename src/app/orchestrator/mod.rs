@@ -240,6 +240,23 @@ impl Orchestrator {
             return Ok(());
         }
 
+        // Apply volume/liquidity filter before subscribing
+        let market_filter = ExchangeFactory::create_filter(&config)?;
+        let market_infos = market_filter.filter(&market_infos);
+        let markets_filtered = market_infos.len();
+
+        info!(
+            markets_fetched,
+            markets_filtered,
+            rejected = markets_fetched - markets_filtered,
+            "Volume/liquidity filter applied"
+        );
+
+        if market_infos.is_empty() {
+            warn!("No markets passed volume/liquidity filter");
+            return Ok(());
+        }
+
         // Parse market info using exchange-specific configuration
         let exchange_config = ExchangeFactory::create_exchange_config(&config);
         let markets = exchange_config.parse_markets(&market_infos);

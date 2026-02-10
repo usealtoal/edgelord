@@ -103,6 +103,10 @@ pub struct MarketInfo {
     pub outcomes: Vec<OutcomeInfo>,
     /// Whether the market is currently active for trading.
     pub active: bool,
+    /// Trading volume in the last 24 hours (USD), if available.
+    pub volume_24h: Option<f64>,
+    /// Current liquidity depth (USD), if available.
+    pub liquidity: Option<f64>,
 }
 
 /// Information about a single outcome in a market.

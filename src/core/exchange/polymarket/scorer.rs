@@ -154,6 +154,8 @@ mod tests {
             question: format!("Test market {}", id),
             outcomes,
             active: true,
+            volume_24h: None,
+            liquidity: None,
         }
     }
 
@@ -173,6 +175,8 @@ mod tests {
             question: format!("Test market {}", id),
             outcomes,
             active: true,
+            volume_24h: None,
+            liquidity: None,
         }
     }
 
@@ -374,6 +378,8 @@ mod tests {
                 },
             ],
             active: true,
+            volume_24h: None,
+            liquidity: None,
         };
         let score = scorer.opportunity_score(&market);
         assert!((score - 0.5).abs() < SCORE_TOLERANCE);

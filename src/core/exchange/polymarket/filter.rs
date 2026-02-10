@@ -59,22 +59,22 @@ impl MarketFilter for PolymarketFilter {
             return false;
         }
 
-        // TODO: Add volume and liquidity filtering when API data is available
-        // The current Polymarket API response (PolymarketMarket) doesn't include
-        // volume_24h or liquidity fields. To implement these filters:
-        // 1. Check if the API has endpoints that provide volume/liquidity data
-        //    (e.g., market stats endpoint or enhanced market data)
-        // 2. Add volume_24h and liquidity fields to PolymarketMarket struct
-        // 3. Pipe the data through to MarketInfo (add optional fields)
-        // 4. Add filter checks here:
-        //    - if let Some(volume) = market.volume_24h {
-        //          if volume < self.config.min_volume_24h { return false; }
-        //      }
-        //    - if let Some(liquidity) = market.liquidity {
-        //          if liquidity < self.config.min_liquidity { return false; }
-        //      }
-        //
-        // Currently min_volume_24h and min_liquidity config values are ignored.
+        // Volume filter: reject markets below minimum 24h volume.
+        // Markets without volume data pass (graceful degradation — not all
+        // exchanges provide this field, and we don't want to reject markets
+        // just because the API didn't include it).
+        if let Some(volume) = market.volume_24h {
+            if volume < self.config.min_volume_24h {
+                return false;
+            }
+        }
+
+        // Liquidity filter: reject markets below minimum liquidity depth.
+        if let Some(liquidity) = market.liquidity {
+            if liquidity < self.config.min_liquidity {
+                return false;
+            }
+        }
 
         true
     }
@@ -98,6 +98,16 @@ mod tests {
     }
 
     fn make_market(id: &str, active: bool, outcome_count: usize) -> MarketInfo {
+        make_market_with_metrics(id, active, outcome_count, None, None)
+    }
+
+    fn make_market_with_metrics(
+        id: &str,
+        active: bool,
+        outcome_count: usize,
+        volume_24h: Option<f64>,
+        liquidity: Option<f64>,
+    ) -> MarketInfo {
         let outcomes: Vec<OutcomeInfo> = (0..outcome_count)
             .map(|i| OutcomeInfo {
                 token_id: format!("token-{}", i),
@@ -111,6 +121,8 @@ mod tests {
             question: format!("Test market {}", id),
             outcomes,
             active,
+            volume_24h,
+            liquidity,
         }
     }
 
@@ -264,6 +276,126 @@ mod tests {
         let market = make_market("m1", true, 0);
 
         assert!(!filter.is_eligible(&market));
+    }
+
+    // --- volume/liquidity filter tests ---
+
+    #[test]
+    fn is_eligible_volume_below_min_returns_false() {
+        let mut config = default_config();
+        config.min_volume_24h = 1000.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, Some(500.0), None);
+
+        assert!(!filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_volume_at_min_returns_true() {
+        let mut config = default_config();
+        config.min_volume_24h = 1000.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, Some(1000.0), None);
+
+        assert!(filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_volume_above_min_returns_true() {
+        let mut config = default_config();
+        config.min_volume_24h = 1000.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, Some(50000.0), None);
+
+        assert!(filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_no_volume_data_passes() {
+        let mut config = default_config();
+        config.min_volume_24h = 1000.0;
+        let filter = PolymarketFilter::new(&config);
+
+        // No volume data → graceful pass (don't reject unknowns)
+        let market = make_market_with_metrics("m1", true, 2, None, None);
+
+        assert!(filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_liquidity_below_min_returns_false() {
+        let mut config = default_config();
+        config.min_liquidity = 500.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, None, Some(200.0));
+
+        assert!(!filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_liquidity_at_min_returns_true() {
+        let mut config = default_config();
+        config.min_liquidity = 500.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, None, Some(500.0));
+
+        assert!(filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_no_liquidity_data_passes() {
+        let mut config = default_config();
+        config.min_liquidity = 500.0;
+        let filter = PolymarketFilter::new(&config);
+
+        let market = make_market_with_metrics("m1", true, 2, None, None);
+
+        assert!(filter.is_eligible(&market));
+    }
+
+    #[test]
+    fn is_eligible_both_volume_and_liquidity_must_pass() {
+        let mut config = default_config();
+        config.min_volume_24h = 1000.0;
+        config.min_liquidity = 500.0;
+        let filter = PolymarketFilter::new(&config);
+
+        // Both pass
+        assert!(filter.is_eligible(&make_market_with_metrics(
+            "m1", true, 2, Some(2000.0), Some(1000.0)
+        )));
+
+        // Volume fails
+        assert!(!filter.is_eligible(&make_market_with_metrics(
+            "m2", true, 2, Some(100.0), Some(1000.0)
+        )));
+
+        // Liquidity fails
+        assert!(!filter.is_eligible(&make_market_with_metrics(
+            "m3", true, 2, Some(2000.0), Some(100.0)
+        )));
+
+        // Both fail
+        assert!(!filter.is_eligible(&make_market_with_metrics(
+            "m4", true, 2, Some(100.0), Some(100.0)
+        )));
+    }
+
+    #[test]
+    fn is_eligible_zero_thresholds_accept_everything() {
+        let mut config = default_config();
+        config.min_volume_24h = 0.0;
+        config.min_liquidity = 0.0;
+        let filter = PolymarketFilter::new(&config);
+
+        assert!(filter.is_eligible(&make_market_with_metrics(
+            "m1", true, 2, Some(0.0), Some(0.0)
+        )));
     }
 
     // --- filter (batch) tests ---
