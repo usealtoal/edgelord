@@ -23,11 +23,11 @@ pub struct SingleConditionConfig {
 }
 
 fn default_min_edge() -> Decimal {
-    Decimal::new(5, 2) // 0.05
+    Decimal::new(3, 2) // 0.03 (accounts for gas costs)
 }
 
 fn default_min_profit() -> Decimal {
-    Decimal::new(50, 2) // 0.50
+    Decimal::new(10, 2) // 0.10
 }
 
 impl Default for SingleConditionConfig {

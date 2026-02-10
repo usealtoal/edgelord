@@ -44,6 +44,12 @@ pub(crate) fn handle_market_event(
                 let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
+                debug!(
+                    market_id = %market.market_id(),
+                    opportunities_found = opportunities.len(),
+                    "Strategy detection complete (snapshot)"
+                );
+
                 for opp in opportunities {
                     handle_opportunity(
                         opp,
@@ -69,6 +75,12 @@ pub(crate) fn handle_market_event(
             if let Some(market) = registry.get_by_token(&token_id) {
                 let ctx = DetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
+
+                debug!(
+                    market_id = %market.market_id(),
+                    opportunities_found = opportunities.len(),
+                    "Strategy detection complete (delta)"
+                );
 
                 for opp in opportunities {
                     handle_opportunity(

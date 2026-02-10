@@ -18,12 +18,12 @@ format = "json"
 enabled = ["single_condition", "market_rebalancing"]
 
 [strategies.single_condition]
-min_edge = 0.05
-min_profit = 0.50
+min_edge = 0.03
+min_profit = 0.10
 
 [strategies.market_rebalancing]
 min_edge = 0.03
-min_profit = 1.00
+min_profit = 0.25
 max_outcomes = 10
 
 [strategies.combinatorial]
@@ -35,7 +35,7 @@ enabled = false
 [risk]
 max_position_per_market = 500
 max_total_exposure = 5000
-min_profit_threshold = 0.10
+min_profit_threshold = 0.03
 max_slippage = 0.02
 
 [telegram]
