@@ -28,9 +28,8 @@ pub use inference::InferenceConfig;
 pub use llm::{AnthropicConfig, LlmConfig, LlmProvider, OpenAiConfig};
 pub use logging::LoggingConfig;
 pub use polymarket::{
-    DedupStrategyConfig, Environment, OutcomeBonusConfig, PolymarketConfig,
-    PolymarketConnectionConfig, PolymarketDedupConfig, PolymarketFilterConfig,
-    PolymarketHttpConfig, PolymarketScoringConfig, ScoringWeightsConfig,
+    DedupStrategyConfig, Environment, OutcomeBonusConfig, PolymarketConfig, PolymarketDedupConfig,
+    PolymarketFilterConfig, PolymarketHttpConfig, PolymarketScoringConfig, ScoringWeightsConfig,
 };
 pub use profile::{Profile, ResourceConfig};
 pub use service::{

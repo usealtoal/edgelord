@@ -2,6 +2,8 @@
 
 use serde::Deserialize;
 
+use super::service::ConnectionPoolConfig;
+
 /// Exchange environment (testnet vs mainnet).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -16,50 +18,6 @@ impl std::fmt::Display for Environment {
         match self {
             Self::Testnet => write!(f, "testnet"),
             Self::Mainnet => write!(f, "mainnet"),
-        }
-    }
-}
-
-/// Polymarket connection configuration.
-#[derive(Debug, Clone, Deserialize)]
-pub struct PolymarketConnectionConfig {
-    /// Connection time-to-live in seconds.
-    #[serde(default = "default_connection_ttl_secs")]
-    pub connection_ttl_secs: u64,
-    /// Seconds before TTL to preemptively reconnect.
-    #[serde(default = "default_preemptive_reconnect_secs")]
-    pub preemptive_reconnect_secs: u64,
-    /// Maximum number of connections.
-    #[serde(default = "default_max_connections")]
-    pub max_connections: usize,
-    /// Maximum subscriptions per connection.
-    #[serde(default = "default_subscriptions_per_connection")]
-    pub subscriptions_per_connection: usize,
-}
-
-const fn default_connection_ttl_secs() -> u64 {
-    120
-}
-
-const fn default_preemptive_reconnect_secs() -> u64 {
-    30
-}
-
-const fn default_max_connections() -> usize {
-    10
-}
-
-const fn default_subscriptions_per_connection() -> usize {
-    500
-}
-
-impl Default for PolymarketConnectionConfig {
-    fn default() -> Self {
-        Self {
-            connection_ttl_secs: default_connection_ttl_secs(),
-            preemptive_reconnect_secs: default_preemptive_reconnect_secs(),
-            max_connections: default_max_connections(),
-            subscriptions_per_connection: default_subscriptions_per_connection(),
         }
     }
 }
@@ -353,7 +311,7 @@ pub struct PolymarketConfig {
     pub chain_id: u64,
     /// Connection management configuration.
     #[serde(default)]
-    pub connections: PolymarketConnectionConfig,
+    pub connections: ConnectionPoolConfig,
     /// HTTP client configuration for REST API calls.
     #[serde(default)]
     pub http: PolymarketHttpConfig,
@@ -388,7 +346,7 @@ impl Default for PolymarketConfig {
             ws_url: default_polymarket_ws_url(),
             api_url: default_polymarket_api_url(),
             chain_id: default_polymarket_chain_id(),
-            connections: PolymarketConnectionConfig::default(),
+            connections: ConnectionPoolConfig::default(),
             http: PolymarketHttpConfig::default(),
             market_filter: PolymarketFilterConfig::default(),
             scoring: PolymarketScoringConfig::default(),

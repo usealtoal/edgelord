@@ -27,6 +27,7 @@ mod dedup;
 mod exchange_config;
 mod factory;
 mod filter;
+mod pool;
 pub mod polymarket;
 mod reconnecting;
 mod scorer;
@@ -37,6 +38,7 @@ pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
 pub use exchange_config::ExchangeConfig;
 pub use factory::ExchangeFactory;
 pub use filter::{MarketFilter, MarketFilterConfig};
+pub use pool::{ConnectionPool, StreamFactory};
 pub use reconnecting::ReconnectingDataStream;
 pub use scorer::MarketScorer;
 pub use types::{

@@ -352,11 +352,23 @@ impl Orchestrator {
 
         let cluster_handle = cluster_handle;
 
-        // Create data stream with reconnection support
-        // TODO: connection pool for multi-WS support when max_connections > 1
-        let inner_stream = ExchangeFactory::create_data_stream(&config);
-        let mut data_stream =
-            ReconnectingDataStream::new(inner_stream, config.reconnection.clone());
+        // Create data stream with optional connection pooling
+        let mut data_stream: Box<dyn MarketDataStream> =
+            if let Some(pool) = ExchangeFactory::create_connection_pool(&config) {
+                info!(
+                    exchange = pool.exchange_name(),
+                    "Using connection pool"
+                );
+                Box::new(pool)
+            } else {
+                info!("Using single connection");
+                let inner = ExchangeFactory::create_data_stream(&config);
+                Box::new(ReconnectingDataStream::new(
+                    inner,
+                    config.reconnection.clone(),
+                ))
+            };
+
         data_stream.connect().await?;
         data_stream.subscribe(&token_ids).await?;
 
