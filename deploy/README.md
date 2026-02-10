@@ -38,10 +38,13 @@ git push
 ### VPS Setup (One-Time)
 
 ```bash
-# Install dugout on VPS
+# Install Rust and dugout
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
 cargo install dugout
 
-# Option A: Copy your local identity to VPS
+# Option A: Copy your local identity to VPS (simpler)
+# Run from your local machine:
 scp ~/.dugout/identity user@vps:~/.dugout/identity
 
 # Option B: Generate new identity on VPS and add as recipient
@@ -55,32 +58,7 @@ dugout sync
 git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
 ```
 
-## VPS Initial Setup
-
-1. Create directories:
-   ```bash
-   sudo mkdir -p /opt/edgelord/{config,releases,data}
-   ```
-
-2. Set up GitHub CLI (for private repo access):
-   ```bash
-   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-   sudo apt update && sudo apt install gh
-   gh auth login  # Choose HTTPS, follow prompts
-   ```
-
-3. Clone repo (for dugout vault access):
-   ```bash
-   git clone https://github.com/usealtoal/edgelord.git /opt/edgelord/repo
-   ```
-
-3. Copy production config:
-   ```bash
-   cp /opt/edgelord/repo/deploy/config.prod.toml /opt/edgelord/config/config.toml
-   ```
-
-> **Note:** The service runs as your current user (e.g., root) so dugout can access `~/.dugout/identity`. No need to create a separate `edgelord` user.
+> **Note:** The deploy workflow automatically syncs the dugout vault and config to the VPS. No need to clone the repo on the VPS.
 
 ## GitHub Actions Deployment
 
@@ -115,6 +93,13 @@ The deploy workflow supports runtime configuration:
 - `telegram_enabled` - Enable Telegram notifications
 - `dugout` - Use dugout for secrets (default: true)
 
+### What Gets Deployed
+
+Each deploy syncs:
+- **Binary** - The compiled `edgelord` binary
+- **Dugout vault** - `.dugout.toml` (encrypted secrets)
+- **Config** - `deploy/config.prod.toml` (only on first deploy, preserves customizations)
+
 ### Deploy
 
 1. Go to Actions → Manual Deploy
@@ -123,40 +108,55 @@ The deploy workflow supports runtime configuration:
 4. Type `deploy-production` to confirm
 5. Run workflow
 
+The workflow will:
+- Build and test the binary
+- Upload binary, vault, and config to VPS
+- Install/update the systemd service
+- Restart and verify health
+
 ## Management Commands
 
-After deployment, SSH to VPS and use dugout for commands that need secrets:
+After deployment, SSH to VPS. Change to the deploy directory first:
+
+```bash
+cd /opt/edgelord
+```
+
+Commands that need secrets (use dugout):
 
 ```bash
 # Start a shell with secrets loaded
 dugout env
-# Then run commands normally:
-edgelord status
-edgelord wallet status
+edgelord wallet status --config /opt/edgelord/config/config.toml
 edgelord check live --config /opt/edgelord/config/config.toml
 
-# Or run individual commands:
+# Or run individual commands
 dugout run -- edgelord wallet status --config /opt/edgelord/config/config.toml
 ```
 
-Commands that don't need secrets work directly:
+Commands that don't need secrets:
 
 ```bash
-# View logs
 edgelord logs -f
-
-# View statistics
-edgelord statistics today
-
-# Service management
+edgelord statistics today --db /opt/edgelord/data/edgelord.db
 sudo systemctl status edgelord
 sudo systemctl restart edgelord
-sudo systemctl stop edgelord
 ```
+
+## Updating Secrets
+
+When you update secrets locally:
+
+```bash
+dugout set NEW_SECRET_KEY
+git add .dugout.toml && git commit -m "chore: update secrets" && git push
+```
+
+Then run a deploy (any mode) - the workflow syncs the vault automatically.
 
 ## Legacy: Manual .env Setup
 
-If not using dugout (not recommended), create a `.env` file:
+If not using dugout (not recommended), create a `.env` file on the VPS:
 
 ```bash
 sudo tee /opt/edgelord/.env << 'EOF'
@@ -165,7 +165,6 @@ TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 EOF
 sudo chmod 600 /opt/edgelord/.env
-sudo chown edgelord:edgelord /opt/edgelord/.env
 ```
 
 Then deploy with `dugout: false` in the workflow inputs.

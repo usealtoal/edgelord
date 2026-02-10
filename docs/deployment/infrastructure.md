@@ -1,6 +1,6 @@
 # Infrastructure
 
-This guide covers VPS setup and service deployment.
+This guide covers VPS setup for edgelord deployment.
 
 ## Recommended Baseline
 
@@ -8,93 +8,80 @@ This guide covers VPS setup and service deployment.
 - 4-8 GB RAM
 - SSD storage
 - Stable outbound network performance
-- Region aligned with your latency and compliance requirements
+- Region: London for Polymarket (lowest latency)
 
-## Host Setup
+## Automated Deployment (Recommended)
+
+Use GitHub Actions for deployment. See [Deployment Guide](../../deploy/README.md).
+
+VPS only needs:
+1. Rust + dugout installed
+2. Dugout identity configured
+
+The workflow handles binary, config, and vault syncing automatically.
+
+## VPS Bootstrap
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential pkg-config libssl-dev curl git
+sudo apt install -y build-essential pkg-config libssl-dev curl
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
-# Install dugout for secrets management
+# Install dugout
 cargo install dugout
 ```
 
-## Build and Configure
+## Dugout Identity Setup
 
 ```bash
-git clone https://github.com/usealtoal/edgelord.git
-cd edgelord
-cargo build --release
-cp config.toml.example config.toml
-```
-
-Validate:
-
-```bash
-./target/release/edgelord check config --config config.toml
-./target/release/edgelord check connection --config config.toml
-```
-
-## Secrets Setup
-
-Set up dugout identity on the VPS:
-
-```bash
-# Option A: Copy your local identity
+# Option A: Copy your local identity (simpler)
+# From your local machine:
 scp ~/.dugout/identity user@vps:~/.dugout/identity
 
-# Option B: Generate new identity and add as recipient
+# Option B: Generate new identity on VPS
 dugout setup
-dugout whoami  # Share this key with team to be added as recipient
+dugout whoami  # Add this key as recipient locally
 ```
 
-Clone the repo to access the encrypted vault:
+## Runtime Layout
 
-```bash
-cd /opt/edgelord
-git clone https://github.com/usealtoal/edgelord.git repo
+After deployment:
+
+```text
+/opt/edgelord/
+  current/                # symlink -> releases/<sha>
+  releases/<git-sha>/     # deployed releases
+  config/config.toml      # production config
+  data/edgelord.db        # sqlite database
+  .dugout.toml            # encrypted vault
 ```
 
 ## Systemd Service
 
-Install from CLI with dugout integration:
+The deploy workflow installs the service automatically. Manual install:
 
 ```bash
-sudo ./target/release/edgelord service install \
-  --config /opt/edgelord/config.toml \
-  --user edgelord \
+sudo edgelord service install \
+  --config /opt/edgelord/config/config.toml \
+  --user root \
   --working-dir /opt/edgelord \
   --dugout
-```
-
-This generates a systemd unit that runs:
-```
-ExecStart=dugout run -- /opt/edgelord/current/edgelord run --config ...
-```
-
-For legacy `.env` file approach (not recommended):
-
-```bash
-sudo ./target/release/edgelord service install \
-  --config /opt/edgelord/config.toml \
-  --user edgelord \
-  --working-dir /opt/edgelord
 ```
 
 Uninstall:
 
 ```bash
-sudo ./target/release/edgelord service uninstall
+sudo edgelord service uninstall
 ```
 
-## Deployment Validation
+## Validation
 
-Before marking a host live:
+Before going live:
 
-1. `check config` passes
-2. `check connection` passes
-3. `check live` passes for intended mode
-4. Logs and status commands behave as expected
+```bash
+cd /opt/edgelord
+edgelord check config --config config/config.toml
+dugout run -- edgelord check connection --config config/config.toml
+dugout run -- edgelord check live --config config/config.toml
+```

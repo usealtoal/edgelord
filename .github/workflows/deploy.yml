@@ -172,7 +172,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Upload release binary
+      - name: Upload release artifacts
         if: ${{ inputs.mode == 'deploy' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -182,11 +182,20 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$DEPLOY_USER"
-          scp \
-            -i ~/.ssh/id_ed25519 \
-            -P "$DEPLOY_SSH_PORT" \
+          # Upload binary
+          scp -i ~/.ssh/id_ed25519 -P "$DEPLOY_SSH_PORT" \
             target/release/edgelord \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/edgelord-$RELEASE_SHA"
+          # Upload dugout vault (if exists)
+          if [[ -f .dugout.toml ]]; then
+            scp -i ~/.ssh/id_ed25519 -P "$DEPLOY_SSH_PORT" \
+              .dugout.toml \
+              "$DEPLOY_USER@$DEPLOY_HOST:/tmp/dugout-$RELEASE_SHA.toml"
+          fi
+          # Upload production config
+          scp -i ~/.ssh/id_ed25519 -P "$DEPLOY_SSH_PORT" \
+            deploy/config.prod.toml \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/config-$RELEASE_SHA.toml"
 
       - name: Deploy and restart
         env:
@@ -229,9 +238,27 @@ jobs:
             set -euo pipefail
 
             CONFIG_PATH="$DEPLOY_PATH/config/config.toml"
+            DUGOUT_PATH="$DEPLOY_PATH/.dugout.toml"
             CURRENT_LINK="$DEPLOY_PATH/current"
             RELEASE_DIR="$DEPLOY_PATH/releases/$RELEASE_SHA"
             PREV_TARGET="$(readlink -f "$CURRENT_LINK" || true)"
+
+            # Ensure directories exist
+            mkdir -p "$DEPLOY_PATH"/{config,releases,data}
+
+            # Update dugout vault (always sync from repo)
+            if [[ -f "/tmp/dugout-$RELEASE_SHA.toml" ]]; then
+              mv "/tmp/dugout-$RELEASE_SHA.toml" "$DUGOUT_PATH"
+              echo "Updated dugout vault"
+            fi
+
+            # Copy config if missing (preserve existing customizations)
+            if [[ ! -f "$CONFIG_PATH" && -f "/tmp/config-$RELEASE_SHA.toml" ]]; then
+              mv "/tmp/config-$RELEASE_SHA.toml" "$CONFIG_PATH"
+              echo "Created initial config"
+            else
+              rm -f "/tmp/config-$RELEASE_SHA.toml"
+            fi
 
             run_checks() {
               "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
