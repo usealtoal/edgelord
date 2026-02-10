@@ -273,14 +273,13 @@ jobs:
             fi
 
             run_checks() {
-              # Config check doesn't need secrets
-              "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
-
-              # Connection and live checks need secrets via dugout
+              # Use dugout for all checks so secrets are available
               local CMD_PREFIX=""
               if [[ "$DUGOUT" == "true" && -f "$DUGOUT_PATH" ]]; then
                 CMD_PREFIX="dugout run --"
               fi
+
+              $CMD_PREFIX "$CURRENT_LINK/edgelord" check config --config "$CONFIG_PATH"
 
               if [[ "$RUN_CONNECTION_CHECK" == "true" ]]; then
                 $CMD_PREFIX "$CURRENT_LINK/edgelord" check connection --config "$CONFIG_PATH"
