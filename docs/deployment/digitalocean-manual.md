@@ -181,7 +181,9 @@ sudo edgelord service install \
   --dugout
 ```
 
-Note: `--working-dir` points to the repo clone so dugout can find `.dugout.toml`.
+**Notes:**
+- `--working-dir` points to the repo clone so dugout can find `.dugout.toml`
+- `--user "$USER"` runs the service as your current user so dugout can access `~/.dugout/identity`
 
 Start and verify:
 

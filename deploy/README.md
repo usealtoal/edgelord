@@ -57,24 +57,22 @@ git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
 
 ## VPS Initial Setup
 
-1. Create edgelord user:
+1. Create directories:
    ```bash
-   sudo useradd -r -s /bin/false edgelord
-   sudo mkdir -p /opt/edgelord/{config,releases}
-   sudo chown -R edgelord:edgelord /opt/edgelord
+   sudo mkdir -p /opt/edgelord/{config,releases,data}
    ```
 
-2. Copy production config:
+2. Clone repo (for dugout vault access):
    ```bash
-   sudo cp deploy/config.prod.toml /opt/edgelord/config/config.toml
-   sudo chown edgelord:edgelord /opt/edgelord/config/config.toml
+   git clone https://github.com/usealtoal/edgelord.git /opt/edgelord/repo
    ```
 
-3. Clone repo for dugout vault access:
+3. Copy production config:
    ```bash
-   cd /opt/edgelord
-   sudo -u edgelord git clone https://github.com/usealtoal/edgelord.git repo
+   cp /opt/edgelord/repo/deploy/config.prod.toml /opt/edgelord/config/config.toml
    ```
+
+> **Note:** The service runs as your current user (e.g., root) so dugout can access `~/.dugout/identity`. No need to create a separate `edgelord` user.
 
 ## GitHub Actions Deployment
 
