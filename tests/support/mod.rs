@@ -6,3 +6,4 @@ pub mod market;
 pub mod order_book;
 pub mod registry;
 pub mod relation;
+pub mod stream;

@@ -2,7 +2,6 @@
 
 mod support;
 
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,6 +15,8 @@ use edgelord::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataSt
 use edgelord::error::{ConfigError, Error};
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
+
+use support::stream::ScriptedStream;
 
 #[test]
 fn factory_returns_error_when_exchange_config_missing() {
@@ -54,72 +55,9 @@ fn factory_returns_error_when_exchange_config_missing() {
     );
 }
 
-struct MockDataStream {
-    connect_results: VecDeque<Result<(), Error>>,
-    subscribe_results: VecDeque<Result<(), Error>>,
-    events: VecDeque<Option<MarketEvent>>,
-    connect_count: Arc<AtomicU32>,
-    subscribe_count: Arc<AtomicU32>,
-}
-
-impl MockDataStream {
-    fn new() -> Self {
-        Self {
-            connect_results: VecDeque::new(),
-            subscribe_results: VecDeque::new(),
-            events: VecDeque::new(),
-            connect_count: Arc::new(AtomicU32::new(0)),
-            subscribe_count: Arc::new(AtomicU32::new(0)),
-        }
-    }
-
-    fn with_connect_results(mut self, results: Vec<Result<(), Error>>) -> Self {
-        self.connect_results = results.into();
-        self
-    }
-
-    fn with_subscribe_results(mut self, results: Vec<Result<(), Error>>) -> Self {
-        self.subscribe_results = results.into();
-        self
-    }
-
-    fn with_events(mut self, events: Vec<Option<MarketEvent>>) -> Self {
-        self.events = events.into();
-        self
-    }
-
-    fn counts(&self) -> (Arc<AtomicU32>, Arc<AtomicU32>) {
-        (
-            Arc::clone(&self.connect_count),
-            Arc::clone(&self.subscribe_count),
-        )
-    }
-}
-
-#[async_trait::async_trait]
-impl MarketDataStream for MockDataStream {
-    async fn connect(&mut self) -> Result<(), Error> {
-        self.connect_count.fetch_add(1, Ordering::SeqCst);
-        self.connect_results.pop_front().unwrap_or(Ok(()))
-    }
-
-    async fn subscribe(&mut self, _token_ids: &[TokenId]) -> Result<(), Error> {
-        self.subscribe_count.fetch_add(1, Ordering::SeqCst);
-        self.subscribe_results.pop_front().unwrap_or(Ok(()))
-    }
-
-    async fn next_event(&mut self) -> Option<MarketEvent> {
-        self.events.pop_front().flatten()
-    }
-
-    fn exchange_name(&self) -> &'static str {
-        "mock"
-    }
-}
-
 #[tokio::test]
 async fn reconnect_retries_on_subscribe_failure() {
-    let mock = MockDataStream::new()
+    let mock = ScriptedStream::new()
         .with_connect_results(vec![Ok(()), Ok(()), Ok(())])
         .with_subscribe_results(vec![
             Ok(()),

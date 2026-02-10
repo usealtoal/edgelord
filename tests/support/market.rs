@@ -1,6 +1,20 @@
 use rust_decimal::Decimal;
 
-use edgelord::core::domain::{Market, MarketId, Outcome, TokenId};
+use edgelord::core::domain::{Market, MarketId, OrderBook, Outcome, TokenId};
+use edgelord::core::exchange::MarketEvent;
+
+/// Generate `n` token IDs named `t0`, `t1`, ..., `t{n-1}`.
+pub fn make_tokens(n: usize) -> Vec<TokenId> {
+    (0..n).map(|i| TokenId::from(format!("t{i}"))).collect()
+}
+
+/// Create an [`OrderBookSnapshot`] event for a given token ID string.
+pub fn snapshot_event(token: &str) -> MarketEvent {
+    MarketEvent::OrderBookSnapshot {
+        token_id: TokenId::from(token.to_string()),
+        book: OrderBook::new(TokenId::from(token.to_string())),
+    }
+}
 
 pub fn make_binary_market(
     id: &str,

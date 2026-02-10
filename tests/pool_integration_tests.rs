@@ -1,8 +1,8 @@
 //! Integration tests for the connection pool.
 //!
-//! These tests use mock WebSocket servers to verify pool behavior
-//! end-to-end: event delivery, connection failure recovery,
-//! multi-connection merging, backpressure, and TTL rotation.
+//! These tests use mock streams to verify pool behavior end-to-end:
+//! event delivery, multi-connection merging, backpressure,
+//! TTL rotation, and reconnection.
 
 mod support;
 
@@ -11,25 +11,16 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::app::{ConnectionPoolConfig, ReconnectionConfig};
-use edgelord::core::domain::{OrderBook, TokenId};
+use edgelord::app::ConnectionPoolConfig;
 use edgelord::core::exchange::{ConnectionPool, MarketDataStream, MarketEvent, StreamFactory};
-use edgelord::error::Result;
+
+use support::config::test_reconnection_config;
+use support::market::{make_tokens, snapshot_event};
+use support::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn make_tokens(n: usize) -> Vec<TokenId> {
-    (0..n).map(|i| TokenId::from(format!("t{i}"))).collect()
-}
-
-fn snapshot_event(token: &str) -> MarketEvent {
-    MarketEvent::OrderBookSnapshot {
-        token_id: TokenId::from(token.to_string()),
-        book: OrderBook::new(TokenId::from(token.to_string())),
-    }
-}
 
 fn pool_config(max_conns: usize, subs_per_conn: usize) -> ConnectionPoolConfig {
     ConnectionPoolConfig {
@@ -43,159 +34,18 @@ fn pool_config(max_conns: usize, subs_per_conn: usize) -> ConnectionPoolConfig {
     }
 }
 
-fn fast_reconnect() -> ReconnectionConfig {
-    ReconnectionConfig {
-        initial_delay_ms: 10,
-        max_delay_ms: 50,
-        backoff_multiplier: 1.5,
-        max_consecutive_failures: 5,
-        circuit_breaker_cooldown_ms: 50,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Mock stream — configurable via closures for maximum test flexibility
-// ---------------------------------------------------------------------------
-
-/// A mock [`MarketDataStream`] that yields events from a channel.
-///
-/// Each test sends events into the `event_tx` side, and the pool
-/// reads them via `next_event()`. This simulates a real WS server
-/// without needing actual network I/O.
-struct ChannelStream {
-    event_rx: tokio::sync::mpsc::Receiver<Option<MarketEvent>>,
-    connect_count: Arc<AtomicU32>,
-    subscribe_count: Arc<AtomicU32>,
-    subscribed_tokens: Arc<std::sync::Mutex<Vec<TokenId>>>,
-}
-
-struct ChannelStreamHandle {
-    event_tx: tokio::sync::mpsc::Sender<Option<MarketEvent>>,
-    connect_count: Arc<AtomicU32>,
-    subscribe_count: Arc<AtomicU32>,
-    subscribed_tokens: Arc<std::sync::Mutex<Vec<TokenId>>>,
-}
-
-impl ChannelStreamHandle {
-    /// Send an event to the stream.
-    async fn send(&self, event: MarketEvent) {
-        let _ = self.event_tx.send(Some(event)).await;
-    }
-
-    /// Signal end-of-stream (causes `next_event` to return `None`).
-    #[allow(dead_code)]
-    async fn close(&self) {
-        let _ = self.event_tx.send(None).await;
-    }
-
-    /// How many times `connect()` was called.
-    fn connect_count(&self) -> u32 {
-        self.connect_count.load(Ordering::SeqCst)
-    }
-
-    /// How many times `subscribe()` was called.
-    fn subscribe_count(&self) -> u32 {
-        self.subscribe_count.load(Ordering::SeqCst)
-    }
-
-    /// Which tokens were last subscribed to.
-    fn subscribed_tokens(&self) -> Vec<TokenId> {
-        self.subscribed_tokens.lock().unwrap().clone()
-    }
-}
-
-fn channel_stream(buffer: usize) -> (ChannelStream, ChannelStreamHandle) {
-    let (tx, rx) = tokio::sync::mpsc::channel(buffer);
-    let cc = Arc::new(AtomicU32::new(0));
-    let sc = Arc::new(AtomicU32::new(0));
-    let st = Arc::new(std::sync::Mutex::new(Vec::new()));
-    (
-        ChannelStream {
-            event_rx: rx,
-            connect_count: cc.clone(),
-            subscribe_count: sc.clone(),
-            subscribed_tokens: st.clone(),
-        },
-        ChannelStreamHandle {
-            event_tx: tx,
-            connect_count: cc,
-            subscribe_count: sc,
-            subscribed_tokens: st,
-        },
-    )
-}
-
-#[async_trait::async_trait]
-impl MarketDataStream for ChannelStream {
-    async fn connect(&mut self) -> Result<()> {
-        self.connect_count.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<()> {
-        self.subscribe_count.fetch_add(1, Ordering::SeqCst);
-        *self.subscribed_tokens.lock().unwrap() = token_ids.to_vec();
-        Ok(())
-    }
-
-    async fn next_event(&mut self) -> Option<MarketEvent> {
-        match self.event_rx.recv().await {
-            Some(Some(event)) => Some(event),
-            Some(None) | None => None,
-        }
-    }
-
-    fn exchange_name(&self) -> &'static str {
-        "mock"
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Cycling mock — produces events forever for TTL/health tests
-// ---------------------------------------------------------------------------
-
-struct CyclingStream {
-    events: Vec<MarketEvent>,
-    index: usize,
-    delay: Duration,
-    connect_count: Arc<AtomicU32>,
-}
-
-impl CyclingStream {
-    fn new(events: Vec<MarketEvent>, delay: Duration, connect_count: Arc<AtomicU32>) -> Self {
-        Self {
-            events,
-            index: 0,
-            delay,
-            connect_count,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl MarketDataStream for CyclingStream {
-    async fn connect(&mut self) -> Result<()> {
-        self.connect_count.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn subscribe(&mut self, _: &[TokenId]) -> Result<()> {
-        Ok(())
-    }
-
-    async fn next_event(&mut self) -> Option<MarketEvent> {
-        if self.events.is_empty() {
-            return std::future::pending().await;
-        }
-        tokio::time::sleep(self.delay).await;
-        let event = self.events[self.index % self.events.len()].clone();
-        self.index += 1;
-        Some(event)
-    }
-
-    fn exchange_name(&self) -> &'static str {
-        "mock"
-    }
+/// Collect handles created by the factory for inspection.
+fn tracked_channel_factory(
+) -> (StreamFactory, Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>>) {
+    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let h = handles.clone();
+    let factory: StreamFactory = Arc::new(move || {
+        let (stream, handle) = channel_stream(64);
+        h.lock().unwrap().push(handle);
+        Box::new(stream)
+    });
+    (factory, handles)
 }
 
 // ---------------------------------------------------------------------------
@@ -204,38 +54,27 @@ impl MarketDataStream for CyclingStream {
 
 #[tokio::test]
 async fn single_connection_delivers_events() {
-    // Use a shared handle list so the factory closure can hand us the controls.
-    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-    let handles_clone = handles.clone();
-
-    let factory: StreamFactory = Arc::new(move || {
-        let (stream, handle) = channel_stream(64);
-        handles_clone.lock().unwrap().push(handle);
-        Box::new(stream)
-    });
+    let (factory, handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 500), fast_reconnect(), factory, "test").unwrap();
+        ConnectionPool::new(pool_config(10, 500), test_reconnection_config(), factory, "test")
+            .unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(3)).await.unwrap();
-
-    // Give pool time to spawn connections.
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let h = &handles.lock().unwrap()[0];
-    assert_eq!(h.connect_count(), 1);
-    assert_eq!(h.subscribe_count(), 1);
-    assert_eq!(h.subscribed_tokens().len(), 3);
+    let h = handles.lock().unwrap();
+    assert_eq!(h[0].connect_count(), 1);
+    assert_eq!(h[0].subscribe_count(), 1);
+    assert_eq!(h[0].subscribed_tokens().len(), 3);
 
-    // Send events through the mock and read them from the pool.
-    h.send(snapshot_event("t0")).await;
-    h.send(snapshot_event("t1")).await;
+    h[0].send(snapshot_event("t0")).await;
+    h[0].send(snapshot_event("t1")).await;
+    drop(h);
 
     let e1 = pool.next_event().await.unwrap();
     let e2 = pool.next_event().await.unwrap();
 
-    // Verify we got both (order preserved in single-connection case).
     let ids: Vec<_> = [e1, e2]
         .iter()
         .map(|e| match e {
@@ -253,19 +92,11 @@ async fn single_connection_delivers_events() {
 
 #[tokio::test]
 async fn multi_connection_merges_events() {
-    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-    let handles_clone = handles.clone();
+    let (factory, handles) = tracked_channel_factory();
 
-    let factory: StreamFactory = Arc::new(move || {
-        let (stream, handle) = channel_stream(64);
-        handles_clone.lock().unwrap().push(handle);
-        Box::new(stream)
-    });
-
-    // 2 tokens per connection → 2 connections for 4 tokens.
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), fast_reconnect(), factory, "test").unwrap();
+        ConnectionPool::new(pool_config(10, 2), test_reconnection_config(), factory, "test")
+            .unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(4)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -273,13 +104,12 @@ async fn multi_connection_merges_events() {
     let h = handles.lock().unwrap();
     assert_eq!(h.len(), 2, "Expected 2 connections for 4 tokens with subs_per_conn=2");
 
-    // Each connection sends its own events.
     h[0].send(snapshot_event("conn0-a")).await;
     h[1].send(snapshot_event("conn1-a")).await;
     h[0].send(snapshot_event("conn0-b")).await;
     h[1].send(snapshot_event("conn1-b")).await;
+    drop(h);
 
-    // Collect all 4 events — order may interleave but all must arrive.
     let mut received = HashSet::new();
     for _ in 0..4 {
         match tokio::time::timeout(Duration::from_secs(2), pool.next_event()).await {
@@ -291,10 +121,9 @@ async fn multi_connection_merges_events() {
     }
 
     assert_eq!(received.len(), 4);
-    assert!(received.contains("conn0-a"));
-    assert!(received.contains("conn0-b"));
-    assert!(received.contains("conn1-a"));
-    assert!(received.contains("conn1-b"));
+    for id in ["conn0-a", "conn0-b", "conn1-a", "conn1-b"] {
+        assert!(received.contains(id), "Missing event: {id}");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,32 +132,22 @@ async fn multi_connection_merges_events() {
 
 #[tokio::test]
 async fn backpressure_drops_events_and_counts() {
-    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-    let handles_clone = handles.clone();
+    let (factory, handles) = tracked_channel_factory();
 
-    let factory: StreamFactory = Arc::new(move || {
-        let (stream, handle) = channel_stream(256);
-        handles_clone.lock().unwrap().push(handle);
-        Box::new(stream)
-    });
-
-    // Tiny channel capacity to trigger backpressure quickly.
     let mut cfg = pool_config(10, 500);
     cfg.channel_capacity = 5;
 
-    let mut pool = ConnectionPool::new(cfg, fast_reconnect(), factory, "test").unwrap();
+    let mut pool =
+        ConnectionPool::new(cfg, test_reconnection_config(), factory, "test").unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(1)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let h = &handles.lock().unwrap()[0];
-
-    // Flood 20 events without reading any — channel holds 5, rest should drop.
+    let h = handles.lock().unwrap();
     for i in 0..20 {
-        h.send(snapshot_event(&format!("flood-{i}"))).await;
+        h[0].send(snapshot_event(&format!("flood-{i}"))).await;
     }
-    // Small delay to let the connection task process all sends.
+    drop(h);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     let stats = pool.stats();
@@ -338,9 +157,9 @@ async fn backpressure_drops_events_and_counts() {
         stats.events_dropped
     );
 
-    // We should still be able to drain the channel.
     let mut read = 0;
-    while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(100), pool.next_event()).await
+    while let Ok(Some(_)) =
+        tokio::time::timeout(Duration::from_millis(100), pool.next_event()).await
     {
         read += 1;
     }
@@ -353,7 +172,7 @@ async fn backpressure_drops_events_and_counts() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 4: Server disconnect triggers reconnect (via ReconnectingDataStream)
+// Test 4: Server disconnect triggers reconnect
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -362,13 +181,10 @@ async fn disconnect_triggers_reconnect() {
     let cc = connect_count.clone();
 
     let factory: StreamFactory = Arc::new(move || {
-        let cc_inner = cc.clone();
-        // Each new stream created by ReconnectingDataStream also goes
-        // through the factory, so we count factory invocations.
         Box::new(CyclingStream::new(
             vec![snapshot_event("t0")],
             Duration::from_millis(10),
-            cc_inner,
+            cc.clone(),
         ))
     });
 
@@ -376,11 +192,11 @@ async fn disconnect_triggers_reconnect() {
     cfg.max_silent_secs = 2;
     cfg.health_check_interval_secs = 1;
 
-    let mut pool = ConnectionPool::new(cfg, fast_reconnect(), factory, "test").unwrap();
+    let mut pool =
+        ConnectionPool::new(cfg, test_reconnection_config(), factory, "test").unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(1)).await.unwrap();
 
-    // Read a few events to confirm stream is working.
     for _ in 0..3 {
         let event = tokio::time::timeout(Duration::from_secs(2), pool.next_event())
             .await
@@ -388,7 +204,6 @@ async fn disconnect_triggers_reconnect() {
         assert!(event.is_some());
     }
 
-    // Pool should have connected at least once.
     assert!(
         connect_count.load(Ordering::SeqCst) >= 1,
         "Expected at least 1 connection"
@@ -417,11 +232,11 @@ async fn ttl_rotation_under_load() {
     cfg.preemptive_reconnect_secs = 2;
     cfg.health_check_interval_secs = 1;
 
-    let mut pool = ConnectionPool::new(cfg, fast_reconnect(), factory, "test").unwrap();
+    let mut pool =
+        ConnectionPool::new(cfg, test_reconnection_config(), factory, "test").unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(1)).await.unwrap();
 
-    // Drain events for 5 seconds — should see at least one rotation.
     let drain = tokio::spawn(async move {
         let mut count = 0u64;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -436,13 +251,11 @@ async fn ttl_rotation_under_load() {
 
     let (pool, events_received) = drain.await.unwrap();
 
-    // Should have received events continuously (no long gaps).
     assert!(
         events_received > 10,
         "Expected >10 events over 5s, got {events_received}"
     );
 
-    // Should have rotated at least once (TTL=3s, window=5s).
     let stats = pool.stats();
     assert!(
         stats.total_rotations > 0,
@@ -450,7 +263,6 @@ async fn ttl_rotation_under_load() {
         stats.total_rotations
     );
 
-    // Factory should have been called more than once (original + rotation).
     assert!(
         connect_count.load(Ordering::SeqCst) > 1,
         "Expected more than 1 factory call after rotation"
@@ -463,27 +275,18 @@ async fn ttl_rotation_under_load() {
 
 #[tokio::test]
 async fn pool_stats_reflect_connections() {
-    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-    let handles_clone = handles.clone();
-
-    let factory: StreamFactory = Arc::new(move || {
-        let (stream, handle) = channel_stream(64);
-        handles_clone.lock().unwrap().push(handle);
-        Box::new(stream)
-    });
+    let (factory, _handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), fast_reconnect(), factory, "test").unwrap();
+        ConnectionPool::new(pool_config(10, 2), test_reconnection_config(), factory, "test")
+            .unwrap();
 
-    // Before subscribe: 0 connections.
     assert_eq!(pool.stats().active_connections, 0);
 
     pool.connect().await.unwrap();
     pool.subscribe(&make_tokens(6)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // 6 tokens / 2 per conn = 3 connections.
     assert_eq!(pool.stats().active_connections, 3);
     assert_eq!(pool.stats().total_rotations, 0);
     assert_eq!(pool.stats().total_restarts, 0);
@@ -496,35 +299,25 @@ async fn pool_stats_reflect_connections() {
 
 #[tokio::test]
 async fn resubscribe_replaces_all_connections() {
-    let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-    let handles_clone = handles.clone();
-
-    let factory: StreamFactory = Arc::new(move || {
-        let (stream, handle) = channel_stream(64);
-        handles_clone.lock().unwrap().push(handle);
-        Box::new(stream)
-    });
+    let (factory, handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), fast_reconnect(), factory, "test").unwrap();
+        ConnectionPool::new(pool_config(10, 2), test_reconnection_config(), factory, "test")
+            .unwrap();
     pool.connect().await.unwrap();
 
-    // First subscribe: 4 tokens → 2 connections.
     pool.subscribe(&make_tokens(4)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(pool.stats().active_connections, 2);
 
-    // Second subscribe: 6 tokens → 3 connections, old 2 torn down.
     pool.subscribe(&make_tokens(6)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(pool.stats().active_connections, 3);
 
-    // The new connections should work.
+    // Handles 0-1 are dead (first subscribe), 2-4 are live (second subscribe).
     let h = handles.lock().unwrap();
-    // Handles 0 and 1 are from the first subscribe (now dead).
-    // Handles 2, 3, 4 are from the second subscribe.
     h[2].send(snapshot_event("new-t0")).await;
+    drop(h);
 
     let event = tokio::time::timeout(Duration::from_secs(2), pool.next_event())
         .await
@@ -545,12 +338,14 @@ async fn resubscribe_replaces_all_connections() {
 
 #[tokio::test]
 async fn exchange_name_propagates() {
-    let factory: StreamFactory = Arc::new(|| {
-        let (stream, _) = channel_stream(1);
-        Box::new(stream)
-    });
+    let (factory, _) = tracked_channel_factory();
 
-    let pool =
-        ConnectionPool::new(pool_config(10, 500), fast_reconnect(), factory, "polymarket").unwrap();
+    let pool = ConnectionPool::new(
+        pool_config(10, 500),
+        test_reconnection_config(),
+        factory,
+        "polymarket",
+    )
+    .unwrap();
     assert_eq!(pool.exchange_name(), "polymarket");
 }
