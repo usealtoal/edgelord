@@ -82,13 +82,12 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     // Collect all returned IDs
     let mut returned_ids: Vec<i32> = handles
         .into_iter()
-        .map(|h| h.join().unwrap())
-        .flatten()
+        .filter_map(|h| h.join().unwrap())
         .collect();
 
     // Verify we got IDs for all inserts
     assert!(
-        returned_ids.len() > 0,
+        !returned_ids.is_empty(),
         "At least some inserts should return IDs"
     );
 

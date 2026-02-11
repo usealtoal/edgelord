@@ -7,6 +7,7 @@
 //!   volume/liquidity stats. Uses [`GammaMarket`].
 
 use serde::Deserialize;
+use tracing::debug;
 
 #[derive(Debug, Deserialize)]
 pub struct PolymarketMarketsResponse {
@@ -95,7 +96,18 @@ impl GammaMarket {
     pub fn token_ids(&self) -> Vec<String> {
         self.clob_token_ids
             .as_deref()
-            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+            .and_then(|s| {
+                serde_json::from_str::<Vec<String>>(s)
+                    .map_err(|e| {
+                        debug!(
+                            error = %e,
+                            raw = %s,
+                            condition_id = %self.condition_id,
+                            "Failed to parse clob_token_ids"
+                        );
+                    })
+                    .ok()
+            })
             .unwrap_or_default()
     }
 
@@ -103,7 +115,18 @@ impl GammaMarket {
     pub fn outcome_names(&self) -> Vec<String> {
         self.outcomes
             .as_deref()
-            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+            .and_then(|s| {
+                serde_json::from_str::<Vec<String>>(s)
+                    .map_err(|e| {
+                        debug!(
+                            error = %e,
+                            raw = %s,
+                            condition_id = %self.condition_id,
+                            "Failed to parse outcomes"
+                        );
+                    })
+                    .ok()
+            })
             .unwrap_or_default()
     }
 
@@ -111,7 +134,18 @@ impl GammaMarket {
     pub fn outcome_prices(&self) -> Vec<f64> {
         self.outcome_prices
             .as_deref()
-            .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+            .and_then(|s| {
+                serde_json::from_str::<Vec<String>>(s)
+                    .map_err(|e| {
+                        debug!(
+                            error = %e,
+                            raw = %s,
+                            condition_id = %self.condition_id,
+                            "Failed to parse outcome_prices"
+                        );
+                    })
+                    .ok()
+            })
             .map(|v| v.iter().filter_map(|p| p.parse::<f64>().ok()).collect())
             .unwrap_or_default()
     }

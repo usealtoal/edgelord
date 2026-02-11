@@ -25,4 +25,4 @@ pub use statistics::{
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 
 #[cfg(feature = "telegram")]
-pub use messaging::{TelegramConfig, TelegramNotifier};
+pub use messaging::{RuntimeStats, TelegramConfig, TelegramNotifier};

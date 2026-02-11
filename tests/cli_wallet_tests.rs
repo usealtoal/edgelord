@@ -1,3 +1,7 @@
+// These tests intentionally hold a MutexGuard across await to serialize access
+// to environment variables shared between parallel tests.
+#![allow(clippy::await_holding_lock)]
+
 use alloy_signer_local::PrivateKeySigner;
 use edgelord::cli::provision::{execute, ProvisionCommand, ProvisionPolymarketArgs, WalletMode};
 use std::fs;

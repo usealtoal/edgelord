@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use edgelord::app::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
-use edgelord::core::domain::OrderBook;
 use edgelord::core::domain::TokenId;
 use edgelord::core::exchange::polymarket::PolymarketClient;
 use edgelord::core::exchange::ExchangeFactory;
@@ -20,12 +19,14 @@ use tokio::net::TcpListener;
 
 #[test]
 fn factory_returns_error_when_exchange_config_missing() {
-    let mut config = Config::default();
-    config.exchange_config = ExchangeSpecificConfig::Polymarket(PolymarketConfig {
-        ws_url: String::new(),
-        api_url: String::new(),
+    let config = Config {
+        exchange_config: ExchangeSpecificConfig::Polymarket(PolymarketConfig {
+            ws_url: String::new(),
+            api_url: String::new(),
+            ..Default::default()
+        }),
         ..Default::default()
-    });
+    };
 
     let result = ExchangeFactory::create_scorer(&config);
     assert!(

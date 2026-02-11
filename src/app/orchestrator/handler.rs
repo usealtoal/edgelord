@@ -279,3 +279,593 @@ pub(crate) fn get_max_slippage(
 
     Some(max_slippage)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use rust_decimal_macros::dec;
+
+    use super::*;
+    use crate::app::{AppState, RiskLimits};
+    use crate::core::cache::OrderBookCache;
+    use crate::core::domain::{
+        Market, MarketId, Opportunity, OpportunityLeg, OrderBook, Outcome, PriceLevel, TokenId,
+    };
+    use crate::core::service::{statistics, NotifierRegistry, RiskManager};
+    use crate::core::strategy::StrategyRegistry;
+
+    fn make_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> OrderBook {
+        OrderBook::with_levels(
+            TokenId::from(token_id),
+            vec![PriceLevel::new(bid, Decimal::new(100, 0))],
+            vec![PriceLevel::new(ask, Decimal::new(100, 0))],
+        )
+    }
+
+    fn make_binary_market(
+        id: &str,
+        question: &str,
+        yes_token: &str,
+        no_token: &str,
+        payout: Decimal,
+    ) -> Market {
+        let outcomes = vec![
+            Outcome::new(TokenId::from(yes_token), "Yes"),
+            Outcome::new(TokenId::from(no_token), "No"),
+        ];
+        Market::new(MarketId::from(id), question, outcomes, payout)
+    }
+
+    fn make_registry(markets: Vec<Market>) -> MarketRegistry {
+        let mut registry = MarketRegistry::new();
+        for market in markets {
+            registry.add(market);
+        }
+        registry
+    }
+
+    fn make_test_opportunity() -> Opportunity {
+        Opportunity::new(
+            MarketId::from("test-market"),
+            "Will it rain?",
+            vec![
+                OpportunityLeg::new(TokenId::from("yes-token"), dec!(0.40)),
+                OpportunityLeg::new(TokenId::from("no-token"), dec!(0.50)),
+            ],
+            dec!(100),
+            dec!(1.00),
+        )
+    }
+
+    // ========== get_max_slippage tests ==========
+
+    #[test]
+    fn get_max_slippage_returns_none_when_token_not_in_cache() {
+        let cache = OrderBookCache::new();
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_max_slippage_returns_none_when_book_has_no_asks() {
+        let cache = OrderBookCache::new();
+        // Create order book with bids but no asks
+        let empty_ask_book = OrderBook::with_levels(
+            TokenId::from("yes-token"),
+            vec![PriceLevel::new(dec!(0.40), dec!(100))],
+            vec![], // no asks
+        );
+        cache.update(empty_ask_book);
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_max_slippage_returns_none_when_expected_price_is_zero() {
+        let cache = OrderBookCache::new();
+        cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        // Create opportunity with zero price leg
+        let opp = Opportunity::new(
+            MarketId::from("test-market"),
+            "Zero price test?",
+            vec![
+                OpportunityLeg::new(TokenId::from("yes-token"), dec!(0.00)),
+                OpportunityLeg::new(TokenId::from("no-token"), dec!(0.50)),
+            ],
+            dec!(100),
+            dec!(1.00),
+        );
+
+        let result = get_max_slippage(&opp, &cache);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_max_slippage_returns_zero_when_prices_match() {
+        let cache = OrderBookCache::new();
+        cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert_eq!(result, Some(dec!(0)));
+    }
+
+    #[test]
+    fn get_max_slippage_calculates_slippage_when_price_increased() {
+        let cache = OrderBookCache::new();
+        // Price increased from 0.40 to 0.42 = 5% slippage
+        cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert_eq!(result, Some(dec!(0.05))); // (0.42 - 0.40) / 0.40 = 0.05
+    }
+
+    #[test]
+    fn get_max_slippage_calculates_slippage_when_price_decreased() {
+        let cache = OrderBookCache::new();
+        // Price decreased from 0.40 to 0.38 = 5% slippage (absolute)
+        cache.update(make_order_book("yes-token", dec!(0.37), dec!(0.38)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert_eq!(result, Some(dec!(0.05))); // |0.38 - 0.40| / 0.40 = 0.05
+    }
+
+    #[test]
+    fn get_max_slippage_returns_max_across_legs() {
+        let cache = OrderBookCache::new();
+        // Yes: 5% slippage, No: 10% slippage
+        cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
+        cache.update(make_order_book("no-token", dec!(0.54), dec!(0.55)));
+
+        let opp = make_test_opportunity();
+        let result = get_max_slippage(&opp, &cache);
+        assert_eq!(result, Some(dec!(0.10))); // max(0.05, 0.10) = 0.10
+    }
+
+    // ========== handle_opportunity tests ==========
+
+    #[test]
+    fn handle_opportunity_skips_when_execution_already_locked() {
+        let opp = make_test_opportunity();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let cache = OrderBookCache::new();
+
+        // Lock the market first
+        state.try_lock_execution("test-market");
+
+        // Try to handle opportunity - should return early
+        handle_opportunity(
+            opp,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &cache,
+            true,
+        );
+
+        // No notifications should have been sent (no OpportunityDetected)
+        // The function returns early before notifying
+    }
+
+    #[test]
+    fn handle_opportunity_rejects_high_slippage() {
+        let state = Arc::new(AppState::new(RiskLimits {
+            max_slippage: dec!(0.01), // 1% max slippage
+            ..Default::default()
+        }));
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let cache = OrderBookCache::new();
+
+        // Set up cache with 5% slippage
+        cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+
+        handle_opportunity(
+            opp,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &cache,
+            true,
+        );
+
+        // Execution lock should be released
+        assert!(
+            state.try_lock_execution("test-market"),
+            "Lock should be released after slippage rejection"
+        );
+    }
+
+    #[test]
+    fn handle_opportunity_releases_lock_on_risk_rejection() {
+        let state = Arc::new(AppState::new(RiskLimits {
+            min_profit_threshold: dec!(100), // Require $100 profit minimum
+            ..Default::default()
+        }));
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let cache = OrderBookCache::new();
+
+        cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity(); // Expected profit = $10, below threshold
+
+        handle_opportunity(
+            opp,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &cache,
+            true,
+        );
+
+        // Lock should be released after risk rejection
+        assert!(
+            state.try_lock_execution("test-market"),
+            "Lock should be released after risk rejection"
+        );
+    }
+
+    #[test]
+    fn handle_opportunity_dry_run_releases_lock_and_exposure() {
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let cache = OrderBookCache::new();
+
+        cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+
+        handle_opportunity(
+            opp,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &cache,
+            true, // dry_run = true
+        );
+
+        // Lock should be released
+        assert!(
+            state.try_lock_execution("test-market"),
+            "Lock should be released after dry run"
+        );
+
+        // Exposure should be released (back to zero)
+        assert_eq!(
+            state.pending_exposure(),
+            dec!(0),
+            "Pending exposure should be zero after dry run"
+        );
+    }
+
+    #[test]
+    fn handle_opportunity_no_executor_releases_lock_and_exposure() {
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let cache = OrderBookCache::new();
+
+        cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
+        cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
+
+        let opp = make_test_opportunity();
+
+        handle_opportunity(
+            opp,
+            None, // No executor
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &cache,
+            false, // dry_run = false
+        );
+
+        // Lock should be released
+        assert!(
+            state.try_lock_execution("test-market"),
+            "Lock should be released when no executor"
+        );
+    }
+
+    // ========== handle_market_event tests ==========
+
+    #[test]
+    fn handle_market_event_updates_cache_on_snapshot() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(make_registry(vec![make_binary_market(
+            "market-1",
+            "Test?",
+            "yes-1",
+            "no-1",
+            dec!(1.00),
+        )]));
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        let book = make_order_book("yes-1", dec!(0.40), dec!(0.42));
+
+        handle_market_event(
+            MarketEvent::OrderBookSnapshot {
+                token_id: TokenId::from("yes-1"),
+                book,
+            },
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+
+        // Cache should have the order book
+        let cached = cache.get(&TokenId::from("yes-1"));
+        assert!(cached.is_some(), "Order book should be in cache");
+        assert_eq!(
+            cached.unwrap().best_ask().unwrap().price(),
+            dec!(0.42),
+            "Cached ask price should match"
+        );
+    }
+
+    #[test]
+    fn handle_market_event_updates_cache_on_delta() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(make_registry(vec![make_binary_market(
+            "market-1",
+            "Test?",
+            "yes-1",
+            "no-1",
+            dec!(1.00),
+        )]));
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        let book = make_order_book("yes-1", dec!(0.40), dec!(0.42));
+
+        handle_market_event(
+            MarketEvent::OrderBookDelta {
+                token_id: TokenId::from("yes-1"),
+                book,
+            },
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+
+        // Cache should have the order book
+        let cached = cache.get(&TokenId::from("yes-1"));
+        assert!(cached.is_some(), "Order book should be in cache");
+    }
+
+    #[test]
+    fn handle_market_event_settles_positions() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(MarketRegistry::new());
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        // Add a position to close
+        {
+            use crate::core::domain::{Position, PositionLeg, PositionStatus};
+            let mut positions = state.positions_mut();
+            let legs = vec![
+                PositionLeg::new(TokenId::from("yes-1"), dec!(100), dec!(0.40)),
+                PositionLeg::new(TokenId::from("no-1"), dec!(100), dec!(0.50)),
+            ];
+            let position = Position::new(
+                positions.next_id(),
+                MarketId::from("settled-market"),
+                legs,
+                dec!(90),
+                dec!(100),
+                chrono::Utc::now(),
+                PositionStatus::Open,
+            );
+            positions.add(position);
+        }
+
+        // Verify position exists
+        assert_eq!(state.positions().all().count(), 1);
+
+        handle_market_event(
+            MarketEvent::MarketSettled {
+                market_id: MarketId::from("settled-market"),
+                winning_outcome: "Yes".to_string(),
+                payout_per_share: dec!(1.00),
+            },
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+
+        // Position should be closed
+        let positions = state.positions();
+        let open_positions: Vec<_> = positions.all().collect();
+        assert!(
+            open_positions.is_empty()
+                || open_positions
+                    .iter()
+                    .all(|p| !matches!(p.status(), crate::core::domain::PositionStatus::Open)),
+            "Position should be closed after settlement"
+        );
+    }
+
+    #[test]
+    fn handle_market_event_connected_does_not_panic() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(MarketRegistry::new());
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        // Should not panic
+        handle_market_event(
+            MarketEvent::Connected,
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+    }
+
+    #[test]
+    fn handle_market_event_disconnected_does_not_panic() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(MarketRegistry::new());
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        // Should not panic
+        handle_market_event(
+            MarketEvent::Disconnected {
+                reason: "Test disconnect".to_string(),
+            },
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+    }
+
+    #[test]
+    fn handle_market_event_ignores_unknown_token() {
+        let cache = Arc::new(OrderBookCache::new());
+        let registry = Arc::new(MarketRegistry::new()); // Empty registry
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        let book = make_order_book("unknown-token", dec!(0.40), dec!(0.42));
+
+        // Should not panic, just update cache and skip strategy detection
+        handle_market_event(
+            MarketEvent::OrderBookSnapshot {
+                token_id: TokenId::from("unknown-token"),
+                book,
+            },
+            &cache,
+            &registry,
+            &strategies,
+            None,
+            &risk_manager,
+            &notifiers,
+            &state,
+            &stats,
+            &position_manager,
+            true,
+        );
+
+        // Cache should still be updated
+        assert!(cache.get(&TokenId::from("unknown-token")).is_some());
+    }
+}

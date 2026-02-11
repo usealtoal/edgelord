@@ -138,6 +138,32 @@ Do NOT store in GitHub:
 4. Approve environment gate
 5. Watch workflow to completion
 
+### Available Runtime Overrides
+
+The workflow supports CLI overrides that get baked into the systemd service:
+
+| Input | Description | Example |
+|-------|-------------|---------|
+| `dry_run` | Detect but don't trade | `true` |
+| `telegram_enabled` | Enable Telegram notifications | `true` |
+| `min_edge` | Minimum edge threshold | `0.05` |
+| `min_profit` | Minimum profit threshold | `0.50` |
+| `max_exposure` | Maximum total exposure | `5000` |
+| `max_position` | Maximum position per market | `500` |
+| `max_slippage` | Maximum slippage tolerance | `0.02` |
+| `max_markets` | Maximum markets to track | `100` |
+| `max_connections` | Maximum WebSocket connections | `5` |
+| `execution_timeout` | Execution timeout in seconds | `30` |
+
+Example conservative first deploy:
+- `dry_run = true`
+- `max_exposure = 1000`
+- `max_position = 100`
+- `max_slippage = 0.02`
+- `max_markets = 50`
+
+After validation, redeploy with `dry_run = false` and higher limits.
+
 The workflow will:
 - Build and test the binary
 - Upload binary, dugout vault, and config to VPS
@@ -254,8 +280,18 @@ git add .dugout.toml && git commit -m "chore: update secrets" && git push
 ## Operational Guardrails
 
 - Start new environments in `dry_run = true`
-- Use low exposure caps initially
+- Use low exposure caps initially via workflow inputs
 - Review logs and daily stats before raising limits
 - Keep dugout identity file `chmod 600 ~/.dugout/identity`
 - Keep SSH access key-only and restricted
 - Update vault recipients when team changes: `dugout team remove <name>`
+
+### Recommended Rollout Pattern
+
+1. **Initial deploy**: `dry_run=true`, `max_markets=50`, observe for 24h
+2. **Validation**: Check logs, verify strategies detect opportunities
+3. **Low-risk live**: `dry_run=false`, `max_exposure=500`, `max_position=100`
+4. **Scale up**: Gradually increase limits as confidence grows
+5. **Production**: Full limits, `telegram_enabled=true` for alerts
+
+All changes are made via workflow redeploys - no SSH required for config changes.

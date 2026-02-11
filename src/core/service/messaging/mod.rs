@@ -7,7 +7,7 @@
 mod telegram;
 
 #[cfg(feature = "telegram")]
-pub use telegram::{TelegramConfig, TelegramNotifier};
+pub use telegram::{RuntimeStats, TelegramConfig, TelegramNotifier};
 
 use crate::core::domain::{ArbitrageExecutionResult, Opportunity};
 use crate::error::RiskError;

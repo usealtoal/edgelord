@@ -75,8 +75,19 @@ dugout run -- ./target/release/edgelord run --config config.toml
 ## Example Commands
 
 ```bash
-# Run (with secrets via dugout)
-dugout run -- edgelord run --config config.toml
+# Run on testnet (default)
+dugout run -- edgelord run --testnet --dry-run
+
+# Run on mainnet with CLI overrides
+dugout run -- edgelord run --mainnet --max-exposure 5000 --max-slippage 0.02
+
+# Production mode with all the trimmings
+dugout run -- edgelord run \
+  --mainnet \
+  --no-banner \
+  --json-logs \
+  --max-markets 100 \
+  --min-volume 5000
 
 # Or spawn a shell with secrets loaded
 dugout env
@@ -93,6 +104,20 @@ dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
 edgelord statistics today --db edgelord.db
 edgelord logs -f
 ```
+
+## CLI Highlights
+
+The CLI is designed to be config-driven with comprehensive flag overrides:
+
+| Category | Example Flags |
+|----------|---------------|
+| Environment | `--mainnet`, `--testnet`, `--chain-id` |
+| Risk | `--max-exposure`, `--max-position`, `--max-slippage` |
+| Filtering | `--max-markets`, `--min-volume`, `--min-liquidity` |
+| Connection | `--max-connections`, `--connection-ttl` |
+| Runtime | `--dry-run`, `--json-logs`, `--no-banner` |
+
+Run `edgelord run --help` for the complete list.
 
 ## Project Structure
 

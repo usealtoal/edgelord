@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-use crate::core::domain::{ArbitrageExecutionResult, Opportunity, OrderBook, OrderId, TokenId};
+use crate::core::domain::{
+    ArbitrageExecutionResult, Opportunity, OrderBook, OrderId, PoolStats, TokenId,
+};
 use crate::error::Error;
 
 /// Result of attempting to execute an order.
@@ -213,6 +215,13 @@ pub trait MarketDataStream: Send {
 
     /// Get the exchange name for logging/debugging.
     fn exchange_name(&self) -> &'static str;
+
+    /// Get connection pool statistics if this stream uses pooling.
+    ///
+    /// Returns `None` for non-pooled streams.
+    fn pool_stats(&self) -> Option<PoolStats> {
+        None
+    }
 }
 
 /// Implement MarketDataStream for boxed trait objects to allow use with generic wrappers.
@@ -232,6 +241,10 @@ impl MarketDataStream for Box<dyn MarketDataStream> {
 
     fn exchange_name(&self) -> &'static str {
         (**self).exchange_name()
+    }
+
+    fn pool_stats(&self) -> Option<PoolStats> {
+        (**self).pool_stats()
     }
 }
 

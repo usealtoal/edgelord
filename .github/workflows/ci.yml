@@ -8,13 +8,154 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   check:
+    name: Check & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check --all-targets
-      - run: cargo test
-      - run: cargo clippy -- -D warnings
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check (default features)
+        run: cargo check --all-targets
+
+      - name: Check (all features)
+        run: cargo check --all-targets --all-features
+
+      - name: Clippy (default features)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Clippy (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --all-features
+
+      - name: Run doc tests
+        run: cargo test --doc --all-features
+
+  cli:
+    name: CLI Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Verify help output (run)
+        run: |
+          ./target/release/edgelord run --help
+          ./target/release/edgelord run --help | grep -q "\-\-mainnet"
+          ./target/release/edgelord run --help | grep -q "\-\-testnet"
+          ./target/release/edgelord run --help | grep -q "\-\-max-slippage"
+          ./target/release/edgelord run --help | grep -q "\-\-max-markets"
+          ./target/release/edgelord run --help | grep -q "\-\-max-connections"
+
+      - name: Verify help output (service install)
+        run: |
+          ./target/release/edgelord service install --help
+          ./target/release/edgelord service install --help | grep -q "\-\-max-slippage"
+          ./target/release/edgelord service install --help | grep -q "\-\-max-markets"
+
+      - name: Verify help output (all commands)
+        run: |
+          ./target/release/edgelord --help
+          ./target/release/edgelord status --help
+          ./target/release/edgelord statistics --help
+          ./target/release/edgelord config --help
+          ./target/release/edgelord check --help
+          ./target/release/edgelord wallet --help
+          ./target/release/edgelord logs --help
+
+      - name: Validate example config
+        run: ./target/release/edgelord check config --config config.toml
+
+      - name: Show effective config
+        run: ./target/release/edgelord config show --config config.toml
+
+      - name: Validate prod config
+        run: ./target/release/edgelord check config --config deploy/config.prod.toml
+
+  features:
+    name: Feature Combinations
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - ""  # default features
+          - "telegram"
+          - "polymarket"
+          - "polymarket,telegram"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
+
+      - name: Check (${{ matrix.features || 'default' }})
+        run: |
+          if [ -z "${{ matrix.features }}" ]; then
+            cargo check --all-targets
+          else
+            cargo check --all-targets --features "${{ matrix.features }}"
+          fi
+
+      - name: Test (${{ matrix.features || 'default' }})
+        run: |
+          if [ -z "${{ matrix.features }}" ]; then
+            cargo test
+          else
+            cargo test --features "${{ matrix.features }}"
+          fi
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build docs
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Check doc links
+        run: |
+          # Verify key doc files exist
+          test -f docs/README.md
+          test -f docs/cli-reference.md
+          test -f docs/configuration.md
+          test -f docs/getting-started.md
+
+  msrv:
+    name: MSRV (1.75)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check MSRV
+        run: cargo check --all-targets

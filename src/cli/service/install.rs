@@ -32,6 +32,18 @@ fn generate_service_file(args: &InstallArgs, binary_path: &str) -> String {
     if args.telegram_enabled {
         extra_args.push("--telegram-enabled".to_string());
     }
+    if let Some(max_slippage) = args.max_slippage {
+        extra_args.push(format!("--max-slippage {}", max_slippage));
+    }
+    if let Some(max_markets) = args.max_markets {
+        extra_args.push(format!("--max-markets {}", max_markets));
+    }
+    if let Some(max_connections) = args.max_connections {
+        extra_args.push(format!("--max-connections {}", max_connections));
+    }
+    if let Some(execution_timeout) = args.execution_timeout {
+        extra_args.push(format!("--execution-timeout {}", execution_timeout));
+    }
 
     let extra_args_str = if extra_args.is_empty() {
         String::new()

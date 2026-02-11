@@ -109,11 +109,45 @@ dugout env
 ./target/release/edgelord run --config config.toml
 ```
 
-Typical production flags:
+### Environment Shortcuts
+
+Quickly switch between testnet and mainnet without editing config:
 
 ```bash
-dugout run -- ./target/release/edgelord run --config config.toml --no-banner --json-logs
+# Run on testnet (default)
+dugout run -- ./target/release/edgelord run --testnet
+
+# Run on mainnet (sets chain_id=137, environment=mainnet)
+dugout run -- ./target/release/edgelord run --mainnet --dry-run
 ```
+
+### Typical Production Flags
+
+```bash
+dugout run -- ./target/release/edgelord run \
+  --mainnet \
+  --no-banner \
+  --json-logs \
+  --max-exposure 5000 \
+  --max-slippage 0.02
+```
+
+### CLI Overrides
+
+Any config setting can be overridden via CLI flags:
+
+```bash
+# Custom market filters
+dugout run -- ./target/release/edgelord run --max-markets 100 --min-volume 5000
+
+# Connection tuning
+dugout run -- ./target/release/edgelord run --max-connections 5 --connection-ttl 60
+
+# Risk limits
+dugout run -- ./target/release/edgelord run --max-exposure 5000 --max-position 500
+```
+
+See `edgelord run --help` for all available flags.
 
 ## 8. Observe and Inspect
 

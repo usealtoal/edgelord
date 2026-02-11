@@ -1,27 +1,108 @@
 //! Telegram command execution against runtime app state.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use chrono::Utc;
+use parking_lot::RwLock;
 
 use crate::app::AppState;
-use crate::core::domain::PositionStatus;
+use crate::core::domain::{PoolStats, PositionStatus};
+use crate::core::service::StatsRecorder;
 
 use super::command::{command_help, TelegramCommand};
+
+/// Runtime statistics updated by the orchestrator.
+///
+/// These values are updated periodically and read by Telegram commands.
+#[derive(Debug, Default)]
+pub struct RuntimeStats {
+    /// Connection pool statistics.
+    pool_stats: RwLock<Option<PoolStats>>,
+    /// Number of subscribed markets.
+    market_count: AtomicUsize,
+    /// Number of subscribed tokens.
+    token_count: AtomicUsize,
+}
+
+impl RuntimeStats {
+    /// Create a new runtime stats container.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Update pool statistics.
+    pub fn update_pool_stats(&self, stats: PoolStats) {
+        *self.pool_stats.write() = Some(stats);
+    }
+
+    /// Update market and token counts.
+    pub fn update_market_counts(&self, markets: usize, tokens: usize) {
+        self.market_count.store(markets, Ordering::Relaxed);
+        self.token_count.store(tokens, Ordering::Relaxed);
+    }
+
+    /// Get current pool stats.
+    #[must_use]
+    pub fn pool_stats(&self) -> Option<PoolStats> {
+        self.pool_stats.read().clone()
+    }
+
+    /// Get market count.
+    #[must_use]
+    pub fn market_count(&self) -> usize {
+        self.market_count.load(Ordering::Relaxed)
+    }
+
+    /// Get token count.
+    #[must_use]
+    pub fn token_count(&self) -> usize {
+        self.token_count.load(Ordering::Relaxed)
+    }
+}
 
 /// Runtime command executor for Telegram control commands.
 #[derive(Clone)]
 pub struct TelegramControl {
     state: Arc<AppState>,
+    stats_recorder: Option<Arc<StatsRecorder>>,
+    runtime_stats: Option<Arc<RuntimeStats>>,
     started_at: chrono::DateTime<Utc>,
+    /// Maximum positions to display in /positions command.
+    position_display_limit: usize,
 }
 
+/// Default position display limit if not specified.
+const DEFAULT_POSITION_DISPLAY_LIMIT: usize = 10;
+
 impl TelegramControl {
+    /// Create a new control with just app state (minimal).
     #[must_use]
     pub fn new(state: Arc<AppState>) -> Self {
         Self {
             state,
+            stats_recorder: None,
+            runtime_stats: None,
             started_at: Utc::now(),
+            position_display_limit: DEFAULT_POSITION_DISPLAY_LIMIT,
+        }
+    }
+
+    /// Create a control with full dependencies and custom position display limit.
+    #[must_use]
+    pub fn with_config(
+        state: Arc<AppState>,
+        stats_recorder: Arc<StatsRecorder>,
+        runtime_stats: Arc<RuntimeStats>,
+        position_display_limit: usize,
+    ) -> Self {
+        Self {
+            state,
+            stats_recorder: Some(stats_recorder),
+            runtime_stats: Some(runtime_stats),
+            started_at: Utc::now(),
+            position_display_limit,
         }
     }
 
@@ -33,17 +114,21 @@ impl TelegramControl {
             TelegramCommand::Status => self.status_text(),
             TelegramCommand::Health => self.health_text(),
             TelegramCommand::Positions => self.positions_text(),
+            TelegramCommand::Stats => self.stats_text(),
+            TelegramCommand::Pool => self.pool_text(),
+            TelegramCommand::Markets => self.markets_text(),
+            TelegramCommand::Version => self.version_text(),
             TelegramCommand::Pause => self.pause_text(),
             TelegramCommand::Resume => self.resume_text(),
             TelegramCommand::SetRisk { kind, value } => {
                 match self.state.set_risk_limit(kind, value) {
                     Ok(limits) => format!(
-                        "Updated {} to {}\n\
-                    Current limits:\n\
-                    min_profit: {}\n\
-                    max_slippage: {}\n\
-                    max_position: {}\n\
-                    max_exposure: {}",
+                        "Updated {} to {}\n\n\
+                        Current limits:\n\
+                        - min_profit: {}\n\
+                        - max_slippage: {}\n\
+                        - max_position: ${}\n\
+                        - max_exposure: ${}",
                         kind.as_str(),
                         value,
                         limits.min_profit_threshold,
@@ -51,7 +136,7 @@ impl TelegramControl {
                         limits.max_position_per_market,
                         limits.max_total_exposure
                     ),
-                    Err(err) => format!("Cannot update {}: {}", kind.as_str(), err),
+                    Err(err) => format!("Error: cannot update {}: {}", kind.as_str(), err),
                 }
             }
         }
@@ -71,27 +156,24 @@ impl TelegramControl {
                 .circuit_breaker_reason()
                 .unwrap_or_else(|| "unknown".to_string())
         } else {
-            "Inactive".to_string()
+            "inactive".to_string()
         };
 
         format!(
-            "🤖 Edgelord Status\n\
-            \n\
-            📊 Mode: {}\n\
-            ⏱ Uptime: {}\n\
-            🔌 Circuit Breaker: {}\n\
-            \n\
-            💰 Portfolio\n\
-            ├ Open Positions: {}\n\
-            ├ Exposure: ${}\n\
-            ├ Pending: ${}\n\
-            └ Pending Executions: {}\n\
-            \n\
-            ⚙️ Risk Limits\n\
-            ├ Min Profit: {}\n\
-            ├ Max Slippage: {}\n\
-            ├ Max Position: ${}\n\
-            └ Max Exposure: ${}",
+            "Edgelord Status\n\n\
+            Mode: {}\n\
+            Uptime: {}\n\
+            Circuit Breaker: {}\n\n\
+            Portfolio\n\
+            - Open Positions: {}\n\
+            - Exposure: ${}\n\
+            - Pending: ${}\n\
+            - In-Flight: {}\n\n\
+            Risk Limits\n\
+            - Min Profit: ${}\n\
+            - Max Slippage: {}%\n\
+            - Max Position: ${}\n\
+            - Max Exposure: ${}",
             mode,
             format_uptime(self.started_at),
             breaker,
@@ -100,7 +182,7 @@ impl TelegramControl {
             pending_exposure,
             pending_executions,
             limits.min_profit_threshold,
-            limits.max_slippage,
+            limits.max_slippage * rust_decimal::Decimal::from(100),
             limits.max_position_per_market,
             limits.max_total_exposure
         )
@@ -117,37 +199,30 @@ impl TelegramControl {
             && limits.max_slippage <= rust_decimal::Decimal::ONE;
 
         let healthy = exposure_ok && breaker_ok && slippage_ok;
-        let status_emoji = if healthy { "✅" } else { "⚠️" };
-        let status_text = if healthy { "HEALTHY" } else { "DEGRADED" };
+        let status = if healthy { "HEALTHY" } else { "DEGRADED" };
 
-        let breaker_emoji = if breaker_ok { "✅" } else { "❌" };
-        let breaker_text = if breaker_ok {
-            "Inactive".to_string()
+        let check = |ok: bool| if ok { "OK" } else { "FAIL" };
+
+        let breaker_detail = if breaker_ok {
+            "inactive".to_string()
         } else {
             self.state
                 .circuit_breaker_reason()
-                .unwrap_or_else(|| "Active (no reason)".to_string())
+                .unwrap_or_else(|| "active".to_string())
         };
 
-        let exposure_emoji = if exposure_ok { "✅" } else { "❌" };
-        let slippage_emoji = if slippage_ok { "✅" } else { "❌" };
-
         format!(
-            "🏥 Health Check\n\
-            \n\
-            Status: {} {}\n\
-            \n\
-            ├ 🔌 Circuit Breaker: {} {}\n\
-            ├ 💰 Exposure: {} OK (${}/${})\n\
-            └ 📊 Slippage: {} Valid ({})",
-            status_emoji,
-            status_text,
-            breaker_emoji,
-            breaker_text,
-            exposure_emoji,
+            "Health Check: {}\n\n\
+            Circuit Breaker: {} ({})\n\
+            Exposure: {} (${}/{})\n\
+            Slippage Config: {} ({})",
+            status,
+            check(breaker_ok),
+            breaker_detail,
+            check(exposure_ok),
             total_exposure,
             limits.max_total_exposure,
-            slippage_emoji,
+            check(slippage_ok),
             limits.max_slippage
         )
     }
@@ -158,49 +233,33 @@ impl TelegramControl {
             .all()
             .filter(|p| !p.status().is_closed())
             .collect();
-        
+
         let total_active = active.len();
-        let max_positions = 10; // Could come from config
 
         if active.is_empty() {
-            return "📈 Active Positions (0)".to_string();
+            return "No active positions".to_string();
         }
 
-        let mut response = format!("📈 Active Positions ({}/{})\n\n", active.len(), max_positions);
-        
-        let display_count = active.len().min(10);
-        for (i, p) in active.iter().take(10).enumerate() {
-            let number = match i {
-                0 => "1️⃣",
-                1 => "2️⃣",
-                2 => "3️⃣",
-                3 => "4️⃣",
-                4 => "5️⃣",
-                5 => "6️⃣",
-                6 => "7️⃣",
-                7 => "8️⃣",
-                8 => "9️⃣",
-                9 => "🔟",
-                _ => "▪️",
-            };
+        let mut response = format!("Active Positions ({})\n\n", active.len());
 
+        let display_count = active.len().min(self.position_display_limit);
+        for (i, p) in active.iter().take(self.position_display_limit).enumerate() {
             let status = match p.status() {
-                PositionStatus::Open => "Open",
-                PositionStatus::PartialFill { .. } => "Partial",
-                PositionStatus::Closed { .. } => "Closed",
+                PositionStatus::Open => "open",
+                PositionStatus::PartialFill { .. } => "partial",
+                PositionStatus::Closed { .. } => "closed",
             };
 
-            // Truncate market ID for display
             let market_id = p.market_id().as_str();
-            let market_display = if market_id.len() > 10 {
-                format!("{}...", &market_id[..10])
+            let market_display = if market_id.len() > 12 {
+                format!("{}...", &market_id[..12])
             } else {
                 market_id.to_string()
             };
 
             response.push_str(&format!(
-                "{} market={}\n   Status: {} | Cost: ${} | Expected: +${}\n\n",
-                number,
+                "{}. {} ({})\n   Cost: ${} | Expected: +${}\n",
+                i + 1,
                 market_display,
                 status,
                 p.entry_cost(),
@@ -209,10 +268,104 @@ impl TelegramControl {
         }
 
         if total_active > display_count {
-            response.push_str(&format!("... and {} more positions", total_active - display_count));
+            response.push_str(&format!("\n... and {} more", total_active - display_count));
         }
 
         response
+    }
+
+    fn stats_text(&self) -> String {
+        let Some(ref recorder) = self.stats_recorder else {
+            return "Statistics not available".to_string();
+        };
+
+        let summary = recorder.get_today();
+
+        let win_rate = summary
+            .win_rate()
+            .map(|r| format!("{:.1}%", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        format!(
+            "Today's Statistics\n\n\
+            Opportunities: {} detected, {} executed\n\
+            Trades: {} opened, {} closed\n\
+            Win Rate: {} ({} wins, {} losses)\n\
+            Volume: ${}\n\n\
+            P&L\n\
+            - Realized Profit: ${}\n\
+            - Realized Loss: ${}\n\
+            - Net: ${}",
+            summary.opportunities_detected,
+            summary.opportunities_executed,
+            summary.trades_opened,
+            summary.trades_closed,
+            win_rate,
+            summary.win_count,
+            summary.loss_count,
+            summary.total_volume,
+            summary.profit_realized,
+            summary.loss_realized,
+            summary.net_profit()
+        )
+    }
+
+    fn pool_text(&self) -> String {
+        let Some(ref runtime) = self.runtime_stats else {
+            return "Pool statistics not available".to_string();
+        };
+
+        let Some(stats) = runtime.pool_stats() else {
+            return "Pool not initialized".to_string();
+        };
+
+        format!(
+            "Connection Pool\n\n\
+            Active Connections: {}\n\
+            TTL Rotations: {}\n\
+            Restarts: {}\n\
+            Events Dropped: {}",
+            stats.active_connections,
+            stats.total_rotations,
+            stats.total_restarts,
+            stats.events_dropped
+        )
+    }
+
+    fn markets_text(&self) -> String {
+        let Some(ref runtime) = self.runtime_stats else {
+            return "Market statistics not available".to_string();
+        };
+
+        let markets = runtime.market_count();
+        let tokens = runtime.token_count();
+
+        if markets == 0 && tokens == 0 {
+            return "No markets subscribed".to_string();
+        }
+
+        format!(
+            "Subscribed Markets\n\n\
+            Markets: {}\n\
+            Tokens: {}",
+            markets, tokens
+        )
+    }
+
+    fn version_text(&self) -> String {
+        let version = env!("CARGO_PKG_VERSION");
+        let name = env!("CARGO_PKG_NAME");
+
+        // Try to get git info if available (set during build)
+        let commit = option_env!("GIT_COMMIT_SHORT").unwrap_or("unknown");
+        let build_date = option_env!("BUILD_DATE").unwrap_or("unknown");
+
+        format!(
+            "{} v{}\n\n\
+            Commit: {}\n\
+            Built: {}",
+            name, version, commit, build_date
+        )
     }
 
     fn pause_text(&self) -> String {
@@ -221,12 +374,12 @@ impl TelegramControl {
                 .state
                 .circuit_breaker_reason()
                 .unwrap_or_else(|| "unknown".to_string());
-            return format!("Trading already paused: {reason}");
+            return format!("Already paused: {}", reason);
         }
 
         self.state
-            .activate_circuit_breaker("paused by telegram command");
-        "Trading paused (circuit breaker activated)".to_string()
+            .activate_circuit_breaker("paused via Telegram");
+        "Trading paused".to_string()
     }
 
     fn resume_text(&self) -> String {
@@ -235,7 +388,7 @@ impl TelegramControl {
         }
 
         self.state.reset_circuit_breaker();
-        "Trading resumed (circuit breaker reset)".to_string()
+        "Trading resumed".to_string()
     }
 }
 
@@ -255,6 +408,8 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use crate::app::{RiskLimitKind, RiskLimits};
+    use crate::core::db;
+    use crate::core::service::statistics;
 
     #[test]
     fn execute_pause_and_resume() {
@@ -262,11 +417,11 @@ mod tests {
         let control = TelegramControl::new(Arc::clone(&state));
 
         let paused = control.execute(TelegramCommand::Pause);
-        assert!(paused.contains("Trading paused"));
+        assert!(paused.contains("paused"));
         assert!(state.is_circuit_breaker_active());
 
         let resumed = control.execute(TelegramCommand::Resume);
-        assert!(resumed.contains("Trading resumed"));
+        assert!(resumed.contains("resumed"));
         assert!(!state.is_circuit_breaker_active());
     }
 
@@ -294,7 +449,8 @@ mod tests {
             value: dec!(2),
         });
 
-        assert!(text.contains("Cannot update max_slippage"));
+        assert!(text.contains("Error"));
+        assert!(text.contains("max_slippage"));
     }
 
     #[test]
@@ -304,7 +460,290 @@ mod tests {
 
         assert_eq!(
             control.execute(TelegramCommand::Positions),
-            "📈 Active Positions (0)"
+            "No active positions"
         );
+    }
+
+    #[test]
+    fn execute_version() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Version);
+        assert!(text.contains("edgelord"));
+        assert!(text.contains("v0."));
+    }
+
+    #[test]
+    fn execute_stats_without_recorder() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Stats);
+        assert!(text.contains("not available"));
+    }
+
+    #[test]
+    fn execute_pool_without_runtime_stats() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Pool);
+        assert!(text.contains("not available"));
+    }
+
+    #[test]
+    fn runtime_stats_update_and_read() {
+        let stats = RuntimeStats::new();
+
+        stats.update_market_counts(10, 20);
+        assert_eq!(stats.market_count(), 10);
+        assert_eq!(stats.token_count(), 20);
+
+        stats.update_pool_stats(PoolStats {
+            active_connections: 3,
+            total_rotations: 5,
+            total_restarts: 1,
+            events_dropped: 0,
+        });
+
+        let pool = stats.pool_stats().unwrap();
+        assert_eq!(pool.active_connections, 3);
+        assert_eq!(pool.total_rotations, 5);
+    }
+
+    #[test]
+    fn execute_stats_with_recorder() {
+        // Create in-memory database for test
+        let pool = db::create_pool("sqlite://:memory:").expect("create pool");
+        db::run_migrations(&pool).expect("run migrations");
+        let recorder = statistics::create_recorder(pool);
+
+        let state = Arc::new(AppState::default());
+        let runtime = Arc::new(RuntimeStats::new());
+        let control = TelegramControl::with_config(state, recorder, runtime, 10);
+
+        let text = control.execute(TelegramCommand::Stats);
+        assert!(text.contains("Today's Statistics"));
+        assert!(text.contains("Opportunities:"));
+        assert!(text.contains("P&L"));
+    }
+
+    #[test]
+    fn execute_pool_with_stats() {
+        let state = Arc::new(AppState::default());
+        let pool = db::create_pool("sqlite://:memory:").expect("create pool");
+        db::run_migrations(&pool).expect("run migrations");
+        let recorder = statistics::create_recorder(pool);
+        let runtime = Arc::new(RuntimeStats::new());
+
+        // Update pool stats
+        runtime.update_pool_stats(PoolStats {
+            active_connections: 5,
+            total_rotations: 10,
+            total_restarts: 2,
+            events_dropped: 100,
+        });
+
+        let control = TelegramControl::with_config(state, recorder, runtime, 10);
+
+        let text = control.execute(TelegramCommand::Pool);
+        assert!(text.contains("Connection Pool"));
+        assert!(text.contains("Active Connections: 5"));
+        assert!(text.contains("TTL Rotations: 10"));
+        assert!(text.contains("Events Dropped: 100"));
+    }
+
+    #[test]
+    fn execute_markets_with_stats() {
+        let state = Arc::new(AppState::default());
+        let pool = db::create_pool("sqlite://:memory:").expect("create pool");
+        db::run_migrations(&pool).expect("run migrations");
+        let recorder = statistics::create_recorder(pool);
+        let runtime = Arc::new(RuntimeStats::new());
+
+        // Update market counts
+        runtime.update_market_counts(42, 84);
+
+        let control = TelegramControl::with_config(state, recorder, runtime, 10);
+
+        let text = control.execute(TelegramCommand::Markets);
+        assert!(text.contains("Subscribed Markets"));
+        assert!(text.contains("Markets: 42"));
+        assert!(text.contains("Tokens: 84"));
+    }
+
+    #[test]
+    fn execute_markets_without_runtime_stats() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Markets);
+        assert!(text.contains("not available"));
+    }
+
+    #[test]
+    fn execute_markets_with_zero_counts() {
+        let state = Arc::new(AppState::default());
+        let pool = db::create_pool("sqlite://:memory:").expect("create pool");
+        db::run_migrations(&pool).expect("run migrations");
+        let recorder = statistics::create_recorder(pool);
+        let runtime = Arc::new(RuntimeStats::new());
+        // Don't update counts - they default to 0
+
+        let control = TelegramControl::with_config(state, recorder, runtime, 10);
+
+        let text = control.execute(TelegramCommand::Markets);
+        assert!(text.contains("No markets subscribed"));
+    }
+
+    #[test]
+    fn execute_pool_not_initialized() {
+        let state = Arc::new(AppState::default());
+        let pool = db::create_pool("sqlite://:memory:").expect("create pool");
+        db::run_migrations(&pool).expect("run migrations");
+        let recorder = statistics::create_recorder(pool);
+        let runtime = Arc::new(RuntimeStats::new());
+        // Don't update pool stats
+
+        let control = TelegramControl::with_config(state, recorder, runtime, 10);
+
+        let text = control.execute(TelegramCommand::Pool);
+        assert!(text.contains("Pool not initialized"));
+    }
+
+    #[test]
+    fn execute_help_command() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Help);
+        assert!(text.contains("/status"));
+        assert!(text.contains("/health"));
+    }
+
+    #[test]
+    fn execute_start_command() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Start);
+        assert!(text.contains("/status"));
+        assert!(text.contains("/positions"));
+        assert!(text.contains("Edgelord Commands"));
+    }
+
+    #[test]
+    fn execute_status_command() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Status);
+        assert!(text.contains("Edgelord Status"));
+        assert!(text.contains("Mode:"));
+        assert!(text.contains("Risk Limits"));
+        assert!(text.contains("Portfolio"));
+    }
+
+    #[test]
+    fn execute_health_command() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Health);
+        assert!(text.contains("Health Check:"));
+        assert!(text.contains("Circuit Breaker:"));
+        assert!(text.contains("Exposure:"));
+    }
+
+    #[test]
+    fn pause_when_already_paused() {
+        let state = Arc::new(AppState::default());
+        state.activate_circuit_breaker("manual pause");
+        let control = TelegramControl::new(Arc::clone(&state));
+
+        let text = control.execute(TelegramCommand::Pause);
+        assert!(text.contains("Already paused"));
+    }
+
+    #[test]
+    fn resume_when_not_paused() {
+        let state = Arc::new(AppState::default());
+        let control = TelegramControl::new(state);
+
+        let text = control.execute(TelegramCommand::Resume);
+        assert!(text.contains("Trading already active"));
+    }
+
+    #[test]
+    fn positions_with_data() {
+        use crate::core::domain::{MarketId, Position, PositionLeg, TokenId};
+
+        let state = Arc::new(AppState::default());
+
+        // Add a position
+        {
+            let mut positions = state.positions_mut();
+            let legs = vec![
+                PositionLeg::new(TokenId::from("yes-1"), dec!(100), dec!(0.40)),
+                PositionLeg::new(TokenId::from("no-1"), dec!(100), dec!(0.50)),
+            ];
+            let position = Position::new(
+                positions.next_id(),
+                MarketId::from("test-market-12345"),
+                legs,
+                dec!(90),
+                dec!(100),
+                chrono::Utc::now(),
+                PositionStatus::Open,
+            );
+            positions.add(position);
+        }
+
+        let control = TelegramControl::new(Arc::clone(&state));
+        let text = control.execute(TelegramCommand::Positions);
+
+        assert!(text.contains("Active Positions (1)"));
+        assert!(text.contains("test-market-"));
+        assert!(text.contains("open"));
+    }
+
+    #[test]
+    fn format_uptime_test() {
+        use chrono::{Duration, Utc};
+
+        let now = Utc::now();
+        let started = now - Duration::hours(2) - Duration::minutes(30) - Duration::seconds(45);
+
+        let uptime = format_uptime(started);
+        assert!(uptime.contains("02:30:45") || uptime.contains("02:30:46")); // Allow for timing
+    }
+
+    #[test]
+    fn runtime_stats_pool_stats_none_initially() {
+        let stats = RuntimeStats::new();
+        assert!(stats.pool_stats().is_none());
+    }
+
+    #[test]
+    fn status_shows_paused_when_circuit_breaker_active() {
+        let state = Arc::new(AppState::default());
+        state.activate_circuit_breaker("test reason");
+        let control = TelegramControl::new(Arc::clone(&state));
+
+        let text = control.execute(TelegramCommand::Status);
+        assert!(text.contains("PAUSED"));
+        assert!(text.contains("test reason"));
+    }
+
+    #[test]
+    fn health_shows_degraded_when_circuit_breaker_active() {
+        let state = Arc::new(AppState::default());
+        state.activate_circuit_breaker("test failure");
+        let control = TelegramControl::new(Arc::clone(&state));
+
+        let text = control.execute(TelegramCommand::Health);
+        assert!(text.contains("DEGRADED"));
+        assert!(text.contains("FAIL"));
     }
 }

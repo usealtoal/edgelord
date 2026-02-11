@@ -96,6 +96,27 @@ on:
         required: false
         default: true
         type: boolean
+      # New risk/pool overrides
+      max_slippage:
+        description: "Maximum slippage tolerance (e.g., 0.02 for 2%)"
+        required: false
+        default: ""
+        type: string
+      max_markets:
+        description: "Maximum markets to track (e.g., 100)"
+        required: false
+        default: ""
+        type: string
+      max_connections:
+        description: "Maximum WebSocket connections (e.g., 5)"
+        required: false
+        default: ""
+        type: string
+      execution_timeout:
+        description: "Execution timeout in seconds (e.g., 30)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -134,12 +155,36 @@ jobs:
 
       - name: Print deployment plan
         run: |
+          echo "=== Deployment Plan ==="
           echo "Mode: ${{ inputs.mode }}"
           echo "Environment: ${{ inputs.environment }}"
           echo "Ref: ${{ inputs.ref }}"
+          echo ""
+          echo "=== Runtime Settings ==="
+          echo "Dry run: ${{ inputs.dry_run }}"
+          echo "Telegram: ${{ inputs.telegram_enabled }}"
+          echo "Dugout: ${{ inputs.dugout }}"
+          echo ""
+          echo "=== Strategy Toggles ==="
+          echo "single_condition: ${{ inputs.strategy_single_condition }}"
+          echo "market_rebalancing: ${{ inputs.strategy_market_rebalancing }}"
+          echo "combinatorial: ${{ inputs.strategy_combinatorial }}"
+          echo ""
+          echo "=== Overrides (if set) ==="
+          [[ -n "${{ inputs.min_edge }}" ]] && echo "min_edge: ${{ inputs.min_edge }}"
+          [[ -n "${{ inputs.min_profit }}" ]] && echo "min_profit: ${{ inputs.min_profit }}"
+          [[ -n "${{ inputs.max_exposure }}" ]] && echo "max_exposure: ${{ inputs.max_exposure }}"
+          [[ -n "${{ inputs.max_position }}" ]] && echo "max_position: ${{ inputs.max_position }}"
+          [[ -n "${{ inputs.max_slippage }}" ]] && echo "max_slippage: ${{ inputs.max_slippage }}"
+          [[ -n "${{ inputs.max_markets }}" ]] && echo "max_markets: ${{ inputs.max_markets }}"
+          [[ -n "${{ inputs.max_connections }}" ]] && echo "max_connections: ${{ inputs.max_connections }}"
+          [[ -n "${{ inputs.execution_timeout }}" ]] && echo "execution_timeout: ${{ inputs.execution_timeout }}"
+          echo ""
           if [[ -n "${{ inputs.change_note }}" ]]; then
-            echo "Change note: ${{ inputs.change_note }}"
+            echo "=== Change Note ==="
+            echo "${{ inputs.change_note }}"
           fi
+          echo "==================="
 
       - name: Install Rust toolchain
         if: ${{ inputs.mode == 'deploy' }}
@@ -225,6 +270,11 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           TELEGRAM_ENABLED: ${{ inputs.telegram_enabled }}
           DUGOUT: ${{ inputs.dugout }}
+          # New risk/pool overrides
+          MAX_SLIPPAGE: ${{ inputs.max_slippage }}
+          MAX_MARKETS: ${{ inputs.max_markets }}
+          MAX_CONNECTIONS: ${{ inputs.max_connections }}
+          EXECUTION_TIMEOUT: ${{ inputs.execution_timeout }}
         run: |
           set -euo pipefail
           test -n "$DEPLOY_USER"
@@ -240,7 +290,7 @@ jobs:
             -i ~/.ssh/id_ed25519 \
             -p "$DEPLOY_SSH_PORT" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' MODE='$MODE' RUN_CONNECTION_CHECK='$RUN_CONNECTION_CHECK' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' STRATEGIES='$STRATEGIES' MIN_EDGE='$MIN_EDGE' MIN_PROFIT='$MIN_PROFIT' MAX_EXPOSURE='$MAX_EXPOSURE' MAX_POSITION='$MAX_POSITION' DRY_RUN='$DRY_RUN' TELEGRAM_ENABLED='$TELEGRAM_ENABLED' DUGOUT='$DUGOUT' bash -s" <<'REMOTE'
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' RELEASE_SHA='$RELEASE_SHA' MODE='$MODE' RUN_CONNECTION_CHECK='$RUN_CONNECTION_CHECK' RUN_LIVE_CHECK='$RUN_LIVE_CHECK' BINARY_STAGING='/tmp/edgelord-$RELEASE_SHA' STRATEGIES='$STRATEGIES' MIN_EDGE='$MIN_EDGE' MIN_PROFIT='$MIN_PROFIT' MAX_EXPOSURE='$MAX_EXPOSURE' MAX_POSITION='$MAX_POSITION' DRY_RUN='$DRY_RUN' TELEGRAM_ENABLED='$TELEGRAM_ENABLED' DUGOUT='$DUGOUT' MAX_SLIPPAGE='$MAX_SLIPPAGE' MAX_MARKETS='$MAX_MARKETS' MAX_CONNECTIONS='$MAX_CONNECTIONS' EXECUTION_TIMEOUT='$EXECUTION_TIMEOUT' bash -s" <<'REMOTE'
             set -euo pipefail
 
             # Ensure cargo binaries (dugout) are in PATH
@@ -300,6 +350,11 @@ jobs:
               [[ "$DRY_RUN" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --dry-run"
               [[ "$TELEGRAM_ENABLED" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --telegram-enabled"
               [[ "$DUGOUT" == "true" ]] && EXTRA_ARGS="$EXTRA_ARGS --dugout"
+              # New risk/pool overrides
+              [[ -n "$MAX_SLIPPAGE" ]] && EXTRA_ARGS="$EXTRA_ARGS --max-slippage $MAX_SLIPPAGE"
+              [[ -n "$MAX_MARKETS" ]] && EXTRA_ARGS="$EXTRA_ARGS --max-markets $MAX_MARKETS"
+              [[ -n "$MAX_CONNECTIONS" ]] && EXTRA_ARGS="$EXTRA_ARGS --max-connections $MAX_CONNECTIONS"
+              [[ -n "$EXECUTION_TIMEOUT" ]] && EXTRA_ARGS="$EXTRA_ARGS --execution-timeout $EXECUTION_TIMEOUT"
 
               sudo "$CURRENT_LINK/edgelord" service install --config "$CONFIG_PATH" --user "$DEPLOY_USER" --working-dir "$DEPLOY_PATH" $EXTRA_ARGS
               sudo systemctl restart edgelord

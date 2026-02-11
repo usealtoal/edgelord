@@ -6,7 +6,7 @@ use crate::core::strategy::combinatorial::{CombinatorialConfig, CombinatorialStr
 use crate::core::strategy::condition::{SingleConditionConfig, SingleConditionStrategy};
 use crate::core::strategy::context::DetectionContext;
 use crate::core::strategy::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
-use crate::core::strategy::traits::Strategy;
+use super::Strategy;
 
 /// Registry of enabled strategies.
 ///

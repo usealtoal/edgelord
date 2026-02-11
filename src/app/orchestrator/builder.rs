@@ -15,40 +15,66 @@ use crate::core::service::{LogNotifier, NotifierRegistry};
 use crate::core::strategy::StrategyRegistry;
 
 #[cfg(feature = "telegram")]
-use crate::core::service::{TelegramConfig, TelegramNotifier};
+use crate::core::service::{RuntimeStats, StatsRecorder, TelegramConfig, TelegramNotifier};
+
+#[cfg(not(feature = "telegram"))]
+use crate::core::service::StatsRecorder;
 
 /// Build notifier registry from configuration.
-pub(crate) fn build_notifier_registry(config: &Config, state: Arc<AppState>) -> NotifierRegistry {
+///
+/// When the `telegram` feature is enabled, this also creates a `RuntimeStats`
+/// instance that should be updated by the orchestrator with pool and market info.
+#[cfg(feature = "telegram")]
+pub(crate) fn build_notifier_registry(
+    config: &Config,
+    state: Arc<AppState>,
+    stats_recorder: Arc<StatsRecorder>,
+) -> (NotifierRegistry, Option<Arc<RuntimeStats>>) {
     let mut registry = NotifierRegistry::new();
 
     // Always add log notifier
     registry.register(Box::new(LogNotifier));
 
     // Add telegram notifier if configured
-    #[cfg(feature = "telegram")]
-    if config.telegram.enabled {
+    let runtime_stats = if config.telegram.enabled {
         if let Some(tg_config) = TelegramConfig::from_env() {
             let tg_config = TelegramConfig {
                 notify_opportunities: config.telegram.notify_opportunities,
                 notify_executions: config.telegram.notify_executions,
                 notify_risk_rejections: config.telegram.notify_risk_rejections,
+                position_display_limit: config.telegram.position_display_limit,
                 ..tg_config
             };
-            registry.register(Box::new(TelegramNotifier::new_with_control(
+            let runtime_stats = Arc::new(RuntimeStats::new());
+            registry.register(Box::new(TelegramNotifier::new_with_full_control(
                 tg_config,
                 Arc::clone(&state),
+                stats_recorder,
+                Arc::clone(&runtime_stats),
             )));
-            info!("Telegram notifier enabled");
+            info!("Telegram notifier enabled with full control");
+            Some(runtime_stats)
         } else {
             warn!("Telegram enabled but TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
+            None
         }
-    }
+    } else {
+        None
+    };
 
-    // Suppress unused variable warning when telegram feature is disabled
-    #[cfg(not(feature = "telegram"))]
-    let _ = (config, state);
+    (registry, runtime_stats)
+}
 
-    registry
+/// Build notifier registry from configuration (non-telegram variant).
+#[cfg(not(feature = "telegram"))]
+pub(crate) fn build_notifier_registry(
+    _config: &Config,
+    _state: Arc<AppState>,
+    _stats_recorder: Arc<StatsRecorder>,
+) -> (NotifierRegistry, Option<()>) {
+    let mut registry = NotifierRegistry::new();
+    registry.register(Box::new(LogNotifier));
+    (registry, None)
 }
 
 /// Build strategy registry from configuration using builder pattern.

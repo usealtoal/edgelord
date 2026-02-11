@@ -195,7 +195,13 @@ impl Orchestrator {
         let risk_manager = Arc::new(RiskManager::new(state.clone()));
 
         // Initialize notifiers
-        let notifiers = Arc::new(build_notifier_registry(&config, Arc::clone(&state)));
+        #[allow(unused_variables)]
+        let (notifiers, runtime_stats) = build_notifier_registry(
+            &config,
+            Arc::clone(&state),
+            Arc::clone(&stats_recorder),
+        );
+        let notifiers = Arc::new(notifiers);
         info!(notifiers = notifiers.len(), "Notifiers initialized");
 
         // Initialize executor (optional)
@@ -329,6 +335,12 @@ impl Orchestrator {
 
         let registry = Arc::new(registry);
 
+        // Update runtime stats for Telegram commands
+        #[cfg(feature = "telegram")]
+        if let Some(ref stats) = runtime_stats {
+            stats.update_market_counts(registry.len(), token_ids.len());
+        }
+
         // Create order book cache (with notifications if cluster detection enabled)
         let (cache, cluster_handle) = if config.cluster_detection.enabled {
             let (cache, update_rx) =
@@ -393,6 +405,11 @@ impl Orchestrator {
 
         let dry_run = config.dry_run;
 
+        // Timer for periodic stats updates (configurable, default 30 seconds)
+        let stats_interval_secs = config.telegram.stats_interval_secs;
+        let mut stats_interval = tokio::time::interval(std::time::Duration::from_secs(stats_interval_secs));
+        stats_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
         // Event loop using trait-based stream
         loop {
             tokio::select! {
@@ -407,6 +424,15 @@ impl Orchestrator {
                         Err(_) => {
                             info!("Shutdown channel closed");
                             break;
+                        }
+                    }
+                }
+                _ = stats_interval.tick() => {
+                    // Update pool stats for Telegram commands
+                    #[cfg(feature = "telegram")]
+                    if let Some(ref stats) = runtime_stats {
+                        if let Some(pool_stats) = data_stream.pool_stats() {
+                            stats.update_pool_stats(pool_stats);
                         }
                     }
                 }
@@ -437,5 +463,230 @@ impl Orchestrator {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::app::Config;
+
+    #[test]
+    fn health_check_struct_accessors() {
+        let check = HealthCheck {
+            name: "test_service",
+            critical: true,
+            status: HealthStatus::Healthy,
+        };
+
+        assert_eq!(check.name(), "test_service");
+        assert!(check.critical());
+        assert!(matches!(check.status(), HealthStatus::Healthy));
+        assert!(check.is_healthy());
+    }
+
+    #[test]
+    fn health_check_unhealthy_status() {
+        let check = HealthCheck {
+            name: "broken_service",
+            critical: false,
+            status: HealthStatus::Unhealthy("connection failed".to_string()),
+        };
+
+        assert!(!check.is_healthy());
+        assert!(matches!(check.status(), HealthStatus::Unhealthy(_)));
+    }
+
+    #[test]
+    fn health_report_is_healthy_when_all_critical_pass() {
+        let report = HealthReport {
+            checks: vec![
+                HealthCheck {
+                    name: "critical_pass",
+                    critical: true,
+                    status: HealthStatus::Healthy,
+                },
+                HealthCheck {
+                    name: "non_critical_fail",
+                    critical: false,
+                    status: HealthStatus::Unhealthy("warning".to_string()),
+                },
+            ],
+        };
+
+        assert!(report.is_healthy());
+    }
+
+    #[test]
+    fn health_report_is_unhealthy_when_critical_fails() {
+        let report = HealthReport {
+            checks: vec![
+                HealthCheck {
+                    name: "critical_fail",
+                    critical: true,
+                    status: HealthStatus::Unhealthy("error".to_string()),
+                },
+                HealthCheck {
+                    name: "critical_pass",
+                    critical: true,
+                    status: HealthStatus::Healthy,
+                },
+            ],
+        };
+
+        assert!(!report.is_healthy());
+    }
+
+    #[test]
+    fn health_report_checks_accessor() {
+        let report = HealthReport {
+            checks: vec![
+                HealthCheck {
+                    name: "check1",
+                    critical: true,
+                    status: HealthStatus::Healthy,
+                },
+                HealthCheck {
+                    name: "check2",
+                    critical: false,
+                    status: HealthStatus::Healthy,
+                },
+            ],
+        };
+
+        assert_eq!(report.checks().len(), 2);
+    }
+
+    #[test]
+    fn health_check_with_default_config() {
+        let config = Config::default();
+        let report = health_check(&config);
+
+        assert!(report.checks().len() >= 4);
+
+        let check_names: Vec<_> = report.checks().iter().map(|c| c.name()).collect();
+        assert!(check_names.contains(&"database"));
+        assert!(check_names.contains(&"exchange_api"));
+        assert!(check_names.contains(&"exchange_ws"));
+        assert!(check_names.contains(&"strategies"));
+    }
+
+    #[test]
+    fn health_check_detects_empty_database_path() {
+        let config = Config {
+            database: String::new(),
+            ..Default::default()
+        };
+
+        let report = health_check(&config);
+        let db_check = report
+            .checks()
+            .iter()
+            .find(|c| c.name() == "database")
+            .unwrap();
+
+        assert!(!db_check.is_healthy());
+    }
+
+    #[test]
+    fn health_check_detects_empty_api_url() {
+        let mut config = Config::default();
+        match &mut config.exchange_config {
+            crate::app::ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.api_url = String::new();
+            }
+        }
+
+        let report = health_check(&config);
+        let api_check = report
+            .checks()
+            .iter()
+            .find(|c| c.name() == "exchange_api")
+            .unwrap();
+
+        assert!(!api_check.is_healthy());
+    }
+
+    #[test]
+    fn health_check_detects_empty_ws_url() {
+        let mut config = Config::default();
+        match &mut config.exchange_config {
+            crate::app::ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.ws_url = String::new();
+            }
+        }
+
+        let report = health_check(&config);
+        let ws_check = report
+            .checks()
+            .iter()
+            .find(|c| c.name() == "exchange_ws")
+            .unwrap();
+
+        assert!(!ws_check.is_healthy());
+    }
+
+    #[test]
+    fn health_check_detects_no_strategies_enabled() {
+        let mut config = Config::default();
+        config.strategies.enabled.clear();
+
+        let report = health_check(&config);
+        let strat_check = report
+            .checks()
+            .iter()
+            .find(|c| c.name() == "strategies")
+            .unwrap();
+
+        assert!(!strat_check.is_healthy());
+    }
+
+    #[test]
+    fn health_status_equality() {
+        assert_eq!(HealthStatus::Healthy, HealthStatus::Healthy);
+        assert_eq!(
+            HealthStatus::Unhealthy("a".to_string()),
+            HealthStatus::Unhealthy("a".to_string())
+        );
+        assert_ne!(
+            HealthStatus::Healthy,
+            HealthStatus::Unhealthy("error".to_string())
+        );
+    }
+
+    #[test]
+    fn event_processing_context_can_be_created() {
+        use crate::app::AppState;
+        use crate::core::cache::OrderBookCache;
+        use crate::core::domain::MarketRegistry;
+        use crate::core::service::{NotifierRegistry, RiskManager};
+        use crate::core::strategy::StrategyRegistry;
+        use std::sync::Arc;
+
+        let cache = OrderBookCache::new();
+        let registry = MarketRegistry::new();
+        let strategies = StrategyRegistry::new();
+        let state = Arc::new(AppState::default());
+        let notifiers = Arc::new(NotifierRegistry::new());
+        let risk_manager = RiskManager::new(Arc::clone(&state));
+        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = crate::core::service::statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+            Arc::clone(&stats),
+        ));
+
+        let _ctx = EventProcessingContext {
+            cache: &cache,
+            registry: &registry,
+            strategies: &strategies,
+            executor: None,
+            risk_manager: &risk_manager,
+            notifiers: &notifiers,
+            state: &state,
+            stats: &stats,
+            position_manager: &position_manager,
+            dry_run: true,
+        };
     }
 }

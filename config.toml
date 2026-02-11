@@ -62,3 +62,51 @@ max_delay_ms = 60000           # 60 seconds max
 backoff_multiplier = 2.0       # Double delay each failure
 max_consecutive_failures = 10  # Trip circuit breaker after 10 failures
 circuit_breaker_cooldown_ms = 300000  # 5 minute cooldown
+
+# === CONNECTION POOL ===
+# WebSocket connection management for high-volume subscriptions
+[connection_pool]
+max_connections = 10           # Maximum WebSocket connections
+subscriptions_per_connection = 500  # Tokens per connection before rotation
+connection_ttl_secs = 120      # Connection lifetime before refresh
+preemptive_reconnect_secs = 30 # Start reconnect before TTL expires
+health_check_interval_secs = 30  # Check connection health interval
+max_silent_secs = 60           # Max seconds without data before reconnect
+channel_capacity = 10000       # Event buffer size
+
+# === MARKET FILTER ===
+# Filter markets by volume/liquidity before subscribing
+# Applied during market discovery phase
+[exchange_config.market_filter]
+max_markets = 500              # Maximum markets to track
+max_subscriptions = 2000       # Maximum token subscriptions
+min_volume_24h = 1000.0        # Minimum 24h volume (USD)
+min_liquidity = 500.0          # Minimum liquidity (USD)
+max_spread_pct = 0.10          # Maximum bid-ask spread (10%)
+
+# === DEDUPLICATION ===
+# Message deduplication for WebSocket events
+[exchange_config.dedup]
+enabled = true
+strategy = "hash"              # Primary: hash | timestamp | content
+fallback = "timestamp"         # Fallback if primary fails
+cache_ttl_secs = 5             # How long to remember seen messages
+
+# === GOVERNOR ===
+# Adaptive subscription management based on latency
+[governor]
+enabled = true
+
+[governor.latency]
+target_p50_ms = 10             # Target median latency
+target_p95_ms = 50             # Target 95th percentile
+target_p99_ms = 100            # Target 99th percentile
+max_p99_ms = 200               # Maximum acceptable p99
+
+[governor.scaling]
+check_interval_secs = 10       # How often to check metrics
+expand_threshold = 0.70        # Add subs when utilization below this
+contract_threshold = 1.20      # Remove subs when utilization above this
+expand_step = 50               # Subscriptions to add per cycle
+contract_step = 100            # Subscriptions to remove per cycle
+cooldown_secs = 60             # Minimum time between scaling actions

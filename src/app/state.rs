@@ -20,6 +20,8 @@ pub struct RiskLimits {
     pub min_profit_threshold: Decimal,
     /// Maximum slippage tolerance (e.g., 0.02 = 2%).
     pub max_slippage: Decimal,
+    /// Execution timeout in seconds.
+    pub execution_timeout_secs: u64,
 }
 
 impl Default for RiskLimits {
@@ -29,6 +31,7 @@ impl Default for RiskLimits {
             max_total_exposure: Decimal::from(10000),
             min_profit_threshold: Decimal::new(5, 2), // $0.05
             max_slippage: Decimal::new(2, 2),         // 2%
+            execution_timeout_secs: 30,
         }
     }
 }

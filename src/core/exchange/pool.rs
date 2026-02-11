@@ -28,7 +28,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::app::{ConnectionPoolConfig, ReconnectionConfig};
-use crate::core::domain::TokenId;
+use crate::core::domain::{PoolStats, TokenId};
 use crate::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
 use crate::error::{ConfigError, Result};
 
@@ -43,22 +43,11 @@ const DRAIN_GRACE_PERIOD: Duration = Duration::from_millis(100);
 /// Polling interval during handoff (checking for first event).
 const HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-// ---------------------------------------------------------------------------
-// Pool statistics
-// ---------------------------------------------------------------------------
-
-/// Runtime statistics for the connection pool.
-#[derive(Debug, Clone, Default)]
-pub struct PoolStats {
-    /// Number of currently active connections.
-    pub active_connections: usize,
-    /// Total number of connection rotations (TTL-triggered).
-    pub total_rotations: u64,
-    /// Total number of restarts (crash/silence-triggered).
-    pub total_restarts: u64,
-    /// Total number of events dropped due to a full channel.
-    pub events_dropped: u64,
-}
+/// Starting ID for management-spawned connections.
+///
+/// Initial connections get IDs 1, 2, 3, ... Management-spawned replacements
+/// start at this value to avoid ID collisions and make logs easier to follow.
+const MANAGEMENT_CONNECTION_ID_START: u64 = 1_000_000;
 
 /// Shared counters updated atomically by connection and management tasks.
 struct SharedCounters {
@@ -108,10 +97,16 @@ fn epoch_millis() -> u64 {
 }
 
 /// Lock a mutex, recovering from poisoning.
+///
+/// If a thread panicked while holding the lock, we log a warning and recover
+/// the data. This keeps the pool operational but surfaces the issue in logs.
 fn lock_or_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     match mutex.lock() {
         Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
+        Err(poisoned) => {
+            warn!("Mutex poisoned (previous holder panicked), recovering");
+            poisoned.into_inner()
+        }
     }
 }
 
@@ -346,7 +341,7 @@ async fn management_task(ctx: ManagementContext, exchange_name: &'static str) {
     let handoff_timeout = Duration::from_secs(ctx.config.connection_ttl_secs.max(30));
 
     let mut interval = tokio::time::interval(check_interval);
-    let mut next_id: u64 = 1_000_000;
+    let mut next_id: u64 = MANAGEMENT_CONNECTION_ID_START;
 
     debug!(exchange = exchange_name, "Management task started");
 
@@ -634,6 +629,10 @@ impl MarketDataStream for ConnectionPool {
 
     fn exchange_name(&self) -> &'static str {
         self.exchange_name
+    }
+
+    fn pool_stats(&self) -> Option<PoolStats> {
+        Some(self.stats())
     }
 }
 

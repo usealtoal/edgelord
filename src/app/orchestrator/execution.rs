@@ -15,10 +15,6 @@ use crate::core::exchange::ArbitrageExecutor;
 use crate::core::service::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
 
-#[cfg(test)]
-const EXECUTION_TIMEOUT: Duration = Duration::from_millis(100);
-#[cfg(not(test))]
-const EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct ExecutionLockGuard {
     state: Arc<AppState>,
@@ -52,7 +48,14 @@ pub(crate) fn spawn_execution(
         let _lock_guard = ExecutionLockGuard::new(Arc::clone(&state), market_id.clone());
         // Calculate reserved exposure for release
         let reserved_exposure = opportunity.total_cost() * opportunity.volume();
-        let result = timeout(EXECUTION_TIMEOUT, executor.execute_arbitrage(&opportunity)).await;
+
+        // Get configurable timeout from state (with test override)
+        #[cfg(test)]
+        let execution_timeout = Duration::from_millis(100);
+        #[cfg(not(test))]
+        let execution_timeout = Duration::from_secs(state.risk_limits().execution_timeout_secs);
+
+        let result = timeout(execution_timeout, executor.execute_arbitrage(&opportunity)).await;
 
         match result {
             Ok(exec_result) => match exec_result {

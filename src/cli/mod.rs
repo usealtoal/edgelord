@@ -29,7 +29,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Run the arbitrage detector (foreground, interactive)
-    Run(RunArgs),
+    Run(Box<RunArgs>),
 
     /// Show service status
     Status(StatusArgs),
@@ -92,7 +92,7 @@ pub enum ConfigCommand {
 #[derive(Subcommand, Debug)]
 pub enum ServiceCommand {
     /// Install systemd service
-    Install(InstallArgs),
+    Install(Box<InstallArgs>),
     /// Uninstall systemd service
     Uninstall,
 }
@@ -244,6 +244,59 @@ pub struct RunArgs {
     /// Enable Telegram notifications
     #[arg(long)]
     pub telegram_enabled: bool,
+
+    // === Risk Management ===
+    /// Override maximum slippage tolerance (0.02 = 2%)
+    #[arg(long)]
+    pub max_slippage: Option<Decimal>,
+
+    // === Market Discovery ===
+    /// Maximum markets to track
+    #[arg(long)]
+    pub max_markets: Option<usize>,
+
+    /// Minimum 24h volume threshold (USD)
+    #[arg(long)]
+    pub min_volume: Option<f64>,
+
+    /// Minimum liquidity threshold (USD)
+    #[arg(long)]
+    pub min_liquidity: Option<f64>,
+
+    // === Connection Pool ===
+    /// Maximum WebSocket connections
+    #[arg(long)]
+    pub max_connections: Option<usize>,
+
+    /// Subscriptions per connection
+    #[arg(long)]
+    pub subs_per_connection: Option<usize>,
+
+    /// Connection TTL in seconds
+    #[arg(long)]
+    pub connection_ttl: Option<u64>,
+
+    // === Execution & Runtime ===
+    /// Execution timeout in seconds
+    #[arg(long)]
+    pub execution_timeout: Option<u64>,
+
+    /// Stats update interval in seconds
+    #[arg(long)]
+    pub stats_interval: Option<u64>,
+
+    /// Path to SQLite database
+    #[arg(long)]
+    pub database: Option<PathBuf>,
+
+    // === Environment Shortcuts ===
+    /// Use mainnet (shortcut for --chain-id=137)
+    #[arg(long, conflicts_with = "testnet")]
+    pub mainnet: bool,
+
+    /// Use testnet (shortcut for --chain-id=80002)
+    #[arg(long, conflicts_with = "mainnet")]
+    pub testnet: bool,
 }
 
 /// Arguments for the `logs` subcommand.
@@ -309,6 +362,26 @@ pub struct InstallArgs {
     /// Use dugout for secrets injection (no .env file needed)
     #[arg(long)]
     pub dugout: bool,
+
+    // === Risk Management ===
+    /// Override maximum slippage tolerance (0.02 = 2%)
+    #[arg(long)]
+    pub max_slippage: Option<Decimal>,
+
+    // === Market Discovery ===
+    /// Maximum markets to track
+    #[arg(long)]
+    pub max_markets: Option<usize>,
+
+    // === Connection Pool ===
+    /// Maximum WebSocket connections
+    #[arg(long)]
+    pub max_connections: Option<usize>,
+
+    // === Execution & Runtime ===
+    /// Execution timeout in seconds
+    #[arg(long)]
+    pub execution_timeout: Option<u64>,
 }
 
 /// Arguments for the `wallet approve` subcommand.

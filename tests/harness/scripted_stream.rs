@@ -6,7 +6,7 @@ use edgelord::core::exchange::{MarketDataStream, MarketEvent};
 use edgelord::error::Error;
 
 /// Deterministic test double for market data streaming.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScriptedMarketDataStream {
     connect_results: VecDeque<Result<(), Error>>,
     subscribe_results: VecDeque<Result<(), Error>>,
@@ -14,19 +14,6 @@ pub struct ScriptedMarketDataStream {
     subscriptions: Vec<Vec<TokenId>>,
     connect_calls: usize,
     subscribe_calls: usize,
-}
-
-impl Default for ScriptedMarketDataStream {
-    fn default() -> Self {
-        Self {
-            connect_results: VecDeque::new(),
-            subscribe_results: VecDeque::new(),
-            events: VecDeque::new(),
-            subscriptions: Vec::new(),
-            connect_calls: 0,
-            subscribe_calls: 0,
-        }
-    }
 }
 
 impl ScriptedMarketDataStream {

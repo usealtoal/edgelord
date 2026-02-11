@@ -14,6 +14,10 @@ pub enum TelegramCommand {
     Status,
     Health,
     Positions,
+    Stats,
+    Pool,
+    Markets,
+    Version,
     Pause,
     Resume,
     SetRisk { kind: RiskLimitKind, value: Decimal },
@@ -66,6 +70,10 @@ pub fn parse_command(text: &str) -> Result<TelegramCommand, CommandParseError> {
         "/status" => Ok(TelegramCommand::Status),
         "/health" => Ok(TelegramCommand::Health),
         "/positions" => Ok(TelegramCommand::Positions),
+        "/stats" => Ok(TelegramCommand::Stats),
+        "/pool" => Ok(TelegramCommand::Pool),
+        "/markets" => Ok(TelegramCommand::Markets),
+        "/version" => Ok(TelegramCommand::Version),
         "/pause" => Ok(TelegramCommand::Pause),
         "/resume" => Ok(TelegramCommand::Resume),
         "/set_risk" => {
@@ -99,14 +107,38 @@ fn parse_risk_limit_kind(value: &str) -> Result<RiskLimitKind, CommandParseError
 /// Help text returned by `/start` and `/help`.
 #[must_use]
 pub const fn command_help() -> &'static str {
-    "Edgelord Telegram commands\n\
-    /status - Show runtime status\n\
-    /health - Show runtime health snapshot\n\
-    /positions - Show active positions\n\
-    /pause - Pause new trading (circuit breaker)\n\
+    "Edgelord Commands\n\n\
+    /status - Runtime status and configuration\n\
+    /health - System health check\n\
+    /positions - Active positions\n\
+    /stats - Today's trading statistics\n\
+    /pool - Connection pool status\n\
+    /markets - Subscribed markets info\n\
+    /version - Build version\n\
+    /pause - Halt trading\n\
     /resume - Resume trading\n\
-    /set_risk <field> <value> - Update one risk limit at runtime\n\
-    Fields: min_profit, max_slippage, max_position, max_exposure"
+    /set_risk <field> <value> - Update risk limit\n\n\
+    Risk fields: min_profit, max_slippage, max_position, max_exposure"
+}
+
+/// Bot commands for Telegram menu registration.
+///
+/// Returns tuples of (command, description) for `set_my_commands`.
+#[must_use]
+pub fn bot_commands() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("status", "Runtime status and configuration"),
+        ("health", "System health check"),
+        ("positions", "Active positions"),
+        ("stats", "Today's trading statistics"),
+        ("pool", "Connection pool status"),
+        ("markets", "Subscribed markets info"),
+        ("version", "Build version"),
+        ("pause", "Halt trading"),
+        ("resume", "Resume trading"),
+        ("set_risk", "Update risk limit"),
+        ("help", "Show all commands"),
+    ]
 }
 
 #[cfg(test)]
@@ -117,6 +149,14 @@ mod tests {
     #[test]
     fn parse_known_command() {
         assert_eq!(parse_command("/status").unwrap(), TelegramCommand::Status);
+    }
+
+    #[test]
+    fn parse_new_commands() {
+        assert_eq!(parse_command("/stats").unwrap(), TelegramCommand::Stats);
+        assert_eq!(parse_command("/pool").unwrap(), TelegramCommand::Pool);
+        assert_eq!(parse_command("/markets").unwrap(), TelegramCommand::Markets);
+        assert_eq!(parse_command("/version").unwrap(), TelegramCommand::Version);
     }
 
     #[test]
@@ -152,5 +192,15 @@ mod tests {
             parse_command("/set_risk min_profit nope"),
             Err(CommandParseError::InvalidDecimal(_))
         ));
+    }
+
+    #[test]
+    fn bot_commands_has_all_commands() {
+        let commands = bot_commands();
+        assert!(commands.iter().any(|(c, _)| *c == "status"));
+        assert!(commands.iter().any(|(c, _)| *c == "stats"));
+        assert!(commands.iter().any(|(c, _)| *c == "pool"));
+        assert!(commands.iter().any(|(c, _)| *c == "markets"));
+        assert!(commands.iter().any(|(c, _)| *c == "version"));
     }
 }

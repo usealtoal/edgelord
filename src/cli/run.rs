@@ -2,7 +2,7 @@
 
 #[cfg(feature = "polymarket")]
 use crate::app::App;
-use crate::app::{Config, ExchangeSpecificConfig};
+use crate::app::{Config, Environment, ExchangeSpecificConfig};
 use crate::cli::{banner, RunArgs};
 use crate::error::{Error, Result};
 use tokio::signal;
@@ -67,6 +67,74 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     }
     if args.dry_run {
         config.dry_run = true;
+    }
+
+    // Risk overrides
+    if let Some(max_slippage) = args.max_slippage {
+        config.risk.max_slippage = max_slippage;
+    }
+    if let Some(timeout) = args.execution_timeout {
+        config.risk.execution_timeout_secs = timeout;
+    }
+
+    // Market filter overrides
+    if let Some(max_markets) = args.max_markets {
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.market_filter.max_markets = max_markets;
+            }
+        }
+    }
+    if let Some(min_volume) = args.min_volume {
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.market_filter.min_volume_24h = min_volume;
+            }
+        }
+    }
+    if let Some(min_liquidity) = args.min_liquidity {
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.market_filter.min_liquidity = min_liquidity;
+            }
+        }
+    }
+
+    // Connection pool overrides
+    if let Some(max_conn) = args.max_connections {
+        config.connection_pool.max_connections = max_conn;
+    }
+    if let Some(subs) = args.subs_per_connection {
+        config.connection_pool.subscriptions_per_connection = subs;
+    }
+    if let Some(ttl) = args.connection_ttl {
+        config.connection_pool.connection_ttl_secs = ttl;
+    }
+
+    // Runtime overrides
+    if let Some(interval) = args.stats_interval {
+        config.telegram.stats_interval_secs = interval;
+    }
+    if let Some(ref db) = args.database {
+        config.database = db.to_string_lossy().to_string();
+    }
+
+    // Environment shortcuts
+    if args.mainnet {
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.chain_id = 137;
+                pm.environment = Environment::Mainnet;
+            }
+        }
+    }
+    if args.testnet {
+        match &mut config.exchange_config {
+            ExchangeSpecificConfig::Polymarket(pm) => {
+                pm.chain_id = 80002;
+                pm.environment = Environment::Testnet;
+            }
+        }
     }
 
     // Initialize logging

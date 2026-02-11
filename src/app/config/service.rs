@@ -32,6 +32,9 @@ pub struct RiskConfig {
     /// Maximum slippage tolerance (e.g., 0.02 = 2%).
     #[serde(default = "default_max_slippage")]
     pub max_slippage: Decimal,
+    /// Execution timeout in seconds (default: 30).
+    #[serde(default = "default_execution_timeout_secs")]
+    pub execution_timeout_secs: u64,
 }
 
 fn default_max_position_per_market() -> Decimal {
@@ -50,6 +53,10 @@ fn default_max_slippage() -> Decimal {
     Decimal::new(2, 2) // 2%
 }
 
+const fn default_execution_timeout_secs() -> u64 {
+    30
+}
+
 impl Default for RiskConfig {
     fn default() -> Self {
         Self {
@@ -57,6 +64,7 @@ impl Default for RiskConfig {
             max_total_exposure: default_max_total_exposure(),
             min_profit_threshold: default_min_profit_threshold(),
             max_slippage: default_max_slippage(),
+            execution_timeout_secs: default_execution_timeout_secs(),
         }
     }
 }
@@ -68,6 +76,7 @@ impl From<RiskConfig> for RiskLimits {
             max_total_exposure: config.max_total_exposure,
             min_profit_threshold: config.min_profit_threshold,
             max_slippage: config.max_slippage,
+            execution_timeout_secs: config.execution_timeout_secs,
         }
     }
 }
@@ -77,7 +86,7 @@ const fn default_true() -> bool {
 }
 
 /// Telegram notification configuration.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TelegramAppConfig {
     /// Enable telegram notifications.
     #[serde(default)]
@@ -91,6 +100,33 @@ pub struct TelegramAppConfig {
     /// Send risk rejection alerts.
     #[serde(default = "default_true")]
     pub notify_risk_rejections: bool,
+    /// Stats polling interval in seconds (default: 30).
+    #[serde(default = "default_stats_interval_secs")]
+    pub stats_interval_secs: u64,
+    /// Maximum positions to display (default: 10).
+    #[serde(default = "default_position_display_limit")]
+    pub position_display_limit: usize,
+}
+
+const fn default_stats_interval_secs() -> u64 {
+    30
+}
+
+const fn default_position_display_limit() -> usize {
+    10
+}
+
+impl Default for TelegramAppConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            notify_opportunities: false,
+            notify_executions: default_true(),
+            notify_risk_rejections: default_true(),
+            stats_interval_secs: default_stats_interval_secs(),
+            position_display_limit: default_position_display_limit(),
+        }
+    }
 }
 
 // Governor configuration defaults

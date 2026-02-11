@@ -8,15 +8,18 @@ mod control;
 use std::sync::Arc;
 
 use teloxide::prelude::*;
-use teloxide::types::ParseMode;
+use teloxide::types::{BotCommand, ParseMode};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use crate::app::AppState;
+use crate::core::service::StatsRecorder;
 
-use self::command::{command_help, parse_command, CommandParseError};
+use self::command::{bot_commands, command_help, parse_command, CommandParseError};
 use self::control::TelegramControl;
 use super::{Event, Notifier};
+
+pub use self::control::RuntimeStats;
 
 /// Configuration for Telegram notifier.
 #[derive(Debug, Clone)]
@@ -31,6 +34,8 @@ pub struct TelegramConfig {
     pub notify_executions: bool,
     /// Whether to send risk rejections.
     pub notify_risk_rejections: bool,
+    /// Maximum positions to display in /positions command.
+    pub position_display_limit: usize,
 }
 
 impl TelegramConfig {
@@ -50,6 +55,7 @@ impl TelegramConfig {
                 .unwrap_or(false),
             notify_executions: true,
             notify_risk_rejections: true,
+            position_display_limit: 10,
         })
     }
 }
@@ -63,16 +69,32 @@ impl TelegramNotifier {
     /// Create a new Telegram notifier and spawn the background task.
     #[must_use]
     pub fn new(config: TelegramConfig) -> Self {
-        Self::new_inner(config, None)
+        Self::new_inner(config, None, None, None)
     }
 
     /// Create a notifier and enable Telegram command handling tied to app state.
     #[must_use]
     pub fn new_with_control(config: TelegramConfig, state: Arc<AppState>) -> Self {
-        Self::new_inner(config, Some(state))
+        Self::new_inner(config, Some(state), None, None)
     }
 
-    fn new_inner(config: TelegramConfig, state: Option<Arc<AppState>>) -> Self {
+    /// Create a notifier with full dependencies for all commands.
+    #[must_use]
+    pub fn new_with_full_control(
+        config: TelegramConfig,
+        state: Arc<AppState>,
+        stats_recorder: Arc<StatsRecorder>,
+        runtime_stats: Arc<RuntimeStats>,
+    ) -> Self {
+        Self::new_inner(config, Some(state), Some(stats_recorder), Some(runtime_stats))
+    }
+
+    fn new_inner(
+        config: TelegramConfig,
+        state: Option<Arc<AppState>>,
+        stats_recorder: Option<Arc<StatsRecorder>>,
+        runtime_stats: Option<Arc<RuntimeStats>>,
+    ) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
         let worker_config = config.clone();
 
@@ -80,8 +102,18 @@ impl TelegramNotifier {
         tokio::spawn(telegram_worker(worker_config, receiver));
 
         if let Some(state) = state {
+            let control = if let (Some(recorder), Some(runtime)) = (stats_recorder, runtime_stats) {
+                TelegramControl::with_config(
+                    state,
+                    recorder,
+                    runtime,
+                    config.position_display_limit,
+                )
+            } else {
+                TelegramControl::new(state)
+            };
             // Spawn background task to handle inbound bot commands.
-            tokio::spawn(telegram_command_worker(config, TelegramControl::new(state)));
+            tokio::spawn(telegram_command_worker(config, control));
         }
 
         Self { sender }
@@ -125,6 +157,11 @@ async fn telegram_command_worker(config: TelegramConfig, control: TelegramContro
     let bot = Bot::new(&config.bot_token);
     let allowed_chat = ChatId(config.chat_id);
 
+    // Register commands with Telegram so they appear in the "/" menu
+    if let Err(e) = register_bot_commands(&bot).await {
+        warn!(error = %e, "Failed to register bot commands with Telegram");
+    }
+
     info!(
         chat_id = config.chat_id,
         "Telegram command listener started"
@@ -151,6 +188,18 @@ async fn telegram_command_worker(config: TelegramConfig, control: TelegramContro
     .await;
 }
 
+/// Register bot commands with Telegram for the "/" menu.
+async fn register_bot_commands(bot: &Bot) -> Result<(), teloxide::RequestError> {
+    let commands: Vec<BotCommand> = bot_commands()
+        .into_iter()
+        .map(|(cmd, desc)| BotCommand::new(cmd, desc))
+        .collect();
+
+    bot.set_my_commands(commands).await?;
+    info!("Registered bot commands with Telegram");
+    Ok(())
+}
+
 fn command_response_for_message(
     text: &str,
     incoming_chat: ChatId,
@@ -175,20 +224,15 @@ fn command_response_for_message(
 fn format_event_message(event: &Event, config: &TelegramConfig) -> Option<String> {
     match event {
         Event::OpportunityDetected(e) if config.notify_opportunities => {
-            // Truncate question if too long
-            let question = if e.question.len() > 60 {
-                format!("{}...", &e.question[..60])
-            } else {
-                e.question.clone()
-            };
+            let question = truncate(&e.question, 60);
 
             Some(format!(
-                "🎯 *Opportunity Found\\!*\n\
+                "*Opportunity Detected*\n\
                 \n\
-                📊 {}\n\
-                💎 Edge: {:.2}%\n\
-                📦 Volume: ${:.2}\n\
-                💰 Expected: \\+${:.2}",
+                {}\n\
+                Edge: {:.2}%\n\
+                Volume: ${:.2}\n\
+                Expected: \\+${:.2}",
                 escape_markdown(&question),
                 e.edge * rust_decimal::Decimal::from(100),
                 e.volume,
@@ -196,68 +240,57 @@ fn format_event_message(event: &Event, config: &TelegramConfig) -> Option<String
             ))
         }
         Event::ExecutionCompleted(e) if config.notify_executions => {
-            let (emoji, title) = if e.success {
-                ("✅", "Trade Executed\\!")
+            let title = if e.success {
+                "Trade Executed"
             } else {
-                ("❌", "Execution Failed")
+                "Execution Failed"
             };
 
-            // Truncate market ID for display
-            let market_display = if e.market_id.len() > 12 {
-                format!("{}\\.\\.\\.", &e.market_id[..12])
-            } else {
-                escape_markdown(&e.market_id)
-            };
+            let market_display = truncate(&e.market_id, 16);
 
             Some(format!(
-                "{} *{}*\n\
+                "*{}*\n\
                 \n\
-                📊 market: {}\n\
-                💰 Details: {}",
-                emoji,
+                Market: {}\n\
+                Details: {}",
                 title,
-                market_display,
+                escape_markdown(&market_display),
                 escape_markdown(&e.details)
             ))
         }
         Event::RiskRejected(e) if config.notify_risk_rejections => {
-            // Truncate market ID for display
-            let market_display = if e.market_id.len() > 12 {
-                format!("{}\\.\\.\\.", &e.market_id[..12])
-            } else {
-                escape_markdown(&e.market_id)
-            };
+            let market_display = truncate(&e.market_id, 16);
 
             Some(format!(
-                "🛑 *Risk Check Failed*\n\
+                "*Risk Check Failed*\n\
                 \n\
-                📊 market: {}\n\
-                ⚠️ Reason: {}",
-                market_display,
+                Market: {}\n\
+                Reason: {}",
+                escape_markdown(&market_display),
                 escape_markdown(&e.reason)
             ))
         }
         Event::CircuitBreakerActivated { reason } => Some(format!(
-            "🚨 *CIRCUIT BREAKER ACTIVATED*\n\
+            "*Circuit Breaker Activated*\n\
             \n\
-            ⚠️ Reason: {}\n\
-            ⛔ All trading halted",
+            Reason: {}\n\
+            Trading halted",
             escape_markdown(reason)
         )),
         Event::CircuitBreakerReset => Some(
-            "✅ *Circuit Breaker Reset*\n\
+            "*Circuit Breaker Reset*\n\
             \n\
-            Trading has resumed\\."
+            Trading resumed"
                 .to_string(),
         ),
         Event::DailySummary(e) => Some(format!(
-            "📊 *Daily Report — {}*\n\
+            "*Daily Summary — {}*\n\
             \n\
-            🎯 Opportunities: {}\n\
-            📈 Trades: {}\n\
-            ✅ Successful: {}\n\
-            💰 Profit: \\+${:.2}\n\
-            💼 Exposure: ${:.2}",
+            Opportunities: {}\n\
+            Trades: {}\n\
+            Successful: {}\n\
+            Profit: \\+${:.2}\n\
+            Exposure: ${:.2}",
             escape_markdown(&e.date.to_string()),
             e.opportunities_detected,
             e.trades_executed,
@@ -266,6 +299,17 @@ fn format_event_message(event: &Event, config: &TelegramConfig) -> Option<String
             e.current_exposure
         )),
         _ => None,
+    }
+}
+
+/// Truncate a string with ellipsis (Unicode-safe).
+fn truncate(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count > max_chars {
+        let truncated: String = s.chars().take(max_chars).collect();
+        format!("{}...", truncated)
+    } else {
+        s.to_string()
     }
 }
 
@@ -305,6 +349,21 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate() {
+        assert_eq!(truncate("hello", 10), "hello");
+        assert_eq!(truncate("hello world", 5), "hello...");
+        assert_eq!(truncate("ab", 2), "ab");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Handles multi-byte UTF-8 characters without panic
+        assert_eq!(truncate("日本語テスト", 3), "日本語...");
+        assert_eq!(truncate("café", 4), "café");
+        assert_eq!(truncate("🎯🚀💰", 2), "🎯🚀...");
+    }
+
+    #[test]
     fn test_command_response_for_authorized_command() {
         let state = Arc::new(AppState::default());
         let control = TelegramControl::new(state);
@@ -331,7 +390,7 @@ mod tests {
 
         let response = command_response_for_message("/bad", chat, chat, &control).unwrap();
         assert!(response.contains("Invalid command"));
-        assert!(response.contains("Edgelord Telegram commands"));
+        assert!(response.contains("Edgelord Commands"));
     }
 
     #[test]

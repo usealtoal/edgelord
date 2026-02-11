@@ -244,6 +244,14 @@ impl ChannelStreamHandle {
         let _ = self.event_tx.send(Some(event)).await;
     }
 
+    /// Get a cloned sender for sending events without holding a reference.
+    ///
+    /// Useful in async tests where you need to avoid holding a `MutexGuard`
+    /// across await points.
+    pub fn sender(&self) -> tokio::sync::mpsc::Sender<Option<MarketEvent>> {
+        self.event_tx.clone()
+    }
+
     /// Signal end-of-stream (causes `next_event` to return `None`).
     pub async fn close(&self) {
         let _ = self.event_tx.send(None).await;

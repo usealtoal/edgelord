@@ -9,26 +9,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::app::ConnectionPoolConfig;
 use edgelord::core::exchange::{ConnectionPool, MarketDataStream, MarketEvent, StreamFactory};
 use edgelord::testkit;
 use edgelord::testkit::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn pool_config(max_conns: usize, subs_per_conn: usize) -> ConnectionPoolConfig {
-    ConnectionPoolConfig {
-        max_connections: max_conns,
-        subscriptions_per_connection: subs_per_conn,
-        connection_ttl_secs: 120,
-        preemptive_reconnect_secs: 30,
-        health_check_interval_secs: 30,
-        max_silent_secs: 60,
-        channel_capacity: 10_000,
-    }
-}
 
 /// Collect handles created by the factory for inspection.
 fn tracked_channel_factory(
@@ -53,20 +36,23 @@ async fn single_connection_delivers_events() {
     let (factory, handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 500), testkit::config::reconnection(), factory, "test")
+        ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), factory, "test")
             .unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&testkit::domain::make_tokens(3)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let h = handles.lock().unwrap();
-    assert_eq!(h[0].connect_count(), 1);
-    assert_eq!(h[0].subscribe_count(), 1);
-    assert_eq!(h[0].subscribed_tokens().len(), 3);
+    // Extract sender before awaiting to avoid holding MutexGuard across await
+    let sender = {
+        let h = handles.lock().unwrap();
+        assert_eq!(h[0].connect_count(), 1);
+        assert_eq!(h[0].subscribe_count(), 1);
+        assert_eq!(h[0].subscribed_tokens().len(), 3);
+        h[0].sender()
+    };
 
-    h[0].send(testkit::domain::snapshot_event("t0")).await;
-    h[0].send(testkit::domain::snapshot_event("t1")).await;
-    drop(h);
+    sender.send(Some(testkit::domain::snapshot_event("t0"))).await.unwrap();
+    sender.send(Some(testkit::domain::snapshot_event("t1"))).await.unwrap();
 
     let e1 = pool.next_event().await.unwrap();
     let e2 = pool.next_event().await.unwrap();
@@ -91,20 +77,23 @@ async fn multi_connection_merges_events() {
     let (factory, handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), testkit::config::reconnection(), factory, "test")
+        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
             .unwrap();
     pool.connect().await.unwrap();
     pool.subscribe(&testkit::domain::make_tokens(4)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let h = handles.lock().unwrap();
-    assert_eq!(h.len(), 2, "Expected 2 connections for 4 tokens with subs_per_conn=2");
+    // Extract senders before awaiting to avoid holding MutexGuard across await
+    let (sender0, sender1) = {
+        let h = handles.lock().unwrap();
+        assert_eq!(h.len(), 2, "Expected 2 connections for 4 tokens with subs_per_conn=2");
+        (h[0].sender(), h[1].sender())
+    };
 
-    h[0].send(testkit::domain::snapshot_event("conn0-a")).await;
-    h[1].send(testkit::domain::snapshot_event("conn1-a")).await;
-    h[0].send(testkit::domain::snapshot_event("conn0-b")).await;
-    h[1].send(testkit::domain::snapshot_event("conn1-b")).await;
-    drop(h);
+    sender0.send(Some(testkit::domain::snapshot_event("conn0-a"))).await.unwrap();
+    sender1.send(Some(testkit::domain::snapshot_event("conn1-a"))).await.unwrap();
+    sender0.send(Some(testkit::domain::snapshot_event("conn0-b"))).await.unwrap();
+    sender1.send(Some(testkit::domain::snapshot_event("conn1-b"))).await.unwrap();
 
     let mut received = HashSet::new();
     for _ in 0..4 {
@@ -130,7 +119,7 @@ async fn multi_connection_merges_events() {
 async fn backpressure_drops_events_and_counts() {
     let (factory, handles) = tracked_channel_factory();
 
-    let mut cfg = pool_config(10, 500);
+    let mut cfg = testkit::config::pool(10, 500);
     cfg.channel_capacity = 5;
 
     let mut pool =
@@ -139,11 +128,14 @@ async fn backpressure_drops_events_and_counts() {
     pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let h = handles.lock().unwrap();
+    // Extract sender before awaiting to avoid holding MutexGuard across await
+    let sender = {
+        let h = handles.lock().unwrap();
+        h[0].sender()
+    };
     for i in 0..20 {
-        h[0].send(testkit::domain::snapshot_event(&format!("flood-{i}"))).await;
+        sender.send(Some(testkit::domain::snapshot_event(&format!("flood-{i}")))).await.unwrap();
     }
-    drop(h);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     let stats = pool.stats();
@@ -184,7 +176,7 @@ async fn disconnect_triggers_reconnect() {
         ))
     });
 
-    let mut cfg = pool_config(10, 500);
+    let mut cfg = testkit::config::pool(10, 500);
     cfg.max_silent_secs = 2;
     cfg.health_check_interval_secs = 1;
 
@@ -223,7 +215,7 @@ async fn ttl_rotation_under_load() {
         ))
     });
 
-    let mut cfg = pool_config(10, 500);
+    let mut cfg = testkit::config::pool(10, 500);
     cfg.connection_ttl_secs = 3;
     cfg.preemptive_reconnect_secs = 2;
     cfg.health_check_interval_secs = 1;
@@ -236,11 +228,8 @@ async fn ttl_rotation_under_load() {
     let drain = tokio::spawn(async move {
         let mut count = 0u64;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-        loop {
-            match tokio::time::timeout_at(deadline, pool.next_event()).await {
-                Ok(Some(_)) => count += 1,
-                _ => break,
-            }
+        while let Ok(Some(_)) = tokio::time::timeout_at(deadline, pool.next_event()).await {
+            count += 1;
         }
         (pool, count)
     });
@@ -274,7 +263,7 @@ async fn pool_stats_reflect_connections() {
     let (factory, _handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), testkit::config::reconnection(), factory, "test")
+        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
             .unwrap();
 
     assert_eq!(pool.stats().active_connections, 0);
@@ -298,7 +287,7 @@ async fn resubscribe_replaces_all_connections() {
     let (factory, handles) = tracked_channel_factory();
 
     let mut pool =
-        ConnectionPool::new(pool_config(10, 2), testkit::config::reconnection(), factory, "test")
+        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
             .unwrap();
     pool.connect().await.unwrap();
 
@@ -311,9 +300,12 @@ async fn resubscribe_replaces_all_connections() {
     assert_eq!(pool.stats().active_connections, 3);
 
     // Handles 0-1 are dead (first subscribe), 2-4 are live (second subscribe).
-    let h = handles.lock().unwrap();
-    h[2].send(testkit::domain::snapshot_event("new-t0")).await;
-    drop(h);
+    // Extract sender before awaiting to avoid holding MutexGuard across await
+    let sender = {
+        let h = handles.lock().unwrap();
+        h[2].sender()
+    };
+    sender.send(Some(testkit::domain::snapshot_event("new-t0"))).await.unwrap();
 
     let event = tokio::time::timeout(Duration::from_secs(2), pool.next_event())
         .await
@@ -337,7 +329,7 @@ async fn exchange_name_propagates() {
     let (factory, _) = tracked_channel_factory();
 
     let pool = ConnectionPool::new(
-        pool_config(10, 500),
+        testkit::config::pool(10, 500),
         testkit::config::reconnection(),
         factory,
         "polymarket",
