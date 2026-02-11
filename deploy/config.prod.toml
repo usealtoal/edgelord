@@ -19,11 +19,11 @@ enabled = ["single_condition", "market_rebalancing"]
 
 [strategies.single_condition]
 min_edge = 0.03
-min_profit = 0.10
+min_profit = 0.03
 
 [strategies.market_rebalancing]
 min_edge = 0.03
-min_profit = 0.25
+min_profit = 0.03
 max_outcomes = 10
 
 [strategies.combinatorial]

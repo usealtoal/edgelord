@@ -55,6 +55,7 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     if let Some(min_profit) = args.min_profit {
         config.strategies.single_condition.min_profit = min_profit;
         config.strategies.market_rebalancing.min_profit = min_profit;
+        config.risk.min_profit_threshold = min_profit;
     }
     if let Some(max_exposure) = args.max_exposure {
         config.risk.max_total_exposure = max_exposure;
