@@ -130,7 +130,7 @@ impl PolymarketClient {
     /// Fetch active markets from the CLOB API.
     ///
     /// Returns raw market data without volume/liquidity metadata.
-    /// Prefer [`get_gamma_markets`] for market discovery.
+    /// Prefer [`Self::get_gamma_markets`] for market discovery.
     pub async fn get_active_markets(&self, limit: usize) -> Result<Vec<PolymarketMarket>> {
         let url = format!(
             "{}/markets?active=true&closed=false&limit={}",
