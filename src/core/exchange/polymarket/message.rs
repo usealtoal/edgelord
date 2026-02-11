@@ -1,4 +1,12 @@
 //! Polymarket WebSocket message types.
+//!
+//! Polymarket WebSocket messages are sent as JSON arrays containing one or more
+//! book snapshot objects. Each object contains order book data for a single token.
+//!
+//! Example message format:
+//! ```json
+//! [{"market":"0x...","asset_id":"123...","timestamp":"1234","hash":"abc","bids":[...],"asks":[...]}]
+//! ```
 
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +29,28 @@ impl PolymarketSubscribeMessage {
     }
 }
 
-/// Messages received from Polymarket WebSocket
+/// Messages received from Polymarket WebSocket.
+///
+/// Messages arrive as a JSON array of book snapshots. Each snapshot contains
+/// the full order book state for a single token.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum PolymarketWsMessage {
+    /// Array of book snapshots (primary message format).
+    Books(Vec<PolymarketBookMessage>),
+
+    /// Legacy single-object format with event_type tag.
+    #[serde(rename_all = "snake_case")]
+    Tagged(PolymarketTaggedMessage),
+
+    /// Unknown or unparseable message.
+    Unknown(serde_json::Value),
+}
+
+/// Legacy tagged message format (for backwards compatibility).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "event_type")]
-pub enum PolymarketWsMessage {
+pub enum PolymarketTaggedMessage {
     #[serde(rename = "book")]
     Book(PolymarketBookMessage),
 

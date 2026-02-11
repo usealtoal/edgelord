@@ -28,7 +28,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, trace, warn};
 
-use super::message::{PolymarketSubscribeMessage, PolymarketWsMessage};
+use super::message::{PolymarketSubscribeMessage, PolymarketTaggedMessage, PolymarketWsMessage};
 use crate::core::domain::TokenId;
 use crate::core::exchange::{MarketDataStream, MarketEvent};
 use crate::error::Result;
@@ -228,13 +228,19 @@ impl PolymarketWebSocketHandler {
 pub struct PolymarketDataStream {
     url: String,
     ws: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    /// Buffer for pending book messages when multiple arrive in one frame.
+    pending_books: Vec<super::message::PolymarketBookMessage>,
 }
 
 impl PolymarketDataStream {
     /// Create a new data stream for the given WebSocket URL.
     #[must_use]
     pub fn new(url: String) -> Self {
-        Self { url, ws: None }
+        Self {
+            url,
+            ws: None,
+            pending_books: Vec::new(),
+        }
     }
 }
 
@@ -271,6 +277,16 @@ impl MarketDataStream for PolymarketDataStream {
     }
 
     async fn next_event(&mut self) -> Option<MarketEvent> {
+        // First, check if we have pending books from a previous message
+        if let Some(book) = self.pending_books.pop() {
+            let order_book = book.to_orderbook();
+            let token_id = TokenId::from(book.asset_id);
+            return Some(MarketEvent::OrderBookSnapshot {
+                token_id,
+                book: order_book,
+            });
+        }
+
         let ws = self.ws.as_mut()?;
 
         loop {
@@ -278,19 +294,38 @@ impl MarketDataStream for PolymarketDataStream {
                 Ok(Message::Text(text)) => {
                     trace!(bytes = text.len(), "Received WebSocket text frame");
                     match serde_json::from_str::<PolymarketWsMessage>(&text) {
-                        Ok(PolymarketWsMessage::Book(book)) => {
-                            let order_book = book.to_orderbook();
-                            let token_id = TokenId::from(book.asset_id);
-                            return Some(MarketEvent::OrderBookSnapshot {
-                                token_id,
-                                book: order_book,
-                            });
-                        }
-                        Ok(PolymarketWsMessage::PriceChange(_)) => {
-                            // Price changes are incremental; skip for now
+                        Ok(PolymarketWsMessage::Books(mut books)) => {
+                            // Store all but the first book for later
+                            if let Some(book) = books.pop() {
+                                // Save remaining books (in reverse order so pop gives correct order)
+                                self.pending_books = books;
+                                let order_book = book.to_orderbook();
+                                let token_id = TokenId::from(book.asset_id);
+                                return Some(MarketEvent::OrderBookSnapshot {
+                                    token_id,
+                                    book: order_book,
+                                });
+                            }
+                            // Empty array, continue
                             continue;
                         }
-                        Ok(_) => continue,
+                        Ok(PolymarketWsMessage::Tagged(tagged)) => {
+                            // Handle legacy tagged messages
+                            match tagged {
+                                PolymarketTaggedMessage::Book(book) => {
+                                    let order_book = book.to_orderbook();
+                                    let token_id = TokenId::from(book.asset_id);
+                                    return Some(MarketEvent::OrderBookSnapshot {
+                                        token_id,
+                                        book: order_book,
+                                    });
+                                }
+                                PolymarketTaggedMessage::PriceChange(_) => continue,
+                                PolymarketTaggedMessage::TickSizeChange(_) => continue,
+                                PolymarketTaggedMessage::Unknown => continue,
+                            }
+                        }
+                        Ok(PolymarketWsMessage::Unknown(_)) => continue,
                         Err(e) => {
                             warn!(error = %e, bytes = text.len(), "Failed to parse message");
                             continue;
