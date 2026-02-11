@@ -86,7 +86,12 @@ impl TelegramNotifier {
         stats_recorder: Arc<StatsRecorder>,
         runtime_stats: Arc<RuntimeStats>,
     ) -> Self {
-        Self::new_inner(config, Some(state), Some(stats_recorder), Some(runtime_stats))
+        Self::new_inner(
+            config,
+            Some(state),
+            Some(stats_recorder),
+            Some(runtime_stats),
+        )
     }
 
     fn new_inner(

@@ -367,22 +367,38 @@ mod tests {
 
         // Both pass
         assert!(filter.is_eligible(&make_market_with_metrics(
-            "m1", true, 2, Some(2000.0), Some(1000.0)
+            "m1",
+            true,
+            2,
+            Some(2000.0),
+            Some(1000.0)
         )));
 
         // Volume fails
         assert!(!filter.is_eligible(&make_market_with_metrics(
-            "m2", true, 2, Some(100.0), Some(1000.0)
+            "m2",
+            true,
+            2,
+            Some(100.0),
+            Some(1000.0)
         )));
 
         // Liquidity fails
         assert!(!filter.is_eligible(&make_market_with_metrics(
-            "m3", true, 2, Some(2000.0), Some(100.0)
+            "m3",
+            true,
+            2,
+            Some(2000.0),
+            Some(100.0)
         )));
 
         // Both fail
         assert!(!filter.is_eligible(&make_market_with_metrics(
-            "m4", true, 2, Some(100.0), Some(100.0)
+            "m4",
+            true,
+            2,
+            Some(100.0),
+            Some(100.0)
         )));
     }
 
@@ -394,7 +410,11 @@ mod tests {
         let filter = PolymarketFilter::new(&config);
 
         assert!(filter.is_eligible(&make_market_with_metrics(
-            "m1", true, 2, Some(0.0), Some(0.0)
+            "m1",
+            true,
+            2,
+            Some(0.0),
+            Some(0.0)
         )));
     }
 

@@ -15,7 +15,6 @@ use crate::core::exchange::ArbitrageExecutor;
 use crate::core::service::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
 
-
 struct ExecutionLockGuard {
     state: Arc<AppState>,
     market_id: String,

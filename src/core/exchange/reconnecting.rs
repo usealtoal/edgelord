@@ -260,9 +260,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_successful_connection() {
-        let mock = ScriptedStream::new().with_events(vec![
-            Some(testkit::domain::snapshot_event("token1")),
-        ]);
+        let mock = ScriptedStream::new()
+            .with_events(vec![Some(testkit::domain::snapshot_event("token1"))]);
 
         let mut stream = ReconnectingDataStream::new(mock, backoff_config());
         stream.connect().await.unwrap();

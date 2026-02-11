@@ -14,8 +14,10 @@ use edgelord::testkit;
 use edgelord::testkit::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
 
 /// Collect handles created by the factory for inspection.
-fn tracked_channel_factory(
-) -> (StreamFactory, Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>>) {
+fn tracked_channel_factory() -> (
+    StreamFactory,
+    Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>>,
+) {
     let handles: Arc<std::sync::Mutex<Vec<ChannelStreamHandle>>> =
         Arc::new(std::sync::Mutex::new(Vec::new()));
     let h = handles.clone();
@@ -35,11 +37,17 @@ fn tracked_channel_factory(
 async fn single_connection_delivers_events() {
     let (factory, handles) = tracked_channel_factory();
 
-    let mut pool =
-        ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), factory, "test")
-            .unwrap();
+    let mut pool = ConnectionPool::new(
+        testkit::config::pool(10, 500),
+        testkit::config::reconnection(),
+        factory,
+        "test",
+    )
+    .unwrap();
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(3)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(3))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Extract sender before awaiting to avoid holding MutexGuard across await
@@ -51,8 +59,14 @@ async fn single_connection_delivers_events() {
         h[0].sender()
     };
 
-    sender.send(Some(testkit::domain::snapshot_event("t0"))).await.unwrap();
-    sender.send(Some(testkit::domain::snapshot_event("t1"))).await.unwrap();
+    sender
+        .send(Some(testkit::domain::snapshot_event("t0")))
+        .await
+        .unwrap();
+    sender
+        .send(Some(testkit::domain::snapshot_event("t1")))
+        .await
+        .unwrap();
 
     let e1 = pool.next_event().await.unwrap();
     let e2 = pool.next_event().await.unwrap();
@@ -76,24 +90,46 @@ async fn single_connection_delivers_events() {
 async fn multi_connection_merges_events() {
     let (factory, handles) = tracked_channel_factory();
 
-    let mut pool =
-        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
-            .unwrap();
+    let mut pool = ConnectionPool::new(
+        testkit::config::pool(10, 2),
+        testkit::config::reconnection(),
+        factory,
+        "test",
+    )
+    .unwrap();
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(4)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(4))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Extract senders before awaiting to avoid holding MutexGuard across await
     let (sender0, sender1) = {
         let h = handles.lock().unwrap();
-        assert_eq!(h.len(), 2, "Expected 2 connections for 4 tokens with subs_per_conn=2");
+        assert_eq!(
+            h.len(),
+            2,
+            "Expected 2 connections for 4 tokens with subs_per_conn=2"
+        );
         (h[0].sender(), h[1].sender())
     };
 
-    sender0.send(Some(testkit::domain::snapshot_event("conn0-a"))).await.unwrap();
-    sender1.send(Some(testkit::domain::snapshot_event("conn1-a"))).await.unwrap();
-    sender0.send(Some(testkit::domain::snapshot_event("conn0-b"))).await.unwrap();
-    sender1.send(Some(testkit::domain::snapshot_event("conn1-b"))).await.unwrap();
+    sender0
+        .send(Some(testkit::domain::snapshot_event("conn0-a")))
+        .await
+        .unwrap();
+    sender1
+        .send(Some(testkit::domain::snapshot_event("conn1-a")))
+        .await
+        .unwrap();
+    sender0
+        .send(Some(testkit::domain::snapshot_event("conn0-b")))
+        .await
+        .unwrap();
+    sender1
+        .send(Some(testkit::domain::snapshot_event("conn1-b")))
+        .await
+        .unwrap();
 
     let mut received = HashSet::new();
     for _ in 0..4 {
@@ -125,7 +161,9 @@ async fn backpressure_drops_events_and_counts() {
     let mut pool =
         ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "test").unwrap();
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(1))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Extract sender before awaiting to avoid holding MutexGuard across await
@@ -134,7 +172,10 @@ async fn backpressure_drops_events_and_counts() {
         h[0].sender()
     };
     for i in 0..20 {
-        sender.send(Some(testkit::domain::snapshot_event(&format!("flood-{i}")))).await.unwrap();
+        sender
+            .send(Some(testkit::domain::snapshot_event(&format!("flood-{i}"))))
+            .await
+            .unwrap();
     }
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -183,7 +224,9 @@ async fn disconnect_triggers_reconnect() {
     let mut pool =
         ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "test").unwrap();
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(1))
+        .await
+        .unwrap();
 
     for _ in 0..3 {
         let event = tokio::time::timeout(Duration::from_secs(2), pool.next_event())
@@ -223,7 +266,9 @@ async fn ttl_rotation_under_load() {
     let mut pool =
         ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "test").unwrap();
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(1))
+        .await
+        .unwrap();
 
     let drain = tokio::spawn(async move {
         let mut count = 0u64;
@@ -262,14 +307,20 @@ async fn ttl_rotation_under_load() {
 async fn pool_stats_reflect_connections() {
     let (factory, _handles) = tracked_channel_factory();
 
-    let mut pool =
-        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
-            .unwrap();
+    let mut pool = ConnectionPool::new(
+        testkit::config::pool(10, 2),
+        testkit::config::reconnection(),
+        factory,
+        "test",
+    )
+    .unwrap();
 
     assert_eq!(pool.stats().active_connections, 0);
 
     pool.connect().await.unwrap();
-    pool.subscribe(&testkit::domain::make_tokens(6)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(6))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     assert_eq!(pool.stats().active_connections, 3);
@@ -286,16 +337,24 @@ async fn pool_stats_reflect_connections() {
 async fn resubscribe_replaces_all_connections() {
     let (factory, handles) = tracked_channel_factory();
 
-    let mut pool =
-        ConnectionPool::new(testkit::config::pool(10, 2), testkit::config::reconnection(), factory, "test")
-            .unwrap();
+    let mut pool = ConnectionPool::new(
+        testkit::config::pool(10, 2),
+        testkit::config::reconnection(),
+        factory,
+        "test",
+    )
+    .unwrap();
     pool.connect().await.unwrap();
 
-    pool.subscribe(&testkit::domain::make_tokens(4)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(4))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(pool.stats().active_connections, 2);
 
-    pool.subscribe(&testkit::domain::make_tokens(6)).await.unwrap();
+    pool.subscribe(&testkit::domain::make_tokens(6))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert_eq!(pool.stats().active_connections, 3);
 
@@ -305,7 +364,10 @@ async fn resubscribe_replaces_all_connections() {
         let h = handles.lock().unwrap();
         h[2].sender()
     };
-    sender.send(Some(testkit::domain::snapshot_event("new-t0"))).await.unwrap();
+    sender
+        .send(Some(testkit::domain::snapshot_event("new-t0")))
+        .await
+        .unwrap();
 
     let event = tokio::time::timeout(Duration::from_secs(2), pool.next_event())
         .await

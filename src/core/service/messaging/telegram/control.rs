@@ -377,8 +377,7 @@ impl TelegramControl {
             return format!("Already paused: {}", reason);
         }
 
-        self.state
-            .activate_circuit_breaker("paused via Telegram");
+        self.state.activate_circuit_breaker("paused via Telegram");
         "Trading paused".to_string()
     }
 

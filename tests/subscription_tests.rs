@@ -182,8 +182,8 @@ async fn test_filter_excludes_inactive_markets() {
                 },
             ],
             active: true,
-        volume_24h: None,
-        liquidity: None,
+            volume_24h: None,
+            liquidity: None,
         },
         MarketInfo {
             id: "inactive-1".to_string(),
@@ -201,8 +201,8 @@ async fn test_filter_excludes_inactive_markets() {
                 },
             ],
             active: false,
-        volume_24h: None,
-        liquidity: None,
+            volume_24h: None,
+            liquidity: None,
         },
     ];
 

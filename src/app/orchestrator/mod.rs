@@ -196,11 +196,8 @@ impl Orchestrator {
 
         // Initialize notifiers
         #[allow(unused_variables)]
-        let (notifiers, runtime_stats) = build_notifier_registry(
-            &config,
-            Arc::clone(&state),
-            Arc::clone(&stats_recorder),
-        );
+        let (notifiers, runtime_stats) =
+            build_notifier_registry(&config, Arc::clone(&state), Arc::clone(&stats_recorder));
         let notifiers = Arc::new(notifiers);
         info!(notifiers = notifiers.len(), "Notifiers initialized");
 
@@ -235,8 +232,7 @@ impl Orchestrator {
         let market_fetcher = ExchangeFactory::create_market_fetcher(&config);
         info!(
             exchange = market_fetcher.exchange_name(),
-            max_markets,
-            "Fetching markets"
+            max_markets, "Fetching markets"
         );
         let market_infos = market_fetcher.get_markets(max_markets).await?;
         let markets_fetched = market_infos.len();
@@ -384,10 +380,7 @@ impl Orchestrator {
         // Create data stream with optional connection pooling
         let mut data_stream: Box<dyn MarketDataStream> =
             if let Some(pool) = ExchangeFactory::create_connection_pool(&config)? {
-                info!(
-                    exchange = pool.exchange_name(),
-                    "Using connection pool"
-                );
+                info!(exchange = pool.exchange_name(), "Using connection pool");
                 Box::new(pool)
             } else {
                 info!("Using single connection");
@@ -407,7 +400,8 @@ impl Orchestrator {
 
         // Timer for periodic stats updates (configurable, default 30 seconds)
         let stats_interval_secs = config.telegram.stats_interval_secs;
-        let mut stats_interval = tokio::time::interval(std::time::Duration::from_secs(stats_interval_secs));
+        let mut stats_interval =
+            tokio::time::interval(std::time::Duration::from_secs(stats_interval_secs));
         stats_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         // Event loop using trait-based stream

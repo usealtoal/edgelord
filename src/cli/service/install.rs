@@ -75,7 +75,10 @@ fn generate_service_file(args: &InstallArgs, binary_path: &str) -> String {
         // Use traditional .env file
         (
             edgelord_cmd,
-            format!("EnvironmentFile=-{working_dir}/.env\n", working_dir = args.working_dir.display()),
+            format!(
+                "EnvironmentFile=-{working_dir}/.env\n",
+                working_dir = args.working_dir.display()
+            ),
         )
     };
 

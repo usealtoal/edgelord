@@ -6,7 +6,7 @@
   <p>
     <a href="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml"><img src="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/license-proprietary-lightgrey.svg" alt="License">
-    <img src="https://img.shields.io/badge/rust-1.75%2B-orange.svg" alt="Rust">
+    <img src="https://img.shields.io/badge/rust-1.78%2B-orange.svg" alt="Rust">
   </p>
 
 </div>

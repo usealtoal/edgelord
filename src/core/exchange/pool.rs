@@ -128,7 +128,11 @@ fn spawn_connection(
 
     tokio::spawn(async move {
         let token_count = tokens.len();
-        debug!(connection_id, tokens = token_count, "Connection task starting");
+        debug!(
+            connection_id,
+            tokens = token_count,
+            "Connection task starting"
+        );
 
         if let Err(e) = stream.connect().await {
             error!(connection_id, error = %e, "Failed to connect");
@@ -237,11 +241,7 @@ impl ReplacementReason {
 }
 
 /// Wait for a connection's first event, returning true on success.
-async fn await_handoff(
-    state: &ConnectionState,
-    initial_ts: u64,
-    timeout: Duration,
-) -> bool {
+async fn await_handoff(state: &ConnectionState, initial_ts: u64, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
         tokio::time::sleep(HANDOFF_POLL_INTERVAL).await;
@@ -253,7 +253,10 @@ async fn await_handoff(
             return false;
         }
         if Instant::now() >= deadline {
-            warn!(connection_id = state.id, "Handoff timeout — swapping anyway");
+            warn!(
+                connection_id = state.id,
+                "Handoff timeout — swapping anyway"
+            );
             return true; // old connection is stale, swap regardless
         }
     }
@@ -318,7 +321,11 @@ async fn replace_connection(
 
         if reason.is_rotation() {
             ctx.counters.rotations.fetch_add(1, Ordering::Relaxed);
-            info!(old_connection_id = old_id, new_connection_id = new_id, "TTL rotation complete");
+            info!(
+                old_connection_id = old_id,
+                new_connection_id = new_id,
+                "TTL rotation complete"
+            );
         } else {
             ctx.counters.restarts.fetch_add(1, Ordering::Relaxed);
             info!(old_connection_id = old_id, new_connection_id = new_id, reason = ?reason, "Restart complete");
@@ -593,7 +600,12 @@ impl MarketDataStream for ConnectionPool {
         for (i, tokens) in chunks.into_iter().enumerate() {
             self.next_conn_id += 1;
             let id = self.next_conn_id;
-            info!(connection = i + 1, connection_id = id, tokens = tokens.len(), "Spawning");
+            info!(
+                connection = i + 1,
+                connection_id = id,
+                tokens = tokens.len(),
+                "Spawning"
+            );
 
             states.push(new_connection(
                 id,
@@ -616,9 +628,7 @@ impl MarketDataStream for ConnectionPool {
             event_tx: self.event_tx.clone(),
             counters: self.counters.clone(),
         };
-        self.management_handle = Some(tokio::spawn(
-            management_task(ctx, self.exchange_name),
-        ));
+        self.management_handle = Some(tokio::spawn(management_task(ctx, self.exchange_name)));
 
         Ok(())
     }
@@ -706,13 +716,25 @@ mod tests {
     #[test]
     fn test_config_rejects_zero_max_connections() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        assert!(ConnectionPool::new(testkit::config::pool(0, 500), testkit::config::reconnection(), f, "t").is_err());
+        assert!(ConnectionPool::new(
+            testkit::config::pool(0, 500),
+            testkit::config::reconnection(),
+            f,
+            "t"
+        )
+        .is_err());
     }
 
     #[test]
     fn test_config_rejects_zero_subs_per_conn() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        assert!(ConnectionPool::new(testkit::config::pool(10, 0), testkit::config::reconnection(), f, "t").is_err());
+        assert!(ConnectionPool::new(
+            testkit::config::pool(10, 0),
+            testkit::config::reconnection(),
+            f,
+            "t"
+        )
+        .is_err());
     }
 
     #[test]
@@ -726,7 +748,13 @@ mod tests {
     #[test]
     fn test_config_accepts_valid() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        assert!(ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").is_ok());
+        assert!(ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t"
+        )
+        .is_ok());
     }
 
     // -- Distribution ---------------------------------------------------------
@@ -735,9 +763,17 @@ mod tests {
     async fn test_single_connection() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -749,9 +785,17 @@ mod tests {
     async fn test_multiple_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(1000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1000))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -764,9 +808,17 @@ mod tests {
     async fn test_respects_max_connections() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(testkit::config::pool(3, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(3, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(5000)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5000))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -779,9 +831,17 @@ mod tests {
     async fn test_distributes_evenly() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![], false);
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(1250)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1250))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let conns = lock_or_recover(&pool.connections);
@@ -798,13 +858,27 @@ mod tests {
         let events = vec![snapshot_event("t1"), snapshot_event("t2")];
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, events, false);
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        assert!(matches!(pool.next_event().await, Some(MarketEvent::OrderBookSnapshot { .. })));
-        assert!(matches!(pool.next_event().await, Some(MarketEvent::OrderBookSnapshot { .. })));
+        assert!(matches!(
+            pool.next_event().await,
+            Some(MarketEvent::OrderBookSnapshot { .. })
+        ));
+        assert!(matches!(
+            pool.next_event().await,
+            Some(MarketEvent::OrderBookSnapshot { .. })
+        ));
     }
 
     // -- Identity / edge cases ------------------------------------------------
@@ -814,7 +888,13 @@ mod tests {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
         let cfg = testkit::config::pool(10, 500);
 
-        let p1 = ConnectionPool::new(cfg.clone(), testkit::config::reconnection(), f.clone(), "polymarket").unwrap();
+        let p1 = ConnectionPool::new(
+            cfg.clone(),
+            testkit::config::reconnection(),
+            f.clone(),
+            "polymarket",
+        )
+        .unwrap();
         assert_eq!(p1.exchange_name(), "polymarket");
 
         let p2 = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "kalshi").unwrap();
@@ -824,7 +904,13 @@ mod tests {
     #[tokio::test]
     async fn test_connect_is_noop() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
         assert!(pool.connect().await.is_ok());
         assert!(lock_or_recover(&pool.connections).is_empty());
@@ -833,7 +919,13 @@ mod tests {
     #[tokio::test]
     async fn test_empty_subscribe() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
         assert!(pool.subscribe(&[]).await.is_ok());
         assert!(lock_or_recover(&pool.connections).is_empty());
@@ -843,13 +935,23 @@ mod tests {
     async fn test_resubscribe_tears_down_old() {
         let cc = Arc::new(AtomicU32::new(0));
         let f = counting_factory(cc, vec![snapshot_event("t1")], true);
-        let mut pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let mut pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
 
-        pool.subscribe(&testkit::domain::make_tokens(5)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(5))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(lock_or_recover(&pool.connections).len(), 1);
 
-        pool.subscribe(&testkit::domain::make_tokens(10)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(10))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
         let conns = lock_or_recover(&pool.connections);
         assert_eq!(conns.len(), 1);
@@ -861,7 +963,13 @@ mod tests {
     #[tokio::test]
     async fn test_stats_initial() {
         let f: StreamFactory = Arc::new(|| Box::new(ScriptedStream::new()));
-        let pool = ConnectionPool::new(testkit::config::pool(10, 500), testkit::config::reconnection(), f, "t").unwrap();
+        let pool = ConnectionPool::new(
+            testkit::config::pool(10, 500),
+            testkit::config::reconnection(),
+            f,
+            "t",
+        )
+        .unwrap();
         let s = pool.stats();
         assert_eq!(s.active_connections, 0);
         assert_eq!(s.total_rotations, 0);
@@ -882,7 +990,9 @@ mod tests {
         cfg.health_check_interval_secs = 1;
 
         let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
 
         tokio::time::sleep(Duration::from_secs(4)).await;
         assert!(cc.load(Ordering::SeqCst) > 1, "Expected TTL rotation");
@@ -900,10 +1010,15 @@ mod tests {
         cfg.health_check_interval_secs = 1;
 
         let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
-        assert!(cc.load(Ordering::SeqCst) > 1, "Expected preemptive reconnect");
+        assert!(
+            cc.load(Ordering::SeqCst) > 1,
+            "Expected preemptive reconnect"
+        );
     }
 
     #[tokio::test]
@@ -928,11 +1043,17 @@ mod tests {
         cfg.connection_ttl_secs = 120;
         cfg.preemptive_reconnect_secs = 30;
 
-        let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "t").unwrap();
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        let mut pool =
+            ConnectionPool::new(cfg, testkit::config::reconnection(), factory, "t").unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
 
         tokio::time::sleep(Duration::from_secs(5)).await;
-        assert!(cc.load(Ordering::SeqCst) > 1, "Expected restart after silence");
+        assert!(
+            cc.load(Ordering::SeqCst) > 1,
+            "Expected restart after silence"
+        );
         assert!(pool.stats().total_restarts > 0);
     }
 
@@ -945,10 +1066,15 @@ mod tests {
         cfg.health_check_interval_secs = 1;
 
         let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
-        assert!(cc.load(Ordering::SeqCst) > 1, "Expected crashed task restart");
+        assert!(
+            cc.load(Ordering::SeqCst) > 1,
+            "Expected crashed task restart"
+        );
     }
 
     #[tokio::test]
@@ -962,9 +1088,15 @@ mod tests {
         cfg.health_check_interval_secs = 1;
 
         let mut pool = ConnectionPool::new(cfg, testkit::config::reconnection(), f, "t").unwrap();
-        pool.subscribe(&testkit::domain::make_tokens(1)).await.unwrap();
+        pool.subscribe(&testkit::domain::make_tokens(1))
+            .await
+            .unwrap();
 
         tokio::time::sleep(Duration::from_secs(3)).await;
-        assert_eq!(cc.load(Ordering::SeqCst), 1, "Healthy connection should not be replaced");
+        assert_eq!(
+            cc.load(Ordering::SeqCst),
+            1,
+            "Healthy connection should not be replaced"
+        );
     }
 }

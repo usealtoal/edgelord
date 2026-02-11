@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use super::Strategy;
 use crate::core::cache::ClusterCache;
 use crate::core::domain::Opportunity;
 use crate::core::strategy::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use crate::core::strategy::condition::{SingleConditionConfig, SingleConditionStrategy};
 use crate::core::strategy::context::DetectionContext;
 use crate::core::strategy::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
-use super::Strategy;
 
 /// Registry of enabled strategies.
 ///
