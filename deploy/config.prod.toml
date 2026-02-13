@@ -28,6 +28,24 @@ max_outcomes = 10
 
 [strategies.combinatorial]
 enabled = false
+max_iterations = 20
+tolerance = 0.0001
+gap_threshold = 0.02
+
+# Cluster detection for combinatorial arbitrage
+[cluster_detection]
+enabled = true
+debounce_ms = 100
+min_gap = 0.02
+max_clusters_per_cycle = 50
+channel_capacity = 1024
+
+# Relation inference for discovering market dependencies
+[inference]
+enabled = true
+min_confidence = 0.7
+ttl_seconds = 3600
+batch_size = 30
 
 [wallet]
 # Private key loaded from WALLET_PRIVATE_KEY env var

@@ -33,7 +33,9 @@ mod context;
 pub mod rebalancing;
 mod registry;
 
-use crate::core::domain::Opportunity;
+use std::sync::Arc;
+
+use crate::core::domain::{MarketRegistry, Opportunity};
 
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 pub use condition::{SingleConditionConfig, SingleConditionStrategy};
@@ -69,4 +71,10 @@ pub trait Strategy: Send + Sync {
     /// Strategies can use this to speed up iterative algorithms
     /// (e.g., Frank-Wolfe can reuse previous solution).
     fn warm_start(&mut self, _previous: &DetectionResult) {}
+
+    /// Optional: inject the market registry for strategies that need it.
+    ///
+    /// Called by the orchestrator after the registry is built. Strategies
+    /// that don't need it can ignore this (default no-op).
+    fn set_market_registry(&mut self, _registry: Arc<MarketRegistry>) {}
 }
