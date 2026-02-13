@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::Strategy;
 use crate::core::cache::ClusterCache;
-use crate::core::domain::Opportunity;
+use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::strategy::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use crate::core::strategy::condition::{SingleConditionConfig, SingleConditionStrategy};
 use crate::core::strategy::context::DetectionContext;
@@ -55,6 +55,16 @@ impl StrategyRegistry {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.strategies.is_empty()
+    }
+
+    /// Inject the market registry into strategies that need it (e.g. combinatorial).
+    ///
+    /// This must be called after the [`MarketRegistry`] is built, since markets
+    /// are fetched after strategy construction in the orchestrator.
+    pub fn set_registry(&mut self, registry: Arc<MarketRegistry>) {
+        for strategy in &mut self.strategies {
+            strategy.set_market_registry(registry.clone());
+        }
     }
 
     /// Run all applicable strategies and collect opportunities.

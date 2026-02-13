@@ -35,7 +35,8 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::core::cache::ClusterCache;
-use crate::core::domain::Opportunity;
+use crate::core::domain::{MarketRegistry, Opportunity};
+use crate::core::service::cluster::{ClusterDetectionConfig, ClusterDetector};
 
 /// Configuration for combinatorial strategy.
 #[derive(Debug, Clone, Deserialize)]
@@ -97,6 +98,10 @@ pub struct CombinatorialStrategy {
     fw: FrankWolfe,
     /// Cluster cache for relation lookups.
     cluster_cache: Option<Arc<ClusterCache>>,
+    /// Market registry for resolving market IDs.
+    registry: Option<Arc<MarketRegistry>>,
+    /// Cluster detector for running Frank-Wolfe detection.
+    detector: Option<ClusterDetector>,
 }
 
 impl CombinatorialStrategy {
@@ -111,19 +116,45 @@ impl CombinatorialStrategy {
             config,
             fw: FrankWolfe::new(fw_config),
             cluster_cache: None,
+            registry: None,
+            detector: None,
         }
     }
 
     /// Set the cluster cache for relation lookups.
     pub fn set_cache(&mut self, cache: Arc<ClusterCache>) {
         self.cluster_cache = Some(cache);
+        self.update_detector();
+    }
+
+    /// Set the market registry for market lookups.
+    pub fn set_registry(&mut self, registry: Arc<MarketRegistry>) {
+        self.registry = Some(registry);
     }
 
     /// Create strategy with cache already set.
     #[must_use]
     pub fn with_cache(mut self, cache: Arc<ClusterCache>) -> Self {
         self.cluster_cache = Some(cache);
+        self.update_detector();
         self
+    }
+
+    /// Create strategy with registry already set.
+    #[must_use]
+    pub fn with_registry(mut self, registry: Arc<MarketRegistry>) -> Self {
+        self.registry = Some(registry);
+        self
+    }
+
+    /// Update the detector instance based on current config.
+    fn update_detector(&mut self) {
+        let detector_config = ClusterDetectionConfig {
+            debounce_ms: 100, // Not used in synchronous detection
+            min_gap: self.config.gap_threshold,
+            max_clusters_per_cycle: 50, // Not relevant for single detection
+        };
+        self.detector = Some(ClusterDetector::new(detector_config));
     }
 
     /// Check if a market has known relations in the cache.
@@ -172,41 +203,104 @@ impl Strategy for CombinatorialStrategy {
     }
 
     fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        // Get cluster from cache
-        let cache = match &self.cluster_cache {
+        // Ensure we have all required components
+        let cluster_cache = match &self.cluster_cache {
             Some(c) => c,
             None => return vec![],
         };
 
-        let cluster = match cache.get_for_market(ctx.market.market_id()) {
+        let registry = match &self.registry {
+            Some(r) => r,
+            None => {
+                tracing::warn!("Combinatorial strategy missing market registry");
+                return vec![];
+            }
+        };
+
+        let detector = match &self.detector {
+            Some(d) => d,
+            None => {
+                tracing::warn!("Combinatorial strategy missing detector");
+                return vec![];
+            }
+        };
+
+        // Get cluster for this market
+        let cluster = match cluster_cache.get_for_market(ctx.market.market_id()) {
             Some(c) => c,
             None => return vec![], // No known relations
         };
 
-        // Log that we found a cluster (actual Frank-Wolfe execution is complex)
         tracing::debug!(
             market_id = %ctx.market.market_id(),
             cluster_size = cluster.markets.len(),
             constraint_count = cluster.constraints.len(),
-            "Found cluster for combinatorial detection"
+            "Running combinatorial detection on cluster"
         );
 
-        // Full Frank-Wolfe execution requires:
-        // 1. Gather prices for all markets in cluster
-        // 2. Build ILP problem from cluster.constraints
-        // 3. Run self.fw.project()
-        // 4. Check if gap > threshold
-        // 5. Build opportunity with multiple legs
-        //
-        // This is the integration point - for now return empty
-        // Real implementation needs multi-market price aggregation
-        vec![]
+        // Run cluster detection
+        match detector.detect(&cluster, ctx.cache, registry) {
+            Ok(Some(cluster_opp)) => {
+                tracing::info!(
+                    market_id = %ctx.market.market_id(),
+                    gap = %cluster_opp.gap,
+                    "Found combinatorial opportunity"
+                );
+                vec![cluster_opp.opportunity]
+            }
+            Ok(None) => {
+                tracing::trace!(
+                    market_id = %ctx.market.market_id(),
+                    "No combinatorial opportunity (gap below threshold)"
+                );
+                vec![]
+            }
+            Err(e) => {
+                tracing::debug!(
+                    market_id = %ctx.market.market_id(),
+                    error = %e,
+                    "Combinatorial detection failed"
+                );
+                vec![]
+            }
+        }
+    }
+
+    fn set_market_registry(&mut self, registry: Arc<MarketRegistry>) {
+        self.set_registry(registry);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::cache::OrderBookCache;
+    use crate::core::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
+    use crate::core::solver::Constraint;
+    use chrono::{Duration, Utc};
+    use rust_decimal_macros::dec;
+
+    fn make_test_config() -> CombinatorialConfig {
+        CombinatorialConfig {
+            enabled: true,
+            max_iterations: 20,
+            tolerance: dec!(0.0001),
+            gap_threshold: dec!(0.02),
+        }
+    }
+
+    fn make_binary_market(id: &str, yes_token: &str, no_token: &str) -> Market {
+        let outcomes = vec![
+            Outcome::new(TokenId::from(yes_token), "Yes"),
+            Outcome::new(TokenId::from(no_token), "No"),
+        ];
+        Market::new(
+            MarketId::from(id),
+            format!("Market {id}?"),
+            outcomes,
+            dec!(1),
+        )
+    }
 
     #[test]
     fn test_strategy_name() {
@@ -247,5 +341,206 @@ mod tests {
         assert_eq!(config.tolerance, Decimal::new(1, 4));
         assert_eq!(config.gap_threshold, Decimal::new(2, 2));
         assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_strategy_requires_cluster_cache() {
+        let config = make_test_config();
+        let strategy = CombinatorialStrategy::new(config);
+
+        let market = make_binary_market("m1", "yes", "no");
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&market, &cache);
+
+        // Without cluster cache, should return empty
+        let opps = strategy.detect(&ctx);
+        assert!(opps.is_empty());
+    }
+
+    fn make_cluster(market_ids: Vec<MarketId>) -> Cluster {
+        Cluster {
+            id: ClusterId::new(),
+            markets: market_ids,
+            relations: vec![],
+            constraints: vec![Constraint::geq(vec![dec!(1), dec!(1)], dec!(1))],
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_strategy_requires_registry() {
+        let config = make_test_config();
+        let mut strategy = CombinatorialStrategy::new(config);
+
+        // Set cluster cache but not registry
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        strategy.set_cache(cluster_cache);
+
+        let market = make_binary_market("m1", "yes", "no");
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&market, &cache);
+
+        // Without registry, should return empty
+        let opps = strategy.detect(&ctx);
+        assert!(opps.is_empty());
+    }
+
+    #[test]
+    fn test_detect_returns_empty_when_no_cluster() {
+        let config = make_test_config();
+        let mut strategy = CombinatorialStrategy::new(config);
+
+        // Set both cache and registry
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        let registry = Arc::new(MarketRegistry::new());
+        strategy.set_cache(cluster_cache);
+        strategy.set_registry(registry);
+
+        let market = make_binary_market("m1", "yes", "no");
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&market, &cache);
+
+        // No cluster exists for this market
+        let opps = strategy.detect(&ctx);
+        assert!(opps.is_empty());
+    }
+
+    #[test]
+    fn test_detect_returns_empty_when_gap_below_threshold() {
+        let config = CombinatorialConfig {
+            gap_threshold: dec!(0.10), // High threshold
+            ..make_test_config()
+        };
+        let mut strategy = CombinatorialStrategy::new(config);
+
+        // Create markets
+        let m1 = make_binary_market("m1", "yes1", "no1");
+        let m2 = make_binary_market("m2", "yes2", "no2");
+
+        // Build registry
+        let mut registry = MarketRegistry::new();
+        registry.add(m1.clone());
+        registry.add(m2.clone());
+        let registry = Arc::new(registry);
+
+        // Create cluster
+        let cluster = make_cluster(vec![m1.market_id().clone(), m2.market_id().clone()]);
+
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        cluster_cache.put(cluster);
+
+        strategy.set_cache(cluster_cache);
+        strategy.set_registry(registry);
+
+        // Set prices that are fair (no arbitrage)
+        let cache = OrderBookCache::new();
+        cache.update(crate::core::domain::OrderBook::with_levels(
+            TokenId::from("yes1"),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        ));
+        cache.update(crate::core::domain::OrderBook::with_levels(
+            TokenId::from("yes2"),
+            vec![],
+            vec![PriceLevel::new(dec!(0.50), dec!(100))],
+        ));
+
+        let ctx = DetectionContext::new(&m1, &cache);
+
+        // Should return empty due to low/no arbitrage gap
+        let opps = strategy.detect(&ctx);
+        assert!(opps.is_empty());
+    }
+
+    #[test]
+    fn test_detect_handles_missing_price_data() {
+        let config = make_test_config();
+        let mut strategy = CombinatorialStrategy::new(config);
+
+        // Create markets
+        let m1 = make_binary_market("m1", "yes1", "no1");
+        let m2 = make_binary_market("m2", "yes2", "no2");
+
+        // Build registry
+        let mut registry = MarketRegistry::new();
+        registry.add(m1.clone());
+        registry.add(m2.clone());
+        let registry = Arc::new(registry);
+
+        // Create cluster
+        let cluster = make_cluster(vec![m1.market_id().clone(), m2.market_id().clone()]);
+
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        cluster_cache.put(cluster);
+
+        strategy.set_cache(cluster_cache);
+        strategy.set_registry(registry);
+
+        // Empty cache (no price data)
+        let cache = OrderBookCache::new();
+        let ctx = DetectionContext::new(&m1, &cache);
+
+        // Should fail closed and return empty
+        let opps = strategy.detect(&ctx);
+        assert!(opps.is_empty());
+    }
+
+    #[test]
+    fn test_strategy_with_cache_builder() {
+        let config = make_test_config();
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        let strategy = CombinatorialStrategy::new(config).with_cache(cluster_cache);
+
+        assert!(strategy.cluster_cache.is_some());
+    }
+
+    #[test]
+    fn test_strategy_with_registry_builder() {
+        let config = make_test_config();
+        let registry = Arc::new(MarketRegistry::new());
+        let strategy = CombinatorialStrategy::new(config).with_registry(registry);
+
+        assert!(strategy.registry.is_some());
+    }
+
+    #[test]
+    fn test_applies_to_checks_enabled_flag() {
+        let config = CombinatorialConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let strategy = CombinatorialStrategy::new(config);
+
+        let ctx_with_deps =
+            MarketContext::binary().with_dependencies(vec![MarketId::from("other")]);
+
+        // Even with dependencies, disabled strategy doesn't apply
+        assert!(!strategy.applies_to(&ctx_with_deps));
+    }
+
+    #[test]
+    fn test_applies_to_checks_cache_for_relations() {
+        let config = make_test_config();
+        let mut strategy = CombinatorialStrategy::new(config);
+
+        let m1 = make_binary_market("m1", "yes1", "no1");
+        let m2 = make_binary_market("m2", "yes2", "no2");
+
+        // Create cluster
+        let cluster = make_cluster(vec![m1.market_id().clone(), m2.market_id().clone()]);
+
+        let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
+        cluster_cache.put(cluster);
+        strategy.set_cache(cluster_cache);
+
+        // Context without dependencies but market is in cache
+        let ctx = MarketContext {
+            outcome_count: 2,
+            has_dependencies: false,
+            correlated_markets: vec![m1.market_id().clone()],
+        };
+
+        // Should apply because cache has relations
+        assert!(strategy.applies_to(&ctx));
     }
 }

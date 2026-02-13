@@ -215,7 +215,8 @@ impl Orchestrator {
         }
 
         // Build strategy registry with cache for combinatorial strategy
-        let strategies = Arc::new(build_strategy_registry(&config, Arc::clone(&cluster_cache)));
+        // NOTE: MarketRegistry is injected later via set_registry() after markets are fetched.
+        let mut strategies = build_strategy_registry(&config, Arc::clone(&cluster_cache));
         info!(
             strategies = ?strategies.strategies().iter().map(|s| s.name()).collect::<Vec<_>>(),
             "Strategies loaded"
@@ -330,6 +331,10 @@ impl Orchestrator {
         info!(tokens = token_ids.len(), "Subscribing to tokens");
 
         let registry = Arc::new(registry);
+
+        // Wire market registry into strategies that need it (e.g. combinatorial)
+        strategies.set_registry(Arc::clone(&registry));
+        let strategies = Arc::new(strategies);
 
         // Update runtime stats for Telegram commands
         #[cfg(feature = "telegram")]
