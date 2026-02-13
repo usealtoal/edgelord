@@ -511,8 +511,8 @@ mod tests {
         };
         let strategy = CombinatorialStrategy::new(config);
 
-        let ctx_with_deps = MarketContext::binary()
-            .with_dependencies(vec![MarketId::from("other")]);
+        let ctx_with_deps =
+            MarketContext::binary().with_dependencies(vec![MarketId::from("other")]);
 
         // Even with dependencies, disabled strategy doesn't apply
         assert!(!strategy.applies_to(&ctx_with_deps));
