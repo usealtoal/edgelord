@@ -20,8 +20,8 @@ pub struct LlmConfig {
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LlmProvider {
-    #[default]
     Anthropic,
+    #[default]
     OpenAi,
 }
 
