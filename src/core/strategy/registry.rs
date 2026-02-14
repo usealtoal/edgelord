@@ -150,13 +150,11 @@ impl StrategyRegistryBuilder {
         }
 
         if let Some(config) = self.combinatorial {
-            if config.enabled {
-                let mut strategy = CombinatorialStrategy::new(config);
-                if let Some(cache) = self.cluster_cache {
-                    strategy.set_cache(cache);
-                }
-                registry.register(Box::new(strategy));
+            let mut strategy = CombinatorialStrategy::new(config);
+            if let Some(cache) = self.cluster_cache {
+                strategy.set_cache(cache);
             }
+            registry.register(Box::new(strategy));
         }
 
         registry
