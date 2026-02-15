@@ -25,6 +25,7 @@ use crate::core::exchange::{
 };
 use crate::core::inference::{Inferrer, MarketSummary};
 use crate::core::service::cluster::ClusterDetectionService;
+use crate::core::service::inference::{run_full_inference, InferenceService};
 use crate::core::service::position::PositionManager;
 use crate::core::service::statistics;
 use crate::core::service::{Event, NotifierRegistry, OpportunityEvent, RiskManager, StatsRecorder};
@@ -291,35 +292,37 @@ impl Orchestrator {
             );
         }
 
-        // Run initial inference if enabled
-        if let Some(ref inf) = inferrer {
-            let summaries: Vec<MarketSummary> = registry
-                .markets()
-                .iter()
-                .take(config.inference.batch_size)
-                .map(|m| MarketSummary {
-                    id: m.market_id().clone(),
-                    question: m.question().to_string(),
-                    outcomes: m.outcomes().iter().map(|o| o.name().to_string()).collect(),
-                })
-                .collect();
+        // Build market summaries for inference
+        let market_summaries: Vec<MarketSummary> = registry
+            .markets()
+            .iter()
+            .map(|m| MarketSummary {
+                id: m.market_id().clone(),
+                question: m.question().to_string(),
+                outcomes: m.outcomes().iter().map(|o| o.name().to_string()).collect(),
+            })
+            .collect();
 
-            if summaries.len() >= 2 {
-                info!(markets = summaries.len(), "Running initial inference");
-                match inf.infer(&summaries).await {
-                    Ok(relations) => {
-                        if !relations.is_empty() {
-                            info!(relations = relations.len(), "Discovered market relations");
-                            cluster_cache.put_relations(relations);
-                        } else {
-                            debug!("No relations discovered in initial batch");
-                        }
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "Initial inference failed");
-                    }
-                }
-            }
+        // Run full inference on ALL markets at startup
+        if let Some(ref inf) = inferrer {
+            info!(
+                markets = market_summaries.len(),
+                batch_size = config.inference.batch_size,
+                "Running full startup inference"
+            );
+            let result = run_full_inference(
+                inf.as_ref(),
+                &market_summaries,
+                config.inference.batch_size,
+                &cluster_cache,
+            )
+            .await;
+            info!(
+                markets = result.markets_processed,
+                relations = result.relations_discovered,
+                batches = result.batches_run,
+                "Startup inference complete"
+            );
         }
 
         let token_ids: Vec<TokenId> = registry
@@ -381,6 +384,41 @@ impl Orchestrator {
         };
 
         let cluster_handle = cluster_handle;
+
+        // Start continuous inference service if enabled
+        let _inference_handle = if config.inference.enabled {
+            if let Some(ref inf) = inferrer {
+                let service = InferenceService::new(
+                    Arc::clone(inf),
+                    config.inference.clone(),
+                    Arc::clone(&cluster_cache),
+                );
+                let markets = Arc::new(market_summaries);
+                let (handle, mut result_rx) = service.start(markets);
+
+                // Log inference results
+                tokio::spawn(async move {
+                    while let Some(result) = result_rx.recv().await {
+                        info!(
+                            markets = result.markets_processed,
+                            relations = result.relations_discovered,
+                            batches = result.batches_run,
+                            "Periodic inference complete"
+                        );
+                    }
+                });
+
+                info!(
+                    interval_secs = config.inference.scan_interval_seconds,
+                    "Continuous inference service started"
+                );
+                Some(handle)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         // Create data stream with optional connection pooling
         let mut data_stream: Box<dyn MarketDataStream> =

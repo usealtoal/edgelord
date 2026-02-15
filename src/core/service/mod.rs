@@ -2,6 +2,7 @@
 
 pub mod cluster;
 mod governor;
+pub mod inference;
 mod messaging;
 pub mod position;
 mod risk;
@@ -23,6 +24,8 @@ pub use statistics::{
     TradeLeg, TradeOpenEvent,
 };
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
+
+pub use inference::{run_full_inference, InferenceResult, InferenceService, InferenceServiceHandle};
 
 #[cfg(feature = "telegram")]
 pub use messaging::{RuntimeStats, TelegramConfig, TelegramNotifier};

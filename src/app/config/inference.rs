@@ -59,5 +59,5 @@ const fn default_scan_interval() -> u64 {
 }
 
 const fn default_batch_size() -> usize {
-    30
+    100
 }
