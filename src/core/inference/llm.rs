@@ -1,6 +1,6 @@
 //! LLM-powered relation inferrer.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -25,15 +25,15 @@ impl LlmInferrer {
         Self { llm, ttl }
     }
 
+    /// Build prompt using short reference IDs (M1, M2, etc) for reliability.
     fn build_prompt(&self, markets: &[MarketSummary]) -> String {
         let market_list = markets
             .iter()
             .enumerate()
             .map(|(i, m)| {
                 format!(
-                    "{}. [{}] {}\n   Outcomes: {}",
+                    "M{}: {}\n   Outcomes: {}",
                     i + 1,
-                    m.id.as_str(),
                     m.question,
                     m.outcomes.join(", ")
                 )
@@ -52,20 +52,20 @@ impl LlmInferrer {
 - **mutually_exclusive**: At most one can be YES. Example: "Trump wins" vs "Biden wins"
 - **exactly_one**: Exactly one must be YES. Example: All candidates in single-winner election
 
-## Output (JSON only, no explanation)
+## Output (JSON only)
 ```json
 {{
   "relations": [
     {{
       "type": "implies",
-      "if_yes": "market_id",
-      "then_yes": "market_id",
+      "if_yes": "M1",
+      "then_yes": "M2",
       "confidence": 0.95,
       "reasoning": "Brief explanation"
     }},
     {{
       "type": "mutually_exclusive",
-      "markets": ["id1", "id2"],
+      "markets": ["M1", "M2", "M3"],
       "confidence": 0.99,
       "reasoning": "Brief explanation"
     }}
@@ -74,19 +74,26 @@ impl LlmInferrer {
 ```
 
 Rules:
-- Only high-confidence relations (>0.7)
-- Use exact market IDs from the list
-- Empty array if no relations found
+- Use market IDs exactly as shown (M1, M2, etc)
+- Only relations with confidence > 0.7
+- Return empty array if no relations found
 "#
         )
     }
 
+    /// Parse response, mapping short IDs back to real market IDs.
     fn parse_response(&self, response: &str, markets: &[MarketSummary]) -> Result<Vec<Relation>> {
         let json_str = extract_json(response)?;
         let parsed: LlmResponse = serde_json::from_str(json_str)
             .map_err(|e| crate::error::Error::Parse(format!("Invalid JSON: {e}")))?;
 
-        let valid_ids: HashSet<_> = markets.iter().map(|m| m.id.as_str()).collect();
+        // Build mapping from short ID (M1, M2) to real market ID
+        let id_map: HashMap<String, &MarketId> = markets
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (format!("M{}", i + 1), &m.id))
+            .collect();
+
         let now = Utc::now();
         let expires = now + self.ttl;
 
@@ -94,23 +101,24 @@ Rules:
             .relations
             .into_iter()
             .filter_map(|r| {
-                if !r.markets_valid(&valid_ids) {
-                    warn!(relation = ?r, "Invalid market ID in relation");
-                    return None;
-                }
-
                 let confidence = r.confidence;
                 let reasoning = r.reasoning.clone();
-                let kind = r.into_kind()?;
+                let relation_type = r.kind.clone();
 
-                Some(Relation {
-                    id: crate::core::domain::RelationId::default(),
-                    kind,
-                    confidence,
-                    reasoning,
-                    inferred_at: now,
-                    expires_at: expires,
-                })
+                match r.into_kind_mapped(&id_map) {
+                    Some(Some(kind)) => Some(Relation {
+                        id: crate::core::domain::RelationId::default(),
+                        kind,
+                        confidence,
+                        reasoning,
+                        inferred_at: now,
+                        expires_at: expires,
+                    }),
+                    _ => {
+                        warn!(relation_type = %relation_type, "Failed to map market IDs");
+                        None
+                    }
+                }
             })
             .collect();
 
@@ -161,38 +169,34 @@ struct RawRelation {
 }
 
 impl RawRelation {
-    fn markets_valid(&self, valid: &HashSet<&str>) -> bool {
+    /// Map short IDs (M1, M2) to real market IDs and build RelationKind.
+    fn into_kind_mapped(self, id_map: &HashMap<String, &MarketId>) -> Option<Option<RelationKind>> {
         match self.kind.as_str() {
             "implies" => {
-                self.if_yes
-                    .as_ref()
-                    .is_some_and(|a| valid.contains(a.as_str()))
-                    && self
-                        .then_yes
-                        .as_ref()
-                        .is_some_and(|c| valid.contains(c.as_str()))
+                let if_yes = id_map.get(self.if_yes.as_ref()?)?;
+                let then_yes = id_map.get(self.then_yes.as_ref()?)?;
+                Some(Some(RelationKind::Implies {
+                    if_yes: (*if_yes).clone(),
+                    then_yes: (*then_yes).clone(),
+                }))
             }
-            "mutually_exclusive" | "exactly_one" => self
-                .markets
-                .as_ref()
-                .is_some_and(|ms| ms.iter().all(|m| valid.contains(m.as_str()))),
-            _ => false,
-        }
-    }
-
-    fn into_kind(self) -> Option<RelationKind> {
-        match self.kind.as_str() {
-            "implies" => Some(RelationKind::Implies {
-                if_yes: MarketId::new(self.if_yes?),
-                then_yes: MarketId::new(self.then_yes?),
-            }),
-            "mutually_exclusive" => Some(RelationKind::MutuallyExclusive {
-                markets: self.markets?.into_iter().map(MarketId::new).collect(),
-            }),
-            "exactly_one" => Some(RelationKind::ExactlyOne {
-                markets: self.markets?.into_iter().map(MarketId::new).collect(),
-            }),
-            _ => None,
+            "mutually_exclusive" => {
+                let markets: Option<Vec<MarketId>> = self
+                    .markets?
+                    .iter()
+                    .map(|m| id_map.get(m).map(|id| (*id).clone()))
+                    .collect();
+                Some(markets.map(|ms| RelationKind::MutuallyExclusive { markets: ms }))
+            }
+            "exactly_one" => {
+                let markets: Option<Vec<MarketId>> = self
+                    .markets?
+                    .iter()
+                    .map(|m| id_map.get(m).map(|id| (*id).clone()))
+                    .collect();
+                Some(markets.map(|ms| RelationKind::ExactlyOne { markets: ms }))
+            }
+            _ => Some(None),
         }
     }
 }
@@ -222,11 +226,12 @@ mod tests {
     use crate::core::llm::tests::MockLlm;
 
     #[tokio::test]
-    async fn parses_valid_response() {
+    async fn parses_valid_response_with_short_ids() {
+        // LLM returns short IDs (M1, M2) which we map to real IDs
         let response = r#"{"relations": [
             {
                 "type": "mutually_exclusive",
-                "markets": ["m1", "m2"],
+                "markets": ["M1", "M2"],
                 "confidence": 0.95,
                 "reasoning": "Same election"
             }
@@ -237,12 +242,12 @@ mod tests {
 
         let markets = vec![
             MarketSummary {
-                id: MarketId::new("m1"),
+                id: MarketId::new("real-market-id-1"),
                 question: "Will A win?".into(),
                 outcomes: vec!["Yes".into(), "No".into()],
             },
             MarketSummary {
-                id: MarketId::new("m2"),
+                id: MarketId::new("real-market-id-2"),
                 question: "Will B win?".into(),
                 outcomes: vec!["Yes".into(), "No".into()],
             },
@@ -251,14 +256,24 @@ mod tests {
         let relations = inferrer.infer(&markets).await.unwrap();
         assert_eq!(relations.len(), 1);
         assert!(relations[0].confidence > 0.9);
+
+        // Verify the real market IDs were used
+        match &relations[0].kind {
+            RelationKind::MutuallyExclusive { markets } => {
+                assert_eq!(markets[0].as_str(), "real-market-id-1");
+                assert_eq!(markets[1].as_str(), "real-market-id-2");
+            }
+            _ => panic!("Expected MutuallyExclusive"),
+        }
     }
 
     #[tokio::test]
-    async fn filters_invalid_market_ids() {
+    async fn filters_invalid_short_ids() {
+        // LLM returns an ID that doesn't exist (M99)
         let response = r#"{"relations": [
             {
                 "type": "mutually_exclusive",
-                "markets": ["m1", "invalid_id"],
+                "markets": ["M1", "M99"],
                 "confidence": 0.95,
                 "reasoning": "Test"
             }
@@ -268,12 +283,52 @@ mod tests {
         let inferrer = LlmInferrer::new(llm, Duration::hours(1));
 
         let markets = vec![MarketSummary {
-            id: MarketId::new("m1"),
+            id: MarketId::new("real-id"),
             question: "Test".into(),
             outcomes: vec!["Yes".into()],
         }];
 
         let relations = inferrer.infer(&markets).await.unwrap();
-        assert!(relations.is_empty()); // Filtered out
+        assert!(relations.is_empty()); // Filtered out because M99 doesn't exist
+    }
+
+    #[tokio::test]
+    async fn parses_implies_relation() {
+        let response = r#"{"relations": [
+            {
+                "type": "implies",
+                "if_yes": "M1",
+                "then_yes": "M2",
+                "confidence": 0.9,
+                "reasoning": "If PA then swing state"
+            }
+        ]}"#;
+
+        let llm = Arc::new(MockLlm::new(response));
+        let inferrer = LlmInferrer::new(llm, Duration::hours(1));
+
+        let markets = vec![
+            MarketSummary {
+                id: MarketId::new("trump-pa"),
+                question: "Trump wins PA?".into(),
+                outcomes: vec!["Yes".into(), "No".into()],
+            },
+            MarketSummary {
+                id: MarketId::new("trump-swing"),
+                question: "Trump wins swing state?".into(),
+                outcomes: vec!["Yes".into(), "No".into()],
+            },
+        ];
+
+        let relations = inferrer.infer(&markets).await.unwrap();
+        assert_eq!(relations.len(), 1);
+
+        match &relations[0].kind {
+            RelationKind::Implies { if_yes, then_yes } => {
+                assert_eq!(if_yes.as_str(), "trump-pa");
+                assert_eq!(then_yes.as_str(), "trump-swing");
+            }
+            _ => panic!("Expected Implies"),
+        }
     }
 }

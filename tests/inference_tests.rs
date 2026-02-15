@@ -22,13 +22,14 @@ impl MockLlm {
         }
     }
 
+    /// Returns mutual exclusion using short IDs (M1, M2)
     fn with_mutual_exclusion() -> Self {
         Self::new(
             r#"{
             "relations": [
                 {
                     "type": "mutually_exclusive",
-                    "markets": ["trump-wins", "biden-wins"],
+                    "markets": ["M1", "M2"],
                     "confidence": 0.98,
                     "reasoning": "Only one can win the election"
                 }
@@ -37,14 +38,15 @@ impl MockLlm {
         )
     }
 
+    /// Returns implication using short IDs (M1, M2)
     fn with_implication() -> Self {
         Self::new(
             r#"{
             "relations": [
                 {
                     "type": "implies",
-                    "if_yes": "trump-wins-pa",
-                    "then_yes": "trump-wins-swing",
+                    "if_yes": "M1",
+                    "then_yes": "M2",
                     "confidence": 0.95,
                     "reasoning": "PA is a swing state"
                 }

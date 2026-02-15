@@ -78,7 +78,7 @@ fn default_anthropic_model() -> String {
 }
 
 fn default_openai_model() -> String {
-    "gpt-4-turbo".into()
+    "gpt-4o".into()
 }
 
 fn default_temperature() -> f64 {
