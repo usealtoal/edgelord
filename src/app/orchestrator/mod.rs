@@ -28,7 +28,10 @@ use crate::core::service::cluster::ClusterDetectionService;
 use crate::core::service::inference::{run_full_inference, InferenceService};
 use crate::core::service::position::PositionManager;
 use crate::core::service::statistics;
-use crate::core::service::{Event, NotifierRegistry, OpportunityEvent, RiskManager, StatsRecorder};
+use crate::core::service::{
+    Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent, RiskManager,
+    StatsRecorder,
+};
 use crate::core::strategy::StrategyRegistry;
 use crate::error::Result;
 
@@ -215,6 +218,12 @@ impl Orchestrator {
             info!("Inference service enabled");
         }
 
+        // Share cluster cache with runtime stats for Telegram /markets command
+        #[cfg(feature = "telegram")]
+        if let Some(ref stats) = runtime_stats {
+            stats.set_cluster_cache(Arc::clone(&cluster_cache));
+        }
+
         // Build strategy registry with cache for combinatorial strategy
         // NOTE: MarketRegistry is injected later via set_registry() after markets are fetched.
         let mut strategies = build_strategy_registry(&config, Arc::clone(&cluster_cache));
@@ -323,6 +332,38 @@ impl Orchestrator {
                 batches = result.batches_run,
                 "Startup inference complete"
             );
+
+            // Send notification about discovered relations
+            if !result.relations.is_empty() {
+                let relation_details: Vec<RelationDetail> = result
+                    .relations
+                    .iter()
+                    .map(|r| {
+                        let market_questions: Vec<String> = r
+                            .kind
+                            .market_ids()
+                            .iter()
+                            .filter_map(|id| {
+                                market_summaries
+                                    .iter()
+                                    .find(|m| &m.id == *id)
+                                    .map(|m| m.question.clone())
+                            })
+                            .collect();
+                        RelationDetail {
+                            relation_type: r.kind.type_name().to_string(),
+                            confidence: r.confidence,
+                            market_questions,
+                            reasoning: r.reasoning.clone(),
+                        }
+                    })
+                    .collect();
+
+                notifiers.notify_all(Event::RelationsDiscovered(RelationsEvent {
+                    relations_count: result.relations_discovered,
+                    relations: relation_details,
+                }));
+            }
         }
 
         let token_ids: Vec<TokenId> = registry

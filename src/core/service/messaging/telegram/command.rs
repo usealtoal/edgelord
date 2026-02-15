@@ -107,17 +107,17 @@ fn parse_risk_limit_kind(value: &str) -> Result<RiskLimitKind, CommandParseError
 /// Help text returned by `/start` and `/help`.
 #[must_use]
 pub const fn command_help() -> &'static str {
-    "Edgelord Commands\n\n\
-    /status - Runtime status and configuration\n\
-    /health - System health check\n\
-    /positions - Active positions\n\
-    /stats - Today's trading statistics\n\
-    /pool - Connection pool status\n\
-    /markets - Subscribed markets info\n\
-    /version - Build version\n\
-    /pause - Halt trading\n\
-    /resume - Resume trading\n\
-    /set_risk <field> <value> - Update risk limit\n\n\
+    "📋 Commands\n\n\
+    /status - 📊 Runtime status and configuration\n\
+    /health - 🏥 System health check\n\
+    /positions - 💼 Active positions\n\
+    /stats - 📈 Today's trading statistics\n\
+    /pool - 🔌 Connection pool status\n\
+    /markets - 🏛️ Subscribed markets info\n\
+    /version - 🔖 Build version\n\
+    /pause - ⏸️ Halt trading\n\
+    /resume - ▶️ Resume trading\n\
+    /set_risk <field> <value> - ⚙️ Update risk limit\n\n\
     Risk fields: min_profit, max_slippage, max_position, max_exposure"
 }
 

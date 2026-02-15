@@ -8,6 +8,7 @@ use parking_lot::RwLock;
 use crate::core::domain::{Cluster, ClusterId, MarketId, Relation};
 
 /// Cache for relation clusters with TTL support.
+#[derive(Debug)]
 pub struct ClusterCache {
     /// Clusters by ID.
     clusters: RwLock<HashMap<ClusterId, Cluster>>,

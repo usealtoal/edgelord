@@ -15,7 +15,7 @@ pub use governor::{
 };
 pub use messaging::{
     Event, ExecutionEvent, LogNotifier, Notifier, NotifierRegistry, NullNotifier, OpportunityEvent,
-    RiskEvent, SummaryEvent,
+    RelationDetail, RelationsEvent, RiskEvent, SummaryEvent,
 };
 pub use position::{CloseReason, CloseResult, MarketSettledEvent, PositionManager};
 pub use risk::{RiskCheckResult, RiskManager};
@@ -25,7 +25,9 @@ pub use statistics::{
 };
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
 
-pub use inference::{run_full_inference, InferenceResult, InferenceService, InferenceServiceHandle};
+pub use inference::{
+    run_full_inference, InferenceResult, InferenceService, InferenceServiceHandle,
+};
 
 #[cfg(feature = "telegram")]
 pub use messaging::{RuntimeStats, TelegramConfig, TelegramNotifier};

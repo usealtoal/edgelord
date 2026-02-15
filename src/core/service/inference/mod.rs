@@ -11,6 +11,7 @@ use tracing::{debug, info, warn};
 
 use crate::app::InferenceConfig;
 use crate::core::cache::ClusterCache;
+use crate::core::domain::Relation;
 use crate::core::inference::{Inferrer, MarketSummary};
 
 /// Handle to control the inference service.
@@ -34,6 +35,8 @@ pub struct InferenceResult {
     pub relations_discovered: usize,
     /// Number of batches run.
     pub batches_run: usize,
+    /// All discovered relations (for notifications).
+    pub relations: Vec<Relation>,
 }
 
 /// Run inference on all markets in batches.
@@ -48,6 +51,7 @@ pub async fn run_full_inference(
 ) -> InferenceResult {
     let mut total_relations = 0;
     let mut batches_run = 0;
+    let mut all_relations = Vec::new();
 
     if markets.len() < 2 {
         debug!("Not enough markets for inference");
@@ -55,12 +59,17 @@ pub async fn run_full_inference(
             markets_processed: markets.len(),
             relations_discovered: 0,
             batches_run: 0,
+            relations: vec![],
         };
     }
 
     for (batch_idx, chunk) in markets.chunks(batch_size).enumerate() {
         if chunk.len() < 2 {
-            debug!(batch = batch_idx, markets = chunk.len(), "Skipping small batch");
+            debug!(
+                batch = batch_idx,
+                markets = chunk.len(),
+                "Skipping small batch"
+            );
             continue;
         }
 
@@ -79,6 +88,7 @@ pub async fn run_full_inference(
                         "Discovered relations"
                     );
                     total_relations += relations.len();
+                    all_relations.extend(relations.clone());
                     cluster_cache.put_relations(relations);
                 }
                 batches_run += 1;
@@ -100,6 +110,7 @@ pub async fn run_full_inference(
         markets_processed: markets.len(),
         relations_discovered: total_relations,
         batches_run,
+        relations: all_relations,
     }
 }
 

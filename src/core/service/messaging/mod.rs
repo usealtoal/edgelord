@@ -27,6 +27,8 @@ pub enum Event {
     CircuitBreakerReset,
     /// Daily summary.
     DailySummary(SummaryEvent),
+    /// Market relations discovered by inference.
+    RelationsDiscovered(RelationsEvent),
 }
 
 /// Opportunity detection event.
@@ -118,6 +120,28 @@ pub struct SummaryEvent {
     pub trades_successful: u64,
     pub total_profit: rust_decimal::Decimal,
     pub current_exposure: rust_decimal::Decimal,
+}
+
+/// Market relations discovered event.
+#[derive(Debug, Clone)]
+pub struct RelationsEvent {
+    /// Number of relations discovered in this batch.
+    pub relations_count: usize,
+    /// Details of each discovered relation.
+    pub relations: Vec<RelationDetail>,
+}
+
+/// Detail of a single discovered relation.
+#[derive(Debug, Clone)]
+pub struct RelationDetail {
+    /// Type of relation (e.g., "mutually_exclusive", "implies", "exactly_one").
+    pub relation_type: String,
+    /// Confidence score (0.0-1.0).
+    pub confidence: f64,
+    /// Market questions involved.
+    pub market_questions: Vec<String>,
+    /// LLM reasoning for this relation.
+    pub reasoning: String,
 }
 
 /// Trait for notification handlers.
@@ -226,6 +250,9 @@ impl Notifier for LogNotifier {
                     profit = %e.total_profit,
                     "Daily summary"
                 );
+            }
+            Event::RelationsDiscovered(e) => {
+                info!(relations = e.relations_count, "Relations discovered");
             }
         }
     }

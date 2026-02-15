@@ -103,6 +103,17 @@ impl RelationKind {
         }
     }
 
+    /// Get the type name of this relation kind.
+    #[must_use]
+    pub const fn type_name(&self) -> &'static str {
+        match self {
+            Self::Implies { .. } => "implies",
+            Self::MutuallyExclusive { .. } => "mutually_exclusive",
+            Self::ExactlyOne { .. } => "exactly_one",
+            Self::Linear { .. } => "linear",
+        }
+    }
+
     /// Convert this relation to solver constraints.
     ///
     /// # Arguments

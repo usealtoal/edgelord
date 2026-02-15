@@ -7,7 +7,8 @@ use chrono::Utc;
 use parking_lot::RwLock;
 
 use crate::app::AppState;
-use crate::core::domain::{PoolStats, PositionStatus};
+use crate::core::cache::ClusterCache;
+use crate::core::domain::{PoolStats, PositionStatus, RelationKind};
 use crate::core::service::StatsRecorder;
 
 use super::command::{command_help, TelegramCommand};
@@ -23,6 +24,8 @@ pub struct RuntimeStats {
     market_count: AtomicUsize,
     /// Number of subscribed tokens.
     token_count: AtomicUsize,
+    /// Cluster cache for relation lookups.
+    cluster_cache: RwLock<Option<Arc<ClusterCache>>>,
 }
 
 impl RuntimeStats {
@@ -59,6 +62,17 @@ impl RuntimeStats {
     #[must_use]
     pub fn token_count(&self) -> usize {
         self.token_count.load(Ordering::Relaxed)
+    }
+
+    /// Set cluster cache for relation lookups.
+    pub fn set_cluster_cache(&self, cache: Arc<ClusterCache>) {
+        *self.cluster_cache.write() = Some(cache);
+    }
+
+    /// Get cluster cache.
+    #[must_use]
+    pub fn cluster_cache(&self) -> Option<Arc<ClusterCache>> {
+        self.cluster_cache.read().clone()
     }
 }
 
@@ -123,12 +137,12 @@ impl TelegramControl {
             TelegramCommand::SetRisk { kind, value } => {
                 match self.state.set_risk_limit(kind, value) {
                     Ok(limits) => format!(
-                        "Updated {} to {}\n\n\
-                        Current limits:\n\
-                        - min_profit: {}\n\
-                        - max_slippage: {}\n\
-                        - max_position: ${}\n\
-                        - max_exposure: ${}",
+                        "✅ Updated {} to {}\n\n\
+                        ⚙️ Current limits:\n\
+                        • 💰 min_profit: {}\n\
+                        • 📉 max_slippage: {}\n\
+                        • 📊 max_position: ${}\n\
+                        • 💼 max_exposure: ${}",
                         kind.as_str(),
                         value,
                         limits.min_profit_threshold,
@@ -136,7 +150,7 @@ impl TelegramControl {
                         limits.max_position_per_market,
                         limits.max_total_exposure
                     ),
-                    Err(err) => format!("Error: cannot update {}: {}", kind.as_str(), err),
+                    Err(err) => format!("❌ Error: cannot update {}: {}", kind.as_str(), err),
                 }
             }
         }
@@ -150,7 +164,11 @@ impl TelegramControl {
         let pending_executions = self.state.pending_execution_count();
         let is_paused = self.state.is_circuit_breaker_active();
 
-        let mode = if is_paused { "PAUSED" } else { "ACTIVE" };
+        let (mode_emoji, mode) = if is_paused {
+            ("⏸️", "PAUSED")
+        } else {
+            ("▶️", "ACTIVE")
+        };
         let breaker = if is_paused {
             self.state
                 .circuit_breaker_reason()
@@ -160,20 +178,21 @@ impl TelegramControl {
         };
 
         format!(
-            "Edgelord Status\n\n\
-            Mode: {}\n\
-            Uptime: {}\n\
-            Circuit Breaker: {}\n\n\
-            Portfolio\n\
-            - Open Positions: {}\n\
-            - Exposure: ${}\n\
-            - Pending: ${}\n\
-            - In-Flight: {}\n\n\
-            Risk Limits\n\
-            - Min Profit: ${}\n\
-            - Max Slippage: {}%\n\
-            - Max Position: ${}\n\
-            - Max Exposure: ${}",
+            "📊 Status\n\n\
+            {} Mode: {}\n\
+            ⏱️ Uptime: {}\n\
+            🛑 Circuit Breaker: {}\n\n\
+            💼 Portfolio\n\
+            • Open Positions: {}\n\
+            • Exposure: ${}\n\
+            • Pending: ${}\n\
+            • In-Flight: {}\n\n\
+            ⚙️ Risk Limits\n\
+            • Min Profit: ${}\n\
+            • Max Slippage: {}%\n\
+            • Max Position: ${}\n\
+            • Max Exposure: ${}",
+            mode_emoji,
             mode,
             format_uptime(self.started_at),
             breaker,
@@ -199,9 +218,13 @@ impl TelegramControl {
             && limits.max_slippage <= rust_decimal::Decimal::ONE;
 
         let healthy = exposure_ok && breaker_ok && slippage_ok;
-        let status = if healthy { "HEALTHY" } else { "DEGRADED" };
+        let (status_emoji, status) = if healthy {
+            ("✅", "HEALTHY")
+        } else {
+            ("⚠️", "DEGRADED")
+        };
 
-        let check = |ok: bool| if ok { "OK" } else { "FAIL" };
+        let check = |ok: bool| if ok { "✅" } else { "❌" };
 
         let breaker_detail = if breaker_ok {
             "inactive".to_string()
@@ -212,10 +235,11 @@ impl TelegramControl {
         };
 
         format!(
-            "Health Check: {}\n\n\
-            Circuit Breaker: {} ({})\n\
-            Exposure: {} (${}/{})\n\
-            Slippage Config: {} ({})",
+            "🏥 Health Check: {} {}\n\n\
+            🛑 Circuit Breaker: {} ({})\n\
+            💰 Exposure: {} (${}/{})\n\
+            📉 Slippage Config: {} ({})",
+            status_emoji,
             status,
             check(breaker_ok),
             breaker_detail,
@@ -237,17 +261,17 @@ impl TelegramControl {
         let total_active = active.len();
 
         if active.is_empty() {
-            return "No active positions".to_string();
+            return "💼 No active positions".to_string();
         }
 
-        let mut response = format!("Active Positions ({})\n\n", active.len());
+        let mut response = format!("💼 Active Positions ({})\n\n", active.len());
 
         let display_count = active.len().min(self.position_display_limit);
         for (i, p) in active.iter().take(self.position_display_limit).enumerate() {
-            let status = match p.status() {
-                PositionStatus::Open => "open",
-                PositionStatus::PartialFill { .. } => "partial",
-                PositionStatus::Closed { .. } => "closed",
+            let (status_emoji, status) = match p.status() {
+                PositionStatus::Open => ("🟢", "open"),
+                PositionStatus::PartialFill { .. } => ("🟡", "partial"),
+                PositionStatus::Closed { .. } => ("⚫", "closed"),
             };
 
             let market_id = p.market_id().as_str();
@@ -258,8 +282,9 @@ impl TelegramControl {
             };
 
             response.push_str(&format!(
-                "{}. {} ({})\n   Cost: ${} | Expected: +${}\n",
+                "{}. {} {} ({})\n   💵 Cost: ${} | 📈 Expected: +${}\n",
                 i + 1,
+                status_emoji,
                 market_display,
                 status,
                 p.entry_cost(),
@@ -268,7 +293,10 @@ impl TelegramControl {
         }
 
         if total_active > display_count {
-            response.push_str(&format!("\n... and {} more", total_active - display_count));
+            response.push_str(&format!(
+                "\n📋 ... and {} more",
+                total_active - display_count
+            ));
         }
 
         response
@@ -276,7 +304,7 @@ impl TelegramControl {
 
     fn stats_text(&self) -> String {
         let Some(ref recorder) = self.stats_recorder else {
-            return "Statistics not available".to_string();
+            return "📈 Statistics not available".to_string();
         };
 
         let summary = recorder.get_today();
@@ -286,16 +314,23 @@ impl TelegramControl {
             .map(|r| format!("{:.1}%", r))
             .unwrap_or_else(|| "N/A".to_string());
 
+        let net = summary.net_profit();
+        let net_emoji = if net >= rust_decimal::Decimal::ZERO {
+            "📈"
+        } else {
+            "📉"
+        };
+
         format!(
-            "Today's Statistics\n\n\
-            Opportunities: {} detected, {} executed\n\
-            Trades: {} opened, {} closed\n\
-            Win Rate: {} ({} wins, {} losses)\n\
-            Volume: ${}\n\n\
-            P&L\n\
-            - Realized Profit: ${}\n\
-            - Realized Loss: ${}\n\
-            - Net: ${}",
+            "📊 Today's Statistics\n\n\
+            🎯 Opportunities: {} detected, {} executed\n\
+            📋 Trades: {} opened, {} closed\n\
+            🏆 Win Rate: {} ({} wins, {} losses)\n\
+            💵 Volume: ${}\n\n\
+            💰 P&L\n\
+            • ✅ Realized Profit: ${}\n\
+            • ❌ Realized Loss: ${}\n\
+            • {} Net: ${}",
             summary.opportunities_detected,
             summary.opportunities_executed,
             summary.trades_opened,
@@ -306,25 +341,26 @@ impl TelegramControl {
             summary.total_volume,
             summary.profit_realized,
             summary.loss_realized,
-            summary.net_profit()
+            net_emoji,
+            net
         )
     }
 
     fn pool_text(&self) -> String {
         let Some(ref runtime) = self.runtime_stats else {
-            return "Pool statistics not available".to_string();
+            return "🔌 Pool statistics not available".to_string();
         };
 
         let Some(stats) = runtime.pool_stats() else {
-            return "Pool not initialized".to_string();
+            return "🔌 Pool not initialized".to_string();
         };
 
         format!(
-            "Connection Pool\n\n\
-            Active Connections: {}\n\
-            TTL Rotations: {}\n\
-            Restarts: {}\n\
-            Events Dropped: {}",
+            "🔌 Connection Pool\n\n\
+            🟢 Active Connections: {}\n\
+            🔄 TTL Rotations: {}\n\
+            🔃 Restarts: {}\n\
+            ⚠️ Events Dropped: {}",
             stats.active_connections,
             stats.total_rotations,
             stats.total_restarts,
@@ -334,37 +370,103 @@ impl TelegramControl {
 
     fn markets_text(&self) -> String {
         let Some(ref runtime) = self.runtime_stats else {
-            return "Market statistics not available".to_string();
+            return "🏛️ Market statistics not available".to_string();
         };
 
         let markets = runtime.market_count();
         let tokens = runtime.token_count();
 
         if markets == 0 && tokens == 0 {
-            return "No markets subscribed".to_string();
+            return "🏛️ No markets subscribed".to_string();
         }
 
-        format!(
-            "Subscribed Markets\n\n\
-            Markets: {}\n\
-            Tokens: {}",
+        let mut response = format!(
+            "🏛️ Subscribed Markets\n\n\
+            📊 Markets: {}\n\
+            🪙 Tokens: {}\n",
             markets, tokens
-        )
+        );
+
+        // Show cluster information if available
+        if let Some(cache) = runtime.cluster_cache() {
+            let clusters = cache.all_clusters();
+            if !clusters.is_empty() {
+                let total_clustered_markets: usize = clusters.iter().map(|c| c.markets.len()).sum();
+                let total_relations: usize = clusters.iter().map(|c| c.relations.len()).sum();
+
+                response.push_str(&format!(
+                    "\n🔗 Related Market Clusters: {}\n\
+                    📈 Markets in clusters: {}\n\
+                    🔀 Discovered relations: {}\n",
+                    clusters.len(),
+                    total_clustered_markets,
+                    total_relations
+                ));
+
+                // Show up to 3 clusters with their markets
+                for (i, cluster) in clusters.iter().take(3).enumerate() {
+                    response.push_str(&format!(
+                        "\n📦 Cluster {} ({} markets)\n",
+                        i + 1,
+                        cluster.markets.len()
+                    ));
+
+                    // Show relation types in this cluster
+                    let mut relation_types: Vec<&str> = cluster
+                        .relations
+                        .iter()
+                        .map(|r| match &r.kind {
+                            RelationKind::MutuallyExclusive { .. } => "🔀 Mutually Exclusive",
+                            RelationKind::Implies { .. } => "➡️ Implies",
+                            RelationKind::ExactlyOne { .. } => "☝️ Exactly One",
+                            RelationKind::Linear { .. } => "📐 Linear",
+                        })
+                        .collect();
+                    relation_types.dedup();
+                    for rt in relation_types {
+                        response.push_str(&format!("  {}\n", rt));
+                    }
+
+                    // Show market IDs (truncated)
+                    for market_id in cluster.markets.iter().take(5) {
+                        let id = market_id.as_str();
+                        let display = if id.len() > 16 {
+                            format!("{}...", &id[..16])
+                        } else {
+                            id.to_string()
+                        };
+                        response.push_str(&format!("  • {}\n", display));
+                    }
+                    if cluster.markets.len() > 5 {
+                        response
+                            .push_str(&format!("  ... and {} more\n", cluster.markets.len() - 5));
+                    }
+                }
+
+                if clusters.len() > 3 {
+                    response.push_str(&format!(
+                        "\n📋 ... and {} more clusters",
+                        clusters.len() - 3
+                    ));
+                }
+            }
+        }
+
+        response
     }
 
     fn version_text(&self) -> String {
         let version = env!("CARGO_PKG_VERSION");
-        let name = env!("CARGO_PKG_NAME");
 
         // Try to get git info if available (set during build)
         let commit = option_env!("GIT_COMMIT_SHORT").unwrap_or("unknown");
         let build_date = option_env!("BUILD_DATE").unwrap_or("unknown");
 
         format!(
-            "{} v{}\n\n\
-            Commit: {}\n\
-            Built: {}",
-            name, version, commit, build_date
+            "🔖 Version v{}\n\n\
+            🔗 Commit: {}\n\
+            📅 Built: {}",
+            version, commit, build_date
         )
     }
 
@@ -374,20 +476,20 @@ impl TelegramControl {
                 .state
                 .circuit_breaker_reason()
                 .unwrap_or_else(|| "unknown".to_string());
-            return format!("Already paused: {}", reason);
+            return format!("⏸️ Already paused: {}", reason);
         }
 
         self.state.activate_circuit_breaker("paused via Telegram");
-        "Trading paused".to_string()
+        "⏸️ Trading paused".to_string()
     }
 
     fn resume_text(&self) -> String {
         if !self.state.is_circuit_breaker_active() {
-            return "Trading already active".to_string();
+            return "▶️ Trading already active".to_string();
         }
 
         self.state.reset_circuit_breaker();
-        "Trading resumed".to_string()
+        "▶️ Trading resumed".to_string()
     }
 }
 
@@ -457,10 +559,8 @@ mod tests {
         let state = Arc::new(AppState::default());
         let control = TelegramControl::new(state);
 
-        assert_eq!(
-            control.execute(TelegramCommand::Positions),
-            "No active positions"
-        );
+        let text = control.execute(TelegramCommand::Positions);
+        assert!(text.contains("No active positions"));
     }
 
     #[test]
@@ -469,7 +569,7 @@ mod tests {
         let control = TelegramControl::new(state);
 
         let text = control.execute(TelegramCommand::Version);
-        assert!(text.contains("edgelord"));
+        assert!(text.contains("Version"));
         assert!(text.contains("v0."));
     }
 
@@ -629,7 +729,7 @@ mod tests {
         let text = control.execute(TelegramCommand::Start);
         assert!(text.contains("/status"));
         assert!(text.contains("/positions"));
-        assert!(text.contains("Edgelord Commands"));
+        assert!(text.contains("Commands"));
     }
 
     #[test]
@@ -638,7 +738,7 @@ mod tests {
         let control = TelegramControl::new(state);
 
         let text = control.execute(TelegramCommand::Status);
-        assert!(text.contains("Edgelord Status"));
+        assert!(text.contains("Status"));
         assert!(text.contains("Mode:"));
         assert!(text.contains("Risk Limits"));
         assert!(text.contains("Portfolio"));
@@ -743,6 +843,6 @@ mod tests {
 
         let text = control.execute(TelegramCommand::Health);
         assert!(text.contains("DEGRADED"));
-        assert!(text.contains("FAIL"));
+        assert!(text.contains("❌")); // Changed from "FAIL" to emoji
     }
 }
