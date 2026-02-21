@@ -1,23 +1,32 @@
-//! Edgelord - Multi-strategy arbitrage detection and execution.
+//! Edgelord - Prediction market arbitrage framework.
+//!
+//! # For CLI users
+//!
+//! Install and run:
+//!
+//! ```text
+//! cargo install edgelord
+//! edgelord init
+//! edgelord run
+//! ```
+//!
+//! # For developers
+//!
+//! Fork this repo and extend:
+//!
+//! - Add strategies: implement `ports::Strategy`
+//! - Add exchanges: implement `ports::MarketDataStream` + `ports::ArbitrageExecutor`
+//! - Add notifiers: implement `ports::Notifier`
 //!
 //! # Architecture
 //!
 //! ```text
-//! src/
-//! ├── core/             # Reusable library components
-//! │   ├── domain/       # Pure domain types
-//! │   ├── exchange/     # Exchange traits + implementations
-//! │   ├── strategy/     # Detection algorithms
-//! │   ├── solver/       # LP/ILP solver abstraction
-//! │   └── service/      # Cross-cutting services
-//! └── app/              # Application orchestration
+//! domain/     Pure types, no I/O
+//! ports/      Trait definitions (extension points)
+//! adapters/   Implementations (Polymarket, strategies, etc.)
+//! runtime/    Orchestration and wiring
+//! cli/        Command-line interface
 //! ```
-//!
-//! # Features
-//!
-//! - `polymarket` - Enable Polymarket exchange support (default)
-//! - `telegram` - Enable Telegram notifications
-//! - `testkit` - Reusable test helpers (mock streams, factories, domain builders)
 
 pub mod adapters;
 pub mod app;
