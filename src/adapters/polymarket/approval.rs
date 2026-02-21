@@ -13,9 +13,9 @@ use polymarket_client_sdk::auth::Signer as _;
 use rust_decimal::Decimal;
 use tracing::info;
 
+use crate::error::{ConfigError, ExecutionError, Result};
 use crate::runtime::exchange::{ApprovalResult, ApprovalStatus, TokenApproval};
 use crate::runtime::{Config, Environment};
-use crate::error::{ConfigError, ExecutionError, Result};
 
 // USDC contract addresses
 const USDC_NATIVE_MAINNET: &str = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"; // Native USDC on Polygon

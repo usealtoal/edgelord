@@ -7,8 +7,8 @@ use chrono::Duration;
 use edgelord::adapters::llm::Llm;
 use edgelord::core::inference::{Inferrer, LlmInferrer, MarketSummary};
 use edgelord::domain::{MarketId, Relation, RelationKind};
-use edgelord::runtime::cache::ClusterCache;
 use edgelord::error::Result;
+use edgelord::runtime::cache::ClusterCache;
 
 /// Mock LLM that returns predefined responses.
 struct MockLlm {

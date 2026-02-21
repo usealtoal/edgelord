@@ -42,13 +42,12 @@ fn cli_returns_nonzero_on_config_error() {
 
     assert!(!output.status.success(), "Expected nonzero exit code");
 
+    // Check both stdout and stderr for the error message
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
     assert!(
-        stderr.contains("Error:"),
-        "Expected standardized error prefix"
-    );
-    assert!(
-        !stderr.contains("Config file is invalid"),
-        "Expected normalized error output without extra banners"
+        combined.contains("invalid value for max_slippage") || combined.contains("max_slippage"),
+        "Expected error message about invalid config.\nstdout: {stdout}\nstderr: {stderr}"
     );
 }

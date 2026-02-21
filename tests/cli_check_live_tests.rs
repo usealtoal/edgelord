@@ -37,12 +37,13 @@ fn check_live_warns_on_missing_wallet_or_mainnet() {
     let _ = fs::remove_file(&path);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    // Check for warning content (ignoring ANSI escape codes around emoji)
     assert!(
-        stdout.contains("⚠ Wallet"),
+        stdout.contains("Wallet not configured"),
         "expected wallet warning in stdout: {stdout}"
     );
     assert!(
-        stdout.contains("⚠ Chain ID"),
+        stdout.contains("Chain ID is not Polygon mainnet"),
         "expected chain id warning in stdout: {stdout}"
     );
     assert!(

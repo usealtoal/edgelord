@@ -18,8 +18,8 @@ use crate::adapters::statistics;
 use crate::adapters::statistics::StatsRecorder;
 use crate::adapters::stores::db;
 use crate::adapters::strategies::StrategyRegistry;
-use crate::domain::{MarketRegistry, TokenId};
 use crate::core::inference::{MarketSummary, RelationInferrer};
+use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
 use crate::runtime::cache::OrderBookCache;
 use crate::runtime::exchange::{
@@ -31,11 +31,11 @@ use crate::adapters::notifiers::{
     Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent,
 };
 
+use super::handler::handle_market_event;
 use super::orchestrator_builder::{
     build_cluster_cache, build_inferrer, build_llm_client, build_notifier_registry,
     build_strategy_registry, init_executor,
 };
-use super::handler::handle_market_event;
 
 /// Inputs required to process one market event through detection and risk gates.
 pub struct EventProcessingContext<'a> {
@@ -732,11 +732,11 @@ mod tests {
     #[test]
     fn event_processing_context_can_be_created() {
         use super::super::state::AppState;
-        use crate::runtime::cache::OrderBookCache;
-        use crate::domain::MarketRegistry;
         use crate::adapters::notifiers::NotifierRegistry;
         use crate::adapters::risk::RiskManager;
         use crate::adapters::strategies::StrategyRegistry;
+        use crate::domain::MarketRegistry;
+        use crate::runtime::cache::OrderBookCache;
         use std::sync::Arc;
 
         let cache = OrderBookCache::new();

@@ -71,9 +71,7 @@ pub fn load_status(db_path: &Path) -> Result<StatusSnapshot> {
     // Count distinct markets from open trades
     let distinct_markets = open_trades
         .iter()
-        .flat_map(|t| {
-            serde_json::from_str::<Vec<String>>(&t.market_ids).unwrap_or_default()
-        })
+        .flat_map(|t| serde_json::from_str::<Vec<String>>(&t.market_ids).unwrap_or_default())
         .collect::<std::collections::HashSet<_>>()
         .len() as i64;
 

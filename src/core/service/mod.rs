@@ -29,7 +29,9 @@ pub use crate::adapters::inference::{
     run_full_inference, InferenceResult, InferenceService, InferenceServiceHandle,
 };
 pub use crate::adapters::position;
-pub use crate::adapters::position::{CloseReason, CloseResult, MarketSettledEvent, PositionManager};
+pub use crate::adapters::position::{
+    CloseReason, CloseResult, MarketSettledEvent, PositionManager,
+};
 pub use crate::adapters::risk::{RiskCheckResult, RiskManager};
 
 // Re-export statistics module for backward compatibility (used as `statistics::create_recorder()`)

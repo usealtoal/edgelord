@@ -10,7 +10,7 @@ use crate::ports::DetectionContext as DetectionContextTrait;
 use crate::runtime::cache::OrderBookCache;
 
 // Re-export types from ports for consistency
-pub use crate::ports::{DetectionResult, MarketContext};
+pub use crate::ports::MarketContext;
 
 /// Full context for detection including market data.
 ///
@@ -105,10 +105,10 @@ impl<'a> DetectionContextTrait for DetectionContext<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::DetectionResult;
 
     #[test]
     fn test_market_context_binary() {

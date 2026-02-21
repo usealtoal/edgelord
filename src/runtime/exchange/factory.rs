@@ -10,11 +10,11 @@ use crate::runtime::{Config, Exchange, PolymarketConfig};
 
 use super::pool::StreamFactory;
 
-use crate::adapters::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
 use super::{
     ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter, MarketScorer,
     MessageDeduplicator, OrderExecutor,
 };
+use crate::adapters::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -45,7 +45,9 @@ impl ExchangeFactory {
                     .polymarket_config()
                     .map(crate::adapters::polymarket::PolymarketClient::from_config)
                     .unwrap_or_else(|| {
-                        crate::adapters::polymarket::PolymarketClient::new(config.network().api_url.clone())
+                        crate::adapters::polymarket::PolymarketClient::new(
+                            config.network().api_url.clone(),
+                        )
                     });
                 Box::new(client)
             }
@@ -55,9 +57,11 @@ impl ExchangeFactory {
     /// Create a market data stream for the configured exchange.
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
-            Exchange::Polymarket => Box::new(crate::adapters::polymarket::PolymarketDataStream::new(
-                config.network().ws_url.clone(),
-            )),
+            Exchange::Polymarket => {
+                Box::new(crate::adapters::polymarket::PolymarketDataStream::new(
+                    config.network().ws_url.clone(),
+                ))
+            }
         }
     }
 
@@ -169,8 +173,9 @@ impl ExchangeFactory {
         let ws_url = config.network().ws_url.clone();
         match config.exchange {
             Exchange::Polymarket => Arc::new(move || {
-                Box::new(crate::adapters::polymarket::PolymarketDataStream::new(ws_url.clone()))
-                    as Box<dyn MarketDataStream>
+                Box::new(crate::adapters::polymarket::PolymarketDataStream::new(
+                    ws_url.clone(),
+                )) as Box<dyn MarketDataStream>
             }),
         }
     }

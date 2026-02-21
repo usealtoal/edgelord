@@ -30,8 +30,8 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::message::{PolymarketSubscribeMessage, PolymarketTaggedMessage, PolymarketWsMessage};
 use crate::domain::TokenId;
-use crate::runtime::exchange::{MarketDataStream, MarketEvent};
 use crate::error::Result;
+use crate::runtime::exchange::{MarketDataStream, MarketEvent};
 
 /// WebSocket handler for Polymarket real-time data feed.
 ///

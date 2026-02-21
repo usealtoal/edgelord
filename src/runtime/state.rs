@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Mutex, RwLock};
 use rust_decimal::Decimal;
 
-use crate::runtime::cache::PositionTracker;
 use crate::domain::Price;
+use crate::runtime::cache::PositionTracker;
 
 /// Risk limits configuration.
 #[derive(Debug, Clone)]

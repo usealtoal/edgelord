@@ -7,12 +7,12 @@ use tracing::{info, warn};
 
 use super::config::{Config, LlmProvider};
 use super::state::AppState;
-use crate::runtime::cache::ClusterCache;
-use crate::runtime::exchange::{ArbitrageExecutor, ExchangeFactory};
-use crate::core::inference::{LlmInferrer, RelationInferrer};
 use crate::adapters::llm::{AnthropicLlm, Llm, OpenAiLlm};
 use crate::adapters::notifiers::{LogNotifier, NotifierRegistry};
 use crate::adapters::strategies::StrategyRegistry;
+use crate::core::inference::{LlmInferrer, RelationInferrer};
+use crate::runtime::cache::ClusterCache;
+use crate::runtime::exchange::{ArbitrageExecutor, ExchangeFactory};
 
 #[cfg(feature = "telegram")]
 use crate::adapters::notifiers::{RuntimeStats, TelegramConfig, TelegramNotifier};

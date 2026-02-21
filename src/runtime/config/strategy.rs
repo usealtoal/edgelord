@@ -2,7 +2,9 @@
 
 use serde::Deserialize;
 
-use crate::adapters::strategies::{CombinatorialConfig, MarketRebalancingConfig, SingleConditionConfig};
+use crate::adapters::strategies::{
+    CombinatorialConfig, MarketRebalancingConfig, SingleConditionConfig,
+};
 
 /// Configuration for all detection strategies.
 #[derive(Debug, Clone, Default, Deserialize)]

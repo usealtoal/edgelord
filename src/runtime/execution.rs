@@ -8,12 +8,12 @@ use tracing::{error, info, warn};
 
 use super::state::AppState;
 use crate::adapters::notifiers::NotifierRegistry;
+use crate::adapters::notifiers::{Event, ExecutionEvent};
 use crate::adapters::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::domain::{
     ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
     PositionStatus, TokenId,
 };
-use crate::adapters::notifiers::{Event, ExecutionEvent};
 use crate::runtime::exchange::ArbitrageExecutor;
 
 struct ExecutionLockGuard {
@@ -263,15 +263,15 @@ mod tests {
     use rust_decimal_macros::dec;
     use tokio::time::{sleep, Duration, Instant};
 
-    use crate::runtime::AppState;
+    use crate::adapters::notifiers::NotifierRegistry;
+    use crate::adapters::statistics;
     use crate::domain::{
         ArbitrageExecutionResult, FailedLeg, FilledLeg, MarketId, Opportunity, OpportunityLeg,
         OrderId, PositionStatus, TokenId,
     };
-    use crate::runtime::exchange::ArbitrageExecutor;
-    use crate::adapters::statistics;
-    use crate::adapters::notifiers::NotifierRegistry;
     use crate::error::{Error, ExecutionError};
+    use crate::runtime::exchange::ArbitrageExecutor;
+    use crate::runtime::AppState;
 
     /// Mock executor that returns PartialFill and fails cancel on one leg.
     struct MockPartialFillExecutor {

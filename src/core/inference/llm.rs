@@ -8,8 +8,8 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::domain::{MarketId, Relation, RelationKind};
 use crate::adapters::llm::Llm;
+use crate::domain::{MarketId, Relation, RelationKind};
 use crate::error::Result;
 use crate::ports::{MarketSummary, RelationInferrer};
 

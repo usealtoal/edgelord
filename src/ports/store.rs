@@ -23,13 +23,19 @@ pub trait Store: Send + Sync {
     fn save_relation(&self, relation: &Relation) -> impl Future<Output = Result<()>> + Send;
 
     /// Get a relation by ID.
-    fn get_relation(&self, id: &RelationId) -> impl Future<Output = Result<Option<Relation>>> + Send;
+    fn get_relation(
+        &self,
+        id: &RelationId,
+    ) -> impl Future<Output = Result<Option<Relation>>> + Send;
 
     /// Delete a relation by ID. Returns true if the relation existed.
     fn delete_relation(&self, id: &RelationId) -> impl Future<Output = Result<bool>> + Send;
 
     /// List all relations, optionally including expired ones.
-    fn list_relations(&self, include_expired: bool) -> impl Future<Output = Result<Vec<Relation>>> + Send;
+    fn list_relations(
+        &self,
+        include_expired: bool,
+    ) -> impl Future<Output = Result<Vec<Relation>>> + Send;
 
     /// Delete all expired relations. Returns count deleted.
     fn prune_expired_relations(&self) -> impl Future<Output = Result<usize>> + Send;

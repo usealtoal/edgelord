@@ -330,8 +330,8 @@ mod tests {
         assert!(!strategy.applies_to(&MarketContext::multi_outcome(3)));
 
         // Should apply to markets with dependencies
-        let ctx_with_deps = MarketContext::binary()
-            .with_dependencies(vec![crate::domain::MarketId::from("other")]);
+        let ctx_with_deps =
+            MarketContext::binary().with_dependencies(vec![crate::domain::MarketId::from("other")]);
         assert!(strategy.applies_to(&ctx_with_deps));
     }
 

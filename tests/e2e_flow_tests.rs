@@ -7,7 +7,9 @@ use edgelord::adapters::notifiers::NotifierRegistry;
 use edgelord::adapters::position::PositionManager;
 use edgelord::adapters::risk::RiskManager;
 use edgelord::adapters::statistics::create_recorder;
-use edgelord::adapters::strategies::{SingleConditionConfig, SingleConditionStrategy, StrategyRegistry};
+use edgelord::adapters::strategies::{
+    SingleConditionConfig, SingleConditionStrategy, StrategyRegistry,
+};
 use edgelord::app::{process_market_event, AppState, EventProcessingContext, RiskLimits};
 use edgelord::domain::TokenId;
 use edgelord::runtime::cache::OrderBookCache;

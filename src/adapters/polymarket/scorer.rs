@@ -5,9 +5,9 @@
 use async_trait::async_trait;
 
 use crate::domain::{MarketId, MarketScore, ScoreFactors, ScoreWeights};
+use crate::error::Result;
 use crate::runtime::exchange::{MarketInfo, MarketScorer};
 use crate::runtime::{OutcomeBonusConfig, PolymarketScoringConfig, ScoringWeightsConfig};
-use crate::error::Result;
 
 /// Scorer for Polymarket markets.
 ///

@@ -123,7 +123,9 @@ pub fn load_daily_rows(
 
 pub fn export_daily_csv(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<String> {
     let pool = connect(db_path)?;
-    Ok(crate::adapters::statistics::export_daily_csv(&pool, from, to))
+    Ok(crate::adapters::statistics::export_daily_csv(
+        &pool, from, to,
+    ))
 }
 
 pub fn prune_old_records(db_path: &Path, retention_days: u32) -> Result<()> {

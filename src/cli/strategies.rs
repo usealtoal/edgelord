@@ -45,7 +45,10 @@ pub fn list() -> Result<()> {
     }
 
     println!();
-    println!("  Run {} for details", output::highlight("edgelord strategies explain <name>"));
+    println!(
+        "  Run {} for details",
+        output::highlight("edgelord strategies explain <name>")
+    );
     println!();
 
     Ok(())

@@ -130,10 +130,7 @@ fn print_strategy_breakdown(rows: &[statistics::StrategyDailyStatsRow]) -> Resul
         "  {:20} {:>8} {:>8} {:>10} {:>8}",
         "Strategy", "Opps", "Trades", "Profit", "Win %"
     );
-    println!(
-        "  {:─<20} {:─>8} {:─>8} {:─>10} {:─>8}",
-        "", "", "", "", ""
-    );
+    println!("  {:─<20} {:─>8} {:─>8} {:─>10} {:─>8}", "", "", "", "", "");
 
     for (name, stats_row) in &by_strategy {
         let total = stats_row.win_count + stats_row.loss_count;
@@ -166,10 +163,7 @@ fn print_daily_breakdown(rows: &[statistics::DailyStatsRow]) -> Result<()> {
         "  {:12} {:>6} {:>6} {:>10} {:>8}",
         "Date", "Opps", "Trades", "Net P/L", "Win %"
     );
-    println!(
-        "  {:─<12} {:─>6} {:─>6} {:─>10} {:─>8}",
-        "", "", "", "", ""
-    );
+    println!("  {:─<12} {:─>6} {:─>6} {:─>10} {:─>8}", "", "", "", "", "");
 
     for row in rows {
         let total = row.win_count + row.loss_count;

@@ -19,7 +19,9 @@ use crate::adapters::stores::db;
 use crate::adapters::stores::db::model::{
     DailyStatsRow, NewOpportunityRow, NewTradeRow, StrategyDailyStatsRow, TradeRow,
 };
-use crate::adapters::stores::db::schema::{daily_stats, opportunities, strategy_daily_stats, trades};
+use crate::adapters::stores::db::schema::{
+    daily_stats, opportunities, strategy_daily_stats, trades,
+};
 
 /// Statistics recorder for persisting events to the database.
 pub struct StatsRecorder {

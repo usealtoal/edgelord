@@ -9,14 +9,14 @@ use tracing::{debug, info, warn};
 use super::execution::spawn_execution;
 use super::state::AppState;
 use crate::adapters::notifiers::NotifierRegistry;
+use crate::adapters::notifiers::{Event, OpportunityEvent, RiskEvent};
 use crate::adapters::position::{CloseReason, PositionManager};
 use crate::adapters::risk::{RiskCheckResult, RiskManager};
 use crate::adapters::statistics::{RecordedOpportunity, StatsRecorder};
+use crate::adapters::strategies::DetectionContext;
 use crate::adapters::strategies::StrategyRegistry;
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::error::RiskError;
-use crate::adapters::notifiers::{Event, OpportunityEvent, RiskEvent};
-use crate::adapters::strategies::DetectionContext;
 use crate::runtime::cache::OrderBookCache;
 use crate::runtime::exchange::{ArbitrageExecutor, MarketEvent};
 
@@ -288,15 +288,15 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use super::*;
-    use crate::runtime::{AppState, RiskLimits};
-    use crate::runtime::cache::OrderBookCache;
+    use crate::adapters::notifiers::NotifierRegistry;
+    use crate::adapters::risk::RiskManager;
+    use crate::adapters::statistics;
+    use crate::adapters::strategies::StrategyRegistry;
     use crate::domain::{
         Market, MarketId, Opportunity, OpportunityLeg, OrderBook, Outcome, PriceLevel, TokenId,
     };
-    use crate::adapters::statistics;
-    use crate::adapters::notifiers::NotifierRegistry;
-    use crate::adapters::risk::RiskManager;
-    use crate::adapters::strategies::StrategyRegistry;
+    use crate::runtime::cache::OrderBookCache;
+    use crate::runtime::{AppState, RiskLimits};
 
     fn make_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> OrderBook {
         OrderBook::with_levels(

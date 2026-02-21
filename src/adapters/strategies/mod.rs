@@ -13,10 +13,10 @@ mod context;
 pub mod rebalancing;
 mod registry;
 
+pub use crate::ports::{DetectionResult, MarketContext};
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 pub use condition::{SingleConditionConfig, SingleConditionStrategy};
 pub use context::DetectionContext;
-pub use crate::ports::{DetectionResult, MarketContext};
 pub use rebalancing::{
     MarketRebalancingConfig, MarketRebalancingStrategy, RebalancingLeg, RebalancingOpportunity,
 };

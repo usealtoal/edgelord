@@ -38,12 +38,7 @@ pub fn section(title: &str) {
 
 /// Print an info line (for streaming output).
 pub fn info(timestamp: &str, label: &str, message: &str) {
-    println!(
-        "  {} {} {}",
-        timestamp.dimmed(),
-        label.cyan(),
-        message
-    );
+    println!("  {} {} {}", timestamp.dimmed(), label.cyan(), message);
 }
 
 /// Print an executed trade line.
@@ -58,12 +53,7 @@ pub fn executed(timestamp: &str, message: &str) {
 
 /// Print a rejected opportunity line.
 pub fn rejected(timestamp: &str, reason: &str) {
-    println!(
-        "  {} {} {}",
-        timestamp.dimmed(),
-        "rejected".red(),
-        reason
-    );
+    println!("  {} {} {}", timestamp.dimmed(), "rejected".red(), reason);
 }
 
 /// Print an opportunity line.
@@ -82,7 +72,7 @@ pub fn spinner(message: &str) -> indicatif::ProgressBar {
     pb.set_style(
         indicatif::ProgressStyle::default_spinner()
             .template("  {spinner:.cyan} {msg}")
-            .unwrap()
+            .unwrap(),
     );
     pb.set_message(message.to_string());
     pb.enable_steady_tick(std::time::Duration::from_millis(80));

@@ -72,7 +72,12 @@ fn check_systemd_status() -> (bool, String, String) {
     // Get uptime if running
     let uptime = if running {
         Command::new("systemctl")
-            .args(["show", "edgelord", "--property=ActiveEnterTimestamp", "--value"])
+            .args([
+                "show",
+                "edgelord",
+                "--property=ActiveEnterTimestamp",
+                "--value",
+            ])
             .output()
             .ok()
             .and_then(|o| {
@@ -164,7 +169,10 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
     if open_positions > 0 {
         output::field(
             "Positions",
-            format!("{} active across {} markets", open_positions, distinct_markets),
+            format!(
+                "{} active across {} markets",
+                open_positions, distinct_markets
+            ),
         );
     } else {
         output::field("Positions", output::muted("none"));
@@ -212,7 +220,10 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
                     } else {
                         output::negative(format!("-${:.2}", profit.abs()))
                     };
-                    output::executed(&timestamp, &format!("{}  \"{}\"", profit_str, market_description));
+                    output::executed(
+                        &timestamp,
+                        &format!("{}  \"{}\"", profit_str, market_description),
+                    );
                 }
                 RecentActivity::Rejected { timestamp, reason } => {
                     output::rejected(&timestamp, &reason);

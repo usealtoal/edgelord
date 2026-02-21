@@ -7,8 +7,8 @@ use crate::adapters::solvers::{
     FrankWolfe, FrankWolfeConfig, HiGHSSolver, IlpProblem, LpProblem, VariableBounds,
 };
 use crate::domain::{Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
-use crate::runtime::cache::OrderBookCache;
 use crate::error::{Error, Result};
+use crate::runtime::cache::OrderBookCache;
 
 use super::{ClusterDetectionConfig, ClusterOpportunity};
 

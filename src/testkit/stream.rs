@@ -19,8 +19,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use crate::domain::TokenId;
-use crate::runtime::exchange::{MarketDataStream, MarketEvent};
 use crate::error::Result;
+use crate::runtime::exchange::{MarketDataStream, MarketEvent};
 
 // ---------------------------------------------------------------------------
 // ScriptedStream

@@ -1,4 +1,7 @@
 //! Miette-based error diagnostics for beautiful CLI errors.
+//!
+//! The struct fields are used by miette's derive macros at runtime.
+#![allow(unused)]
 
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
@@ -21,7 +24,12 @@ pub struct ConfigError {
 }
 
 impl ConfigError {
-    pub fn new(message: impl Into<String>, src: impl Into<String>, offset: usize, len: usize) -> Self {
+    pub fn new(
+        message: impl Into<String>,
+        src: impl Into<String>,
+        offset: usize,
+        len: usize,
+    ) -> Self {
         Self {
             message: message.into(),
             src: src.into(),

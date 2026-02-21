@@ -134,6 +134,7 @@ pub trait DetectionContext: Send + Sync {
 /// - Strategies must be thread-safe (`Send + Sync`)
 /// - The `detect` method should be pure and idempotent
 /// - Use `warm_start` for iterative optimization algorithms
+#[allow(dead_code)] // Extension point for custom strategies
 pub trait Strategy: Send + Sync {
     /// Unique identifier for this strategy.
     ///
