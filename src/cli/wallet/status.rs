@@ -12,28 +12,28 @@ pub async fn execute_status(config_path: &Path) -> Result<()> {
 
     output::section("Wallet Status");
 
-    output::progress("Fetching approval status");
+    let pb = output::spinner("Fetching approval status");
     let status = match WalletService::get_approval_status(&config).await {
         Ok(status) => {
-            output::progress_done(true);
+            output::spinner_success(&pb, "Fetching approval status");
             status
         }
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "Fetching approval status");
             return Err(e);
         }
     };
-    output::key_value("Exchange", status.exchange);
-    output::key_value("Wallet", status.wallet_address);
-    output::key_value("Token", status.token);
-    output::key_value("Allowance", format!("${}", status.allowance));
-    output::key_value("Spender", status.spender);
+    output::field("Exchange", status.exchange);
+    output::field("Wallet", status.wallet_address);
+    output::field("Token", status.token);
+    output::field("Allowance", format!("${}", status.allowance));
+    output::field("Spender", status.spender);
 
     if status.needs_approval {
-        output::warn("Approval required");
-        output::note("Run `edgelord wallet approve` to approve token spending.");
+        output::warning("Approval required");
+        println!("  Run `edgelord wallet approve` to approve token spending.");
     } else {
-        output::ok("Token approval is in place");
+        output::success("Token approval is in place");
     }
 
     Ok(())

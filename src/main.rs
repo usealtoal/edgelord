@@ -79,7 +79,7 @@ async fn main() {
     };
 
     if let Err(e) = result {
-        output::fatal(&e.to_string());
+        output::error(&e.to_string());
         std::process::exit(1);
     }
 }

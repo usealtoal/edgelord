@@ -8,25 +8,25 @@ use crate::error::Result;
 pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let path = config_path.as_ref();
     output::section("Configuration Check");
-    output::key_value("Config", path.display());
+    output::field("Config", path.display());
 
     // Try to load and validate
     match Config::load(path) {
         Ok(config) => {
-            output::ok("Configuration file is valid");
+            output::success("Configuration file is valid");
 
             output::section("Summary");
-            output::key_value("Exchange", format!("{:?}", config.exchange));
-            output::key_value("Environment", config.network().environment);
-            output::key_value("Chain ID", config.network().chain_id);
-            output::key_value("Strategies", format!("{:?}", config.strategies.enabled));
-            output::key_value("Dry run", config.dry_run);
+            output::field("Exchange", format!("{:?}", config.exchange));
+            output::field("Environment", config.network().environment);
+            output::field("Chain ID", config.network().chain_id);
+            output::field("Strategies", format!("{:?}", config.strategies.enabled));
+            output::field("Dry run", config.dry_run);
 
             // Check wallet
             if config.wallet.private_key.is_some() {
-                output::ok("Wallet credentials detected");
+                output::success("Wallet credentials detected");
             } else {
-                output::warn(
+                output::warning(
                     "Wallet credentials not configured (set WALLET_PRIVATE_KEY for trading)",
                 );
             }
@@ -37,21 +37,21 @@ pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {
 
             if config.telegram.enabled {
                 if telegram_token.is_some() && telegram_chat.is_some() {
-                    output::ok("Telegram integration configured");
+                    output::success("Telegram integration configured");
                 } else {
-                    output::warn("Telegram enabled but environment variables are missing");
+                    output::warning("Telegram enabled but environment variables are missing");
                     if telegram_token.is_none() {
-                        output::key_value("Missing", "TELEGRAM_BOT_TOKEN");
+                        output::field("Missing", "TELEGRAM_BOT_TOKEN");
                     }
                     if telegram_chat.is_none() {
-                        output::key_value("Missing", "TELEGRAM_CHAT_ID");
+                        output::field("Missing", "TELEGRAM_CHAT_ID");
                     }
                 }
             } else {
-                output::key_value("Telegram", "disabled");
+                output::field("Telegram", "disabled");
             }
 
-            output::ok("Configuration check complete");
+            output::success("Configuration check complete");
         }
         Err(e) => {
             return Err(e);

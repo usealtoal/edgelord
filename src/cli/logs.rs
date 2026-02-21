@@ -26,15 +26,15 @@ pub fn execute(args: &LogsArgs) {
             if !exit.success() {
                 if let Some(code) = exit.code() {
                     if code == 1 {
-                        output::warn("No logs found. Is the edgelord service installed?");
-                        output::warn("Run `sudo edgelord service install` to install it.");
+                        output::warning("No logs found. Is the edgelord service installed?");
+                        output::warning("Run `sudo edgelord service install` to install it.");
                     }
                 }
             }
         }
         Err(e) => {
             output::error(&format!("Failed to execute journalctl: {e}"));
-            output::warn("This command requires a host with systemd.");
+            output::warning("This command requires a host with systemd.");
         }
     }
 }

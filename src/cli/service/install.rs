@@ -125,7 +125,7 @@ pub fn execute_install(args: &InstallArgs) -> Result<()> {
 
     // Write service file
     fs::write(SERVICE_PATH, &service_content)?;
-    output::ok(&format!("Created {SERVICE_PATH}"));
+    output::success(&format!("Created {SERVICE_PATH}"));
 
     // Reload systemd
     if !run_systemctl(&["daemon-reload"]) {
@@ -133,31 +133,31 @@ pub fn execute_install(args: &InstallArgs) -> Result<()> {
             "failed to reload systemd daemon".to_string(),
         ));
     }
-    output::ok("Reloaded systemd daemon");
+    output::success("Reloaded systemd daemon");
 
     // Enable service
     if !run_systemctl(&["enable", "edgelord"]) {
         return Err(Error::Connection("failed to enable service".to_string()));
     }
-    output::ok("Enabled edgelord service (starts on boot)");
+    output::success("Enabled edgelord service (starts on boot)");
 
     // Create status directory with correct ownership
     let status_dir = "/var/run/edgelord";
     if !std::path::Path::new(status_dir).exists() {
         if let Err(e) = fs::create_dir_all(status_dir) {
-            output::warn(&format!("Failed to create {status_dir}: {e}"));
+            output::warning(&format!("Failed to create {status_dir}: {e}"));
         } else {
             // chown to service user
             let user = &args.user;
             let _ = std::process::Command::new("chown")
                 .args(["-R", user, status_dir])
                 .status();
-            output::ok(&format!("Created {status_dir}"));
+            output::success(&format!("Created {status_dir}"));
         }
     }
 
     output::section("Service Ready");
-    output::key_value("Start", "sudo systemctl start edgelord");
-    output::key_value("Logs", "edgelord logs -f");
+    output::field("Start", "sudo systemctl start edgelord");
+    output::field("Logs", "edgelord logs -f");
     Ok(())
 }

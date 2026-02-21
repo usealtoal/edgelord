@@ -10,6 +10,6 @@ pub fn execute_address(config_path: &Path) -> Result<()> {
     let address = WalletService::wallet_address(&config)?;
 
     output::section("Wallet Address");
-    output::key_value("Address", address);
+    output::field("Address", address);
     Ok(())
 }

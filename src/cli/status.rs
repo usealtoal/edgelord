@@ -16,9 +16,9 @@ pub fn execute(db_path: &Path) {
 
     output::section(&format!("edgelord v{version}"));
     if running {
-        output::key_value("Status", format!("running (pid {pid})"));
+        output::field("Status", format!("running (pid {pid})"));
     } else {
-        output::key_value("Status", "stopped");
+        output::field("Status", "stopped");
     }
 
     // Try to connect to database for stats
@@ -26,11 +26,11 @@ pub fn execute(db_path: &Path) {
         if let Ok(snapshot) = status::load_status(db_path) {
             display_db_stats(snapshot);
         } else {
-            output::warn(&format!("Database error reading stats ({db_path:?})"));
+            output::warning(&format!("Database error reading stats ({db_path:?})"));
         }
     } else {
-        output::warn(&format!("Database not found ({db_path:?})"));
-        output::note("Run `edgelord run` to start trading and create the database.");
+        output::warning(&format!("Database not found ({db_path:?})"));
+        println!("  Run `edgelord run` to start trading and create the database.");
     }
 }
 
@@ -72,18 +72,18 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
     // Today
     if let Some(row) = today_row {
         output::section(&format!("Today ({today})"));
-        output::key_value("Opportunities", row.opportunities_detected);
-        output::key_value("Trades opened", row.trades_opened);
-        output::key_value("Trades closed", row.trades_closed);
-        output::key_value("Profit", format!("${:.2}", row.profit_realized));
-        output::key_value("Loss", format!("${:.2}", row.loss_realized));
-        output::key_value(
+        output::field("Opportunities", row.opportunities_detected);
+        output::field("Trades opened", row.trades_opened);
+        output::field("Trades closed", row.trades_closed);
+        output::field("Profit", format!("${:.2}", row.profit_realized));
+        output::field("Loss", format!("${:.2}", row.loss_realized));
+        output::field(
             "Net",
             format!("${:.2}", row.profit_realized - row.loss_realized),
         );
     } else {
         output::section(&format!("Today ({today})"));
-        output::note("No data");
+        println!("  No data");
     }
 
     // Last 7 days
@@ -97,13 +97,13 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
     let week_losses: i32 = week_rows.iter().map(|r| r.loss_count).sum();
 
     output::section(&format!("Last 7 Days ({week_ago} to {today})"));
-    output::key_value("Opportunities", week_opps);
-    output::key_value("Trades closed", week_trades);
-    output::key_value("Net profit", format!("${:.2}", week_profit));
+    output::field("Opportunities", week_opps);
+    output::field("Trades closed", week_trades);
+    output::field("Net profit", format!("${:.2}", week_profit));
     if week_wins + week_losses > 0 {
         let win_rate = week_wins as f32 / (week_wins + week_losses) as f32 * 100.0;
-        output::key_value("Win rate", format!("{win_rate:.1}%"));
+        output::field("Win rate", format!("{win_rate:.1}%"));
     }
 
-    output::key_value("Open positions", open_positions);
+    output::field("Open positions", open_positions);
 }

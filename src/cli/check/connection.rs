@@ -10,46 +10,46 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let network = config.network();
 
     output::section("Connection Check");
-    output::key_value("Exchange", format!("{:?}", config.exchange));
-    output::key_value("WebSocket", &network.ws_url);
-    output::key_value("API", &network.api_url);
-    output::key_value("Environment", network.environment);
+    output::field("Exchange", format!("{:?}", config.exchange));
+    output::field("WebSocket", &network.ws_url);
+    output::field("API", &network.api_url);
+    output::field("Environment", network.environment);
 
     // Test REST API connectivity
-    output::progress("REST API connectivity");
+    let pb = output::spinner("REST API connectivity");
     let client = reqwest::Client::new();
     let api_url = format!("{}/markets", network.api_url);
 
     match client.get(&api_url).send().await {
         Ok(response) if response.status().is_success() => {
-            output::progress_done(true);
+            output::spinner_success(&pb, "REST API connectivity");
         }
         Ok(response) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "REST API connectivity");
             return Err(Error::Connection(format!(
                 "REST API returned non-success status: {}",
                 response.status()
             )));
         }
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "REST API connectivity");
             return Err(Error::Connection(e.to_string()));
         }
     }
 
     // Test WebSocket connectivity
-    output::progress("WebSocket connectivity");
+    let pb = output::spinner("WebSocket connectivity");
     match tokio_tungstenite::connect_async(&network.ws_url).await {
         Ok((_, _)) => {
-            output::progress_done(true);
+            output::spinner_success(&pb, "WebSocket connectivity");
         }
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "WebSocket connectivity");
             return Err(Error::Connection(e.to_string()));
         }
     }
 
-    output::ok("Connection checks passed");
+    output::success("Connection checks passed");
 
     Ok(())
 }

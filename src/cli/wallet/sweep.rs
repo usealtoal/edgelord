@@ -23,14 +23,14 @@ pub async fn execute_sweep(
     let from_address = WalletService::wallet_address(&config)?;
 
     output::section("Wallet Sweep");
-    output::key_value("From", from_address);
-    output::key_value("To", to);
-    output::key_value("Asset", asset.to_uppercase());
-    output::key_value("Network", network.to_lowercase());
-    output::key_value("Balance", format!("${balance}"));
+    output::field("From", from_address);
+    output::field("To", to);
+    output::field("Asset", asset.to_uppercase());
+    output::field("Network", network.to_lowercase());
+    output::field("Balance", format!("${balance}"));
 
     if balance <= Decimal::ZERO {
-        output::warn("No balance available to sweep");
+        output::warning("No balance available to sweep");
         return Ok(());
     }
 
@@ -42,31 +42,31 @@ pub async fn execute_sweep(
         io::stdin().read_line(&mut input).ok();
 
         if !input.trim().eq_ignore_ascii_case("y") {
-            output::warn("Sweep cancelled by user");
+            output::warning("Sweep cancelled by user");
             return Ok(());
         }
     }
 
-    output::progress("Submitting transaction");
+    let pb = output::spinner("Submitting transaction");
 
     let outcome = match WalletService::sweep_usdc(&config, to).await {
         Ok(outcome) => outcome,
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "Submitting transaction");
             return Err(e);
         }
     };
 
     match outcome {
         SweepOutcome::NoBalance { .. } => {
-            output::progress_done(true);
-            output::warn("No balance available to sweep");
+            output::spinner_success(&pb, "Submitting transaction");
+            output::warning("No balance available to sweep");
         }
         SweepOutcome::Transferred { tx_hash, amount } => {
-            output::progress_done(true);
-            output::ok("Sweep transaction submitted");
-            output::key_value("Amount", format!("${amount}"));
-            output::key_value("Transaction", tx_hash);
+            output::spinner_success(&pb, "Submitting transaction");
+            output::success("Sweep transaction submitted");
+            output::field("Amount", format!("${amount}"));
+            output::field("Transaction", tx_hash);
         }
     }
 

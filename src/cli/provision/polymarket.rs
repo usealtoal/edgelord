@@ -60,10 +60,10 @@ pub(super) fn execute_polymarket(args: ProvisionPolymarketArgs) -> Result<()> {
     update_wallet_keystore_path(&config_path, &keystore_path)?;
 
     output::section("Polymarket Provisioning");
-    output::ok("Wallet provisioned");
-    output::key_value("Address", signer.address());
-    output::key_value("Keystore", keystore_path.display());
-    output::key_value("Funding", "USDC on Polygon");
+    output::success("Wallet provisioned");
+    output::field("Address", signer.address());
+    output::field("Keystore", keystore_path.display());
+    output::field("Funding", "USDC on Polygon");
 
     Ok(())
 }

@@ -23,26 +23,26 @@ pub async fn execute_approve(
 
     output::section("Wallet Approval");
 
-    output::progress("Fetching current allowance");
+    let pb = output::spinner("Fetching current allowance");
     let status = match WalletService::get_approval_status(&config).await {
         Ok(status) => {
-            output::progress_done(true);
+            output::spinner_success(&pb, "Fetching current allowance");
             status
         }
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "Fetching current allowance");
             return Err(e);
         }
     };
-    output::key_value("Exchange", status.exchange);
-    output::key_value("Wallet", status.wallet_address);
-    output::key_value("Token", status.token);
-    output::key_value("Allowance", format!("${}", status.allowance));
-    output::key_value("Spender", status.spender);
-    output::key_value("Requested", format!("${amount}"));
+    output::field("Exchange", status.exchange);
+    output::field("Wallet", status.wallet_address);
+    output::field("Token", status.token);
+    output::field("Allowance", format!("${}", status.allowance));
+    output::field("Spender", status.spender);
+    output::field("Requested", format!("${amount}"));
 
     if !status.needs_approval && status.allowance >= amount {
-        output::ok(&format!(
+        output::success(&format!(
             "Approval already satisfied (requested ${amount}, current ${})",
             status.allowance
         ));
@@ -57,35 +57,35 @@ pub async fn execute_approve(
         io::stdin().read_line(&mut input).ok();
 
         if !input.trim().eq_ignore_ascii_case("y") {
-            output::warn("Approval cancelled by user");
+            output::warning("Approval cancelled by user");
             return Ok(());
         }
     }
 
-    output::progress("Submitting transaction");
+    let pb = output::spinner("Submitting transaction");
     let outcome = match WalletService::approve(&config, amount).await {
         Ok(outcome) => outcome,
         Err(e) => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "Submitting transaction");
             return Err(e);
         }
     };
 
     match outcome {
         ApprovalOutcome::Approved { tx_hash, amount } => {
-            output::progress_done(true);
-            output::ok("Approval successful");
-            output::key_value("Amount", format!("${amount}"));
-            output::key_value("Transaction", tx_hash);
+            output::spinner_success(&pb, "Submitting transaction");
+            output::success("Approval successful");
+            output::field("Amount", format!("${amount}"));
+            output::field("Transaction", tx_hash);
         }
         ApprovalOutcome::AlreadyApproved { current_allowance } => {
-            output::progress_done(true);
-            output::ok(&format!(
+            output::spinner_success(&pb, "Submitting transaction");
+            output::success(&format!(
                 "Allowance already sufficient (current ${current_allowance})"
             ));
         }
         ApprovalOutcome::Failed { reason } => {
-            output::progress_done(false);
+            output::spinner_fail(&pb, "Submitting transaction");
             output::error(&format!("Approval failed: {reason}"));
             return Err(ExecutionError::OrderRejected(reason).into());
         }
