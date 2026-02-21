@@ -4,13 +4,13 @@ use chrono::{Duration, NaiveDate, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::core::db::schema::{daily_stats, strategy_daily_stats, trades};
-use crate::core::service::statistics::{f32_to_decimal, StatsRecorder};
+use crate::adapters::statistics::f32_to_decimal;
+use crate::adapters::stores::db::schema::{daily_stats, strategy_daily_stats, trades};
 use crate::error::{ConfigError, Error, Result};
 
-pub type DailyStatsRow = crate::core::db::model::DailyStatsRow;
-pub type StrategyDailyStatsRow = crate::core::db::model::StrategyDailyStatsRow;
-pub type StatsSummary = crate::core::service::statistics::StatsSummary;
+// Re-export types for public use
+pub use crate::adapters::statistics::{StatsRecorder, StatsSummary};
+pub use crate::adapters::stores::db::model::{DailyStatsRow, StrategyDailyStatsRow};
 
 fn connect(db_path: &Path) -> Result<Pool<ConnectionManager<SqliteConnection>>> {
     let db_url = format!("sqlite://{}", db_path.display());
@@ -123,9 +123,7 @@ pub fn load_daily_rows(
 
 pub fn export_daily_csv(db_path: &Path, from: NaiveDate, to: NaiveDate) -> Result<String> {
     let pool = connect(db_path)?;
-    Ok(crate::core::service::statistics::export_daily_csv(
-        &pool, from, to,
-    ))
+    Ok(crate::adapters::statistics::export_daily_csv(&pool, from, to))
 }
 
 pub fn prune_old_records(db_path: &Path, retention_days: u32) -> Result<()> {

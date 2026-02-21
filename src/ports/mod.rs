@@ -48,6 +48,10 @@ pub use exchange::{
 // Inference port
 pub use inference::{MarketSummary, RelationInferrer};
 
+// Test utilities
+#[cfg(test)]
+pub use inference::tests;
+
 // Notifier port
 pub use notifier::{
     Event, ExecutionEvent, Notifier, OpportunityEvent, RelationDetail, RelationsEvent, RiskEvent,

@@ -78,3 +78,30 @@ pub trait RelationInferrer: Send + Sync {
         30
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    /// Mock inferrer for testing.
+    pub struct MockInferrer {
+        relations: Vec<Relation>,
+    }
+
+    impl MockInferrer {
+        pub fn new(relations: Vec<Relation>) -> Self {
+            Self { relations }
+        }
+    }
+
+    #[async_trait]
+    impl RelationInferrer for MockInferrer {
+        fn name(&self) -> &'static str {
+            "mock"
+        }
+
+        async fn infer(&self, _markets: &[MarketSummary]) -> Result<Vec<Relation>> {
+            Ok(self.relations.clone())
+        }
+    }
+}

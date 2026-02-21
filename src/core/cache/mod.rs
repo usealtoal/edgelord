@@ -1,9 +1,6 @@
 //! Stateful caches and repositories for domain objects.
+//!
+//! DEPRECATED: This module is being phased out. Use `crate::runtime::cache` instead.
 
-mod cluster;
-mod order_book;
-mod position;
-
-pub use cluster::ClusterCache;
-pub use order_book::{OrderBookCache, OrderBookUpdate};
-pub use position::PositionTracker;
+// Re-export from new location for backward compatibility
+pub use crate::runtime::cache::{ClusterCache, OrderBookCache, OrderBookUpdate, PositionTracker};

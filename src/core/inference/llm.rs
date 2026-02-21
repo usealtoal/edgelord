@@ -8,10 +8,10 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use super::{Inferrer, MarketSummary};
 use crate::core::domain::{MarketId, Relation, RelationKind};
 use crate::core::llm::Llm;
 use crate::error::Result;
+use crate::ports::{MarketSummary, RelationInferrer};
 
 /// LLM-powered relation inferrer.
 pub struct LlmInferrer {
@@ -127,7 +127,7 @@ Rules:
 }
 
 #[async_trait]
-impl Inferrer for LlmInferrer {
+impl RelationInferrer for LlmInferrer {
     fn name(&self) -> &'static str {
         "llm"
     }

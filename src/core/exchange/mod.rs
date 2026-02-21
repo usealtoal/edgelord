@@ -1,48 +1,15 @@
 //! Exchange abstraction layer.
 //!
-//! ## Adding a New Exchange
-//!
-//! 1. Create a module under `exchange/<name>/`
-//! 2. Implement [`ExchangeConfig`] trait with:
-//!    - `name()` - Exchange identifier
-//!    - `default_payout()` - Payout amount per share
-//!    - `binary_outcome_names()` - Names for Yes/No outcomes
-//! 3. The default `parse_markets()` implementation handles most cases
-//! 4. Add to [`ExchangeFactory`] for runtime selection
-//!
-//! ## Example
-//!
-//! ```ignore
-//! struct MyExchangeConfig;
-//!
-//! impl ExchangeConfig for MyExchangeConfig {
-//!     fn name(&self) -> &'static str { "myexchange" }
-//!     fn default_payout(&self) -> Decimal { dec!(1.00) }
-//!     fn binary_outcome_names(&self) -> (&'static str, &'static str) { ("Yes", "No") }
-//! }
-//! ```
+//! DEPRECATED: This module is being phased out. Use `crate::runtime::exchange` instead.
 
-mod approval;
-mod dedup;
-mod exchange_config;
-mod factory;
-mod filter;
+// Keep polymarket submodule (it's still in adapters)
 pub mod polymarket;
-mod pool;
-mod reconnecting;
-mod scorer;
-mod types;
 
-pub use crate::core::domain::PoolStats;
-pub use approval::{ApprovalResult, ApprovalStatus, TokenApproval};
-pub use dedup::{DedupConfig, DedupStrategy, MessageDeduplicator};
-pub use exchange_config::ExchangeConfig;
-pub use factory::ExchangeFactory;
-pub use filter::{MarketFilter, MarketFilterConfig};
-pub use pool::{ConnectionPool, StreamFactory};
-pub use reconnecting::ReconnectingDataStream;
-pub use scorer::MarketScorer;
-pub use types::{
-    ArbitrageExecutor, ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher, MarketInfo,
-    OrderExecutor, OrderRequest, OrderSide, OutcomeInfo,
+// Re-export from new location for backward compatibility
+pub use crate::domain::PoolStats;
+pub use crate::runtime::exchange::{
+    ApprovalResult, ApprovalStatus, ArbitrageExecutor, ConnectionPool, DedupConfig, DedupStrategy,
+    ExchangeConfig, ExchangeFactory, ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher,
+    MarketFilter, MarketFilterConfig, MarketInfo, MarketScorer, MessageDeduplicator, OrderExecutor,
+    OrderRequest, OrderSide, OutcomeInfo, ReconnectingDataStream, StreamFactory, TokenApproval,
 };

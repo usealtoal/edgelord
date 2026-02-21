@@ -7,13 +7,14 @@ use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
 use super::state::AppState;
-use crate::core::domain::{
+use crate::adapters::notifiers::NotifierRegistry;
+use crate::adapters::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
+use crate::domain::{
     ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
     PositionStatus, TokenId,
 };
-use crate::core::exchange::ArbitrageExecutor;
-use crate::core::service::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
-use crate::core::service::{Event, ExecutionEvent, NotifierRegistry};
+use crate::adapters::notifiers::{Event, ExecutionEvent};
+use crate::runtime::exchange::ArbitrageExecutor;
 
 struct ExecutionLockGuard {
     state: Arc<AppState>,

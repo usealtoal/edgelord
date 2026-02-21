@@ -9,7 +9,7 @@ use super::config::{Config, LlmProvider};
 use super::state::AppState;
 use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
-use crate::core::inference::{Inferrer, LlmInferrer};
+use crate::core::inference::{LlmInferrer, RelationInferrer};
 use crate::core::llm::{AnthropicLlm, Llm, OpenAiLlm};
 use crate::core::service::{LogNotifier, NotifierRegistry};
 use crate::core::strategy::StrategyRegistry;
@@ -174,7 +174,7 @@ pub(crate) fn build_cluster_cache(config: &Config) -> Arc<ClusterCache> {
 }
 
 /// Build inference service components.
-pub(crate) fn build_inferrer(config: &Config, llm: Arc<dyn Llm>) -> Arc<dyn Inferrer> {
+pub(crate) fn build_inferrer(config: &Config, llm: Arc<dyn Llm>) -> Arc<dyn RelationInferrer> {
     let ttl = Duration::seconds(config.inference.ttl_seconds as i64);
     Arc::new(LlmInferrer::new(llm, ttl))
 }

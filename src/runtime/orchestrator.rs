@@ -10,23 +10,26 @@ use tracing::{debug, info, warn};
 
 use super::config::Config;
 use super::state::AppState;
-use crate::core::cache::OrderBookCache;
-use crate::core::db;
-use crate::core::domain::{MarketRegistry, TokenId};
-use crate::core::exchange::{
+use crate::adapters::cluster::ClusterDetectionService;
+use crate::adapters::inference::{run_full_inference, InferenceService};
+use crate::adapters::position::PositionManager;
+use crate::adapters::risk::RiskManager;
+use crate::adapters::statistics;
+use crate::adapters::statistics::StatsRecorder;
+use crate::adapters::stores::db;
+use crate::adapters::strategies::StrategyRegistry;
+use crate::domain::{MarketRegistry, TokenId};
+use crate::core::inference::{MarketSummary, RelationInferrer};
+use crate::error::Result;
+use crate::runtime::cache::OrderBookCache;
+use crate::runtime::exchange::{
     ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
 };
-use crate::core::inference::{Inferrer, MarketSummary};
-use crate::core::service::cluster::ClusterDetectionService;
-use crate::core::service::inference::{run_full_inference, InferenceService};
-use crate::core::service::position::PositionManager;
-use crate::core::service::statistics;
-use crate::core::service::{
-    Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent, RiskManager,
-    StatsRecorder,
+
+// Use adapter Event type (which NotifierRegistry expects)
+use crate::adapters::notifiers::{
+    Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent,
 };
-use crate::core::strategy::StrategyRegistry;
-use crate::error::Result;
 
 use super::orchestrator_builder::{
     build_cluster_cache, build_inferrer, build_llm_client, build_notifier_registry,
@@ -204,7 +207,7 @@ impl Orchestrator {
         // Initialize inference infrastructure
         let cluster_cache = build_cluster_cache(&config);
         let llm_client = build_llm_client(&config);
-        let inferrer: Option<Arc<dyn Inferrer>> =
+        let inferrer: Option<Arc<dyn RelationInferrer>> =
             llm_client.map(|llm| build_inferrer(&config, llm));
 
         if inferrer.is_some() {

@@ -8,16 +8,17 @@ use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
 use super::state::AppState;
-use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketRegistry, Opportunity};
-use crate::core::exchange::{ArbitrageExecutor, MarketEvent};
-use crate::core::service::position::{CloseReason, PositionManager};
-use crate::core::service::statistics::{RecordedOpportunity, StatsRecorder};
-use crate::core::service::{
-    Event, NotifierRegistry, OpportunityEvent, RiskCheckResult, RiskEvent, RiskManager,
-};
-use crate::core::strategy::{DetectionContext, StrategyRegistry};
+use crate::adapters::notifiers::NotifierRegistry;
+use crate::adapters::position::{CloseReason, PositionManager};
+use crate::adapters::risk::{RiskCheckResult, RiskManager};
+use crate::adapters::statistics::{RecordedOpportunity, StatsRecorder};
+use crate::adapters::strategies::StrategyRegistry;
+use crate::domain::{MarketRegistry, Opportunity};
 use crate::error::RiskError;
+use crate::adapters::notifiers::{Event, OpportunityEvent, RiskEvent};
+use crate::adapters::strategies::DetectionContext;
+use crate::runtime::cache::OrderBookCache;
+use crate::runtime::exchange::{ArbitrageExecutor, MarketEvent};
 
 /// Handle incoming market events from the data stream.
 #[allow(clippy::too_many_arguments)]

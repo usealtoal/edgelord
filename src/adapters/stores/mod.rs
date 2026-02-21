@@ -1,5 +1,6 @@
 //! Persistence layer with pluggable storage backends.
 
+pub mod db;
 mod memory;
 mod sqlite;
 
