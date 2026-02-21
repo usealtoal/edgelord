@@ -18,7 +18,10 @@ pub enum Event {
     /// Risk check rejected a trade.
     RiskRejected(RiskEvent),
     /// Circuit breaker activated.
-    CircuitBreakerActivated { reason: String },
+    CircuitBreakerActivated {
+        /// The reason for activation.
+        reason: String,
+    },
     /// Circuit breaker reset.
     CircuitBreakerReset,
     /// Daily summary.
@@ -30,10 +33,15 @@ pub enum Event {
 /// Opportunity detection event.
 #[derive(Debug, Clone)]
 pub struct OpportunityEvent {
+    /// The market ID where the opportunity was found.
     pub market_id: String,
+    /// The market question.
     pub question: String,
+    /// The arbitrage edge (payout - cost).
     pub edge: Decimal,
+    /// The trade volume.
     pub volume: Decimal,
+    /// Expected profit from the opportunity.
     pub expected_profit: Decimal,
 }
 
@@ -52,12 +60,16 @@ impl From<&Opportunity> for OpportunityEvent {
 /// Execution result event.
 #[derive(Debug, Clone)]
 pub struct ExecutionEvent {
+    /// The market ID for the executed trade.
     pub market_id: String,
+    /// Whether the execution was successful.
     pub success: bool,
+    /// Additional execution details.
     pub details: String,
 }
 
 impl ExecutionEvent {
+    /// Create an execution event from an arbitrage execution result.
     #[must_use]
     pub fn from_result(market_id: &str, result: &ArbitrageExecutionResult) -> Self {
         match result {
@@ -93,11 +105,14 @@ impl ExecutionEvent {
 /// Risk rejection event.
 #[derive(Debug, Clone)]
 pub struct RiskEvent {
+    /// The market ID for the rejected trade.
     pub market_id: String,
+    /// The rejection reason.
     pub reason: String,
 }
 
 impl RiskEvent {
+    /// Create a new risk event from a market ID and risk error.
     #[must_use]
     pub fn new(market_id: &str, error: &RiskError) -> Self {
         Self {
@@ -110,11 +125,17 @@ impl RiskEvent {
 /// Daily summary event.
 #[derive(Debug, Clone)]
 pub struct SummaryEvent {
+    /// The date for this summary.
     pub date: chrono::NaiveDate,
+    /// Total opportunities detected.
     pub opportunities_detected: u64,
+    /// Total trades executed.
     pub trades_executed: u64,
+    /// Number of successful trades.
     pub trades_successful: u64,
+    /// Total profit for the day.
     pub total_profit: Decimal,
+    /// Current exposure amount.
     pub current_exposure: Decimal,
 }
 

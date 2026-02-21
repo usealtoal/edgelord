@@ -141,11 +141,14 @@ impl Constraint {
     }
 }
 
-/// Constraint sense.
+/// Constraint sense (comparison operator).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConstraintSense {
+    /// Greater than or equal (>=).
     GreaterEqual,
+    /// Less than or equal (<=).
     LessEqual,
+    /// Equal (=).
     Equal,
 }
 

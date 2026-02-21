@@ -16,19 +16,29 @@ use crate::error::Error;
 pub enum ExecutionResult {
     /// Order was fully filled.
     Success {
+        /// The order ID returned by the exchange.
         order_id: OrderId,
+        /// Total amount filled.
         filled_amount: Decimal,
+        /// Average execution price.
         average_price: Decimal,
     },
     /// Order was partially filled.
     PartialFill {
+        /// The order ID returned by the exchange.
         order_id: OrderId,
+        /// Amount that was filled.
         filled_amount: Decimal,
+        /// Amount still unfilled.
         remaining_amount: Decimal,
+        /// Average execution price for filled portion.
         average_price: Decimal,
     },
     /// Order failed to execute.
-    Failed { reason: String },
+    Failed {
+        /// The failure reason.
+        reason: String,
+    },
 }
 
 impl ExecutionResult {
@@ -159,19 +169,35 @@ pub trait MarketFetcher: Send + Sync {
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
     /// Full order book snapshot for a token.
-    OrderBookSnapshot { token_id: TokenId, book: OrderBook },
+    OrderBookSnapshot {
+        /// The token this order book belongs to.
+        token_id: TokenId,
+        /// The full order book state.
+        book: OrderBook,
+    },
     /// Incremental order book update (deltas).
-    OrderBookDelta { token_id: TokenId, book: OrderBook },
+    OrderBookDelta {
+        /// The token this update applies to.
+        token_id: TokenId,
+        /// The order book delta.
+        book: OrderBook,
+    },
     /// Market has settled (prediction resolved).
     MarketSettled {
+        /// The settled market ID.
         market_id: crate::domain::MarketId,
+        /// The winning outcome name.
         winning_outcome: String,
+        /// Payout amount per share.
         payout_per_share: Decimal,
     },
     /// Connection established.
     Connected,
     /// Connection lost (may reconnect).
-    Disconnected { reason: String },
+    Disconnected {
+        /// The disconnection reason.
+        reason: String,
+    },
 }
 
 impl MarketEvent {

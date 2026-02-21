@@ -42,11 +42,16 @@ pub enum PositionStatus {
     Open,
     /// Some legs filled, exposure exists.
     PartialFill {
+        /// Token IDs of filled legs.
         filled: Vec<TokenId>,
+        /// Token IDs of unfilled legs.
         missing: Vec<TokenId>,
     },
     /// Position closed (market settled or sold).
-    Closed { pnl: Price },
+    Closed {
+        /// Realized profit/loss.
+        pnl: Price,
+    },
 }
 
 impl PositionStatus {

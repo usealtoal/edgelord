@@ -71,22 +71,33 @@ pub enum RelationKind {
     /// If market A resolves YES, market B must resolve YES.
     /// Constraint: P(A) ≤ P(B), encoded as μ_A - μ_B ≤ 0
     Implies {
+        /// Market that implies the other.
         if_yes: MarketId,
+        /// Market that must be true if `if_yes` is true.
         then_yes: MarketId,
     },
 
     /// At most one of these markets can resolve YES.
     /// Constraint: Σ μ_i ≤ 1
-    MutuallyExclusive { markets: Vec<MarketId> },
+    MutuallyExclusive {
+        /// Markets in the mutually exclusive set.
+        markets: Vec<MarketId>,
+    },
 
     /// Exactly one of these markets must resolve YES.
     /// Constraint: Σ μ_i = 1
-    ExactlyOne { markets: Vec<MarketId> },
+    ExactlyOne {
+        /// Markets where exactly one must be true.
+        markets: Vec<MarketId>,
+    },
 
     /// Custom linear constraint: Σ (coeff_i × μ_i) {≤, =, ≥} rhs
     Linear {
+        /// Coefficient terms (market, coefficient) pairs.
         terms: Vec<(MarketId, Decimal)>,
+        /// Constraint sense (<=, =, >=).
         sense: ConstraintSense,
+        /// Right-hand side value.
         rhs: Decimal,
     },
 }

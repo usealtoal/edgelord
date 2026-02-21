@@ -82,14 +82,22 @@ impl FailedLeg {
 #[derive(Debug, Clone)]
 pub enum ArbitrageExecutionResult {
     /// All legs executed successfully.
-    Success { filled: Vec<FilledLeg> },
+    Success {
+        /// The successfully filled legs.
+        filled: Vec<FilledLeg>,
+    },
     /// Some legs executed, some failed.
     PartialFill {
+        /// The legs that were successfully filled.
         filled: Vec<FilledLeg>,
+        /// The legs that failed to execute.
         failed: Vec<FailedLeg>,
     },
     /// All legs failed.
-    Failed { reason: String },
+    Failed {
+        /// The failure reason.
+        reason: String,
+    },
 }
 
 impl ArbitrageExecutionResult {
