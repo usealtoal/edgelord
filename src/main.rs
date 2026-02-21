@@ -1,7 +1,7 @@
 use clap::Parser;
 use edgelord::cli::{
     output, CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand,
-    WalletCommand,
+    StrategiesCommand, WalletCommand,
 };
 
 #[tokio::main]
@@ -77,6 +77,10 @@ async fn main() {
             }
         },
         Commands::Init(args) => edgelord::cli::init::execute(args.path, args.force),
+        Commands::Strategies(cmd) => match cmd {
+            StrategiesCommand::List => edgelord::cli::strategies::list(),
+            StrategiesCommand::Explain { name } => edgelord::cli::strategies::explain(&name),
+        },
     };
 
     if let Err(e) = result {

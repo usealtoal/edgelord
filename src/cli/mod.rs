@@ -12,6 +12,7 @@ pub mod run;
 pub mod service;
 pub mod statistics;
 pub mod status;
+pub mod strategies;
 pub mod wallet;
 
 use clap::{Parser, Subcommand};
@@ -65,6 +66,10 @@ pub enum Commands {
 
     /// Initialize configuration interactively
     Init(InitArgs),
+
+    /// Explore available strategies
+    #[command(subcommand)]
+    Strategies(StrategiesCommand),
 }
 
 /// Subcommands for `edgelord statistics`
@@ -126,6 +131,18 @@ pub enum WalletCommand {
     Address(ConfigPathArg),
     /// Sweep USDC balance to another address
     Sweep(WalletSweepArgs),
+}
+
+/// Subcommands for `edgelord strategies`
+#[derive(Subcommand, Debug)]
+pub enum StrategiesCommand {
+    /// List all available strategies
+    List,
+    /// Explain a specific strategy
+    Explain {
+        /// Name of the strategy to explain
+        name: String,
+    },
 }
 
 /// Shared argument for commands that only need a config path.
