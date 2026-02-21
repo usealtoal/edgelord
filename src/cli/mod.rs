@@ -4,6 +4,7 @@ pub mod banner;
 pub mod check;
 pub mod config;
 pub mod diagnostic;
+pub mod init;
 pub mod logs;
 pub mod output;
 pub mod provision;
@@ -61,6 +62,9 @@ pub enum Commands {
     /// Manage wallet approvals
     #[command(subcommand)]
     Wallet(WalletCommand),
+
+    /// Initialize configuration interactively
+    Init(InitArgs),
 }
 
 /// Subcommands for `edgelord statistics`
@@ -190,6 +194,18 @@ pub struct ConfigInitArgs {
     /// Output path for config file
     #[arg(default_value = "config.toml")]
     pub path: PathBuf,
+    /// Overwrite if file exists
+    #[arg(long)]
+    pub force: bool,
+}
+
+/// Arguments for the `init` command.
+#[derive(Parser, Debug)]
+pub struct InitArgs {
+    /// Output path for config file
+    #[arg(default_value = "config.toml")]
+    pub path: PathBuf,
+
     /// Overwrite if file exists
     #[arg(long)]
     pub force: bool,

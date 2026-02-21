@@ -146,3 +146,10 @@ impl From<tokio_tungstenite::tungstenite::Error> for Error {
         Error::WebSocket(Box::new(err))
     }
 }
+
+impl From<dialoguer::Error> for Error {
+    fn from(err: dialoguer::Error) -> Self {
+        // dialoguer::Error wraps an IO error
+        Error::Io(std::io::Error::other(err.to_string()))
+    }
+}

@@ -76,6 +76,7 @@ async fn main() {
                 .await
             }
         },
+        Commands::Init(args) => edgelord::cli::init::execute(args.path, args.force),
     };
 
     if let Err(e) = result {
