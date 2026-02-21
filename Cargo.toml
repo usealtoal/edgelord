@@ -63,6 +63,11 @@ anyhow = "1"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+miette = { version = "7", features = ["fancy"] }
+owo-colors = "4"
+indicatif = "0.17"
+dialoguer = "0.11"
+tabled = "0.16"
 
 # Synchronization
 parking_lot = "0.12"
