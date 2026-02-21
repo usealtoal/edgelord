@@ -25,8 +25,32 @@ use std::path::PathBuf;
 #[command(name = "edgelord")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
+    /// Color output mode
+    #[arg(long, global = true, default_value = "auto")]
+    pub color: ColorChoice,
+
+    /// JSON output for scripting
+    #[arg(long, global = true)]
+    pub json: bool,
+
+    /// Decrease output verbosity
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+
+    /// Increase output verbosity (-v, -vv, -vvv)
+    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    pub verbose: u8,
+
     #[command(subcommand)]
     pub command: Commands,
+}
+
+#[derive(Clone, Debug, Default, clap::ValueEnum)]
+pub enum ColorChoice {
+    #[default]
+    Auto,
+    Always,
+    Never,
 }
 
 #[derive(Subcommand, Debug)]

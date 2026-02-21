@@ -64,7 +64,7 @@ anyhow = "1"
 # CLI
 clap = { version = "4", features = ["derive"] }
 miette = { version = "7", features = ["fancy"] }
-owo-colors = "4"
+owo-colors = { version = "4", features = ["supports-colors"] }
 indicatif = "0.17"
 dialoguer = "0.11"
 tabled = "0.16"

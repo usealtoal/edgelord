@@ -1,14 +1,29 @@
 use clap::Parser;
 use edgelord::cli::{
-    output, CheckCommand, Cli, Commands, ConfigCommand, ServiceCommand, StatisticsCommand,
-    StrategiesCommand, WalletCommand,
+    output, CheckCommand, Cli, ColorChoice, Commands, ConfigCommand, ServiceCommand,
+    StatisticsCommand, StrategiesCommand, WalletCommand,
 };
+
+fn setup_colors(choice: ColorChoice) {
+    match choice {
+        ColorChoice::Auto => {
+            // owo-colors auto-detects TTY by default
+        }
+        ColorChoice::Always => {
+            owo_colors::set_override(true);
+        }
+        ColorChoice::Never => {
+            owo_colors::set_override(false);
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
+    setup_colors(cli.color.clone());
 
     let result = match cli.command {
         Commands::Run(args) => edgelord::cli::run::execute(&args).await,
