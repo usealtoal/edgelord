@@ -1,133 +1,58 @@
-<div align="center">
-  <img src="asset/banner.png" alt="edgelord" width="100%">
+# edgelord
 
-  <p><strong>Multi-strategy arbitrage detection and execution for prediction markets, written in Rust</strong></p>
+Arbitrage detection for prediction markets.
 
-  <p>
-    <a href="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml"><img src="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-    <img src="https://img.shields.io/badge/license-proprietary-lightgrey.svg" alt="License">
-    <img src="https://img.shields.io/badge/rust-stable-orange.svg" alt="Rust">
-  </p>
+## Install
 
-</div>
+    cargo install edgelord
 
-## Overview
+## Quick start
 
-edgelord is a Rust CLI for running arbitrage detection and execution workflows against prediction-market exchanges.
+    edgelord init
+    edgelord check live
+    edgelord run
 
-Current implementation focus:
+## What it does
 
-- Exchange: Polymarket
-- Detection model: multi-strategy (single-condition, market-rebalancing, combinatorial)
-- Runtime model: event-driven with risk-gated execution
+Detects and executes arbitrage opportunities on Polymarket.
+Three strategies ship by default:
 
-## Strategy Coverage
+| Strategy | Signal | Typical edge |
+|----------|--------|--------------|
+| single-condition | YES + NO < $1 | 2-5% |
+| market-rebalancing | sum(outcomes) < $1 | 1-3% |
+| combinatorial | cross-market constraints | <1% |
 
-| Strategy | Market Scope | Core Signal |
-|---|---|---|
-| Market Rebalancing | Multi-outcome markets | `sum(outcomes) < payout` |
-| Single-Condition | Binary markets | `YES + NO < payout` |
-| Combinatorial | Related market clusters | Cross-market constraint violations |
+## Commands
 
-## Quick Start
+    edgelord init              Setup wizard
+    edgelord run               Start trading
+    edgelord status            Show current state
+    edgelord strategies list   Available strategies
+    edgelord check live        Validate config
+    edgelord wallet status     Show approvals
 
-```bash
-git clone https://github.com/usealtoal/edgelord.git
-cd edgelord
-cargo build --release
-cp config.toml.example config.toml
+Run `edgelord --help` for all commands.
+
+## Configuration
+
+See [docs/configuration.md](docs/configuration.md).
+
+## Extending
+
+Fork this repo. Implement `ports::Strategy`. See
+[docs/strategies/overview.md](docs/strategies/overview.md).
+
+## Architecture
+
 ```
-
-Set up secrets with [dugout](https://crates.io/crates/dugout):
-
-```bash
-cargo install dugout
-dugout init
-dugout set WALLET_PRIVATE_KEY
-```
-
-Validate and run:
-
-```bash
-dugout run -- ./target/release/edgelord check config --config config.toml
-dugout run -- ./target/release/edgelord check connection --config config.toml
-dugout run -- ./target/release/edgelord run --config config.toml
-```
-
-## Production Readiness Flow
-
-1. Run in `dry_run = true` first.
-2. Validate with `check live` before any live deployment.
-3. Start with conservative risk limits.
-4. Promote to mainnet only after stable observation windows.
-
-## Documentation
-
-- [Documentation Home](docs/README.md)
-- [Getting Started](docs/getting-started.md)
-- [CLI Reference](docs/cli-reference.md)
-- [Configuration Reference](docs/configuration.md)
-- [Strategy Guide](docs/strategies/overview.md)
-- [Architecture](docs/architecture/overview.md)
-- [Deployment Guide](docs/deployment/README.md)
-- [Testing Guide](docs/testing.md)
-
-## Example Commands
-
-```bash
-# Run on testnet (default)
-dugout run -- edgelord run --testnet --dry-run
-
-# Run on mainnet with CLI overrides
-dugout run -- edgelord run --mainnet --max-exposure 5000 --max-slippage 0.02
-
-# Production mode with all the trimmings
-dugout run -- edgelord run \
-  --mainnet \
-  --no-banner \
-  --json-logs \
-  --max-markets 100 \
-  --min-volume 5000
-
-# Or spawn a shell with secrets loaded
-dugout env
-edgelord run --config config.toml
-
-# Diagnostics
-dugout run -- edgelord check live --config config.toml
-
-# Wallet operations (need secrets)
-dugout run -- edgelord wallet address --config config.toml
-dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
-
-# Statistics (no secrets needed)
-edgelord statistics today --db edgelord.db
-edgelord logs -f
-```
-
-## CLI Highlights
-
-The CLI is designed to be config-driven with comprehensive flag overrides:
-
-| Category | Example Flags |
-|----------|---------------|
-| Environment | `--mainnet`, `--testnet`, `--chain-id` |
-| Risk | `--max-exposure`, `--max-position`, `--max-slippage` |
-| Filtering | `--max-markets`, `--min-volume`, `--min-liquidity` |
-| Connection | `--max-connections`, `--connection-ttl` |
-| Runtime | `--dry-run`, `--json-logs`, `--no-banner` |
-
-Run `edgelord run --help` for the complete list.
-
-## Project Structure
-
-```text
-src/
-├── app/      # Orchestration and config loading
-├── cli/      # Command handlers and CLI surface
-└── core/     # Domain, exchange adapters, strategies, services, solvers
+domain/     Pure types, no I/O
+ports/      Trait definitions (extension points)
+adapters/   Implementations (Polymarket, strategies, etc.)
+runtime/    Orchestration and wiring
+cli/        Command-line interface
 ```
 
 ## License
 
-Proprietary. All rights reserved.
+MIT OR Apache-2.0
