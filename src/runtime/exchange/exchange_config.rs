@@ -18,7 +18,7 @@ use crate::domain::{Market, MarketId, Outcome, TokenId};
 ///
 /// ```
 /// use rust_decimal_macros::dec;
-/// use edgelord::core::exchange::ExchangeConfig;
+/// use edgelord::runtime::exchange::ExchangeConfig;
 ///
 /// struct MyExchange;
 ///

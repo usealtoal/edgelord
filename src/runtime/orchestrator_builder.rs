@@ -7,10 +7,11 @@ use tracing::{info, warn};
 
 use super::config::{Config, LlmProvider};
 use super::state::AppState;
+use crate::adapters::inference::LlmInferrer;
 use crate::adapters::llm::{AnthropicLlm, Llm, OpenAiLlm};
 use crate::adapters::notifiers::{LogNotifier, NotifierRegistry};
 use crate::adapters::strategies::StrategyRegistry;
-use crate::core::inference::{LlmInferrer, RelationInferrer};
+use crate::ports::RelationInferrer;
 use crate::runtime::cache::ClusterCache;
 use crate::runtime::exchange::{ArbitrageExecutor, ExchangeFactory};
 

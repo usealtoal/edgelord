@@ -30,7 +30,7 @@ const MAX_SAMPLES: usize = 1000;
 /// # Example
 ///
 /// ```
-/// use edgelord::core::service::{GovernorConfig, LatencyGovernor, AdaptiveGovernor};
+/// use edgelord::runtime::governor::{GovernorConfig, LatencyGovernor, AdaptiveGovernor};
 /// use std::time::Duration;
 ///
 /// let governor = LatencyGovernor::new(GovernorConfig::default());
@@ -69,7 +69,7 @@ impl LatencyGovernor {
     /// # Example
     ///
     /// ```
-    /// use edgelord::core::service::{GovernorConfig, LatencyGovernor};
+    /// use edgelord::runtime::governor::{GovernorConfig, LatencyGovernor};
     ///
     /// let governor = LatencyGovernor::new(GovernorConfig::default());
     /// ```

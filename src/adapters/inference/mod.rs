@@ -3,6 +3,8 @@
 //! Handles both multi-batch startup inference and periodic cycling
 //! to maximize market coverage for arbitrage detection.
 
+mod llm;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,6 +15,9 @@ use crate::domain::Relation;
 use crate::ports::{MarketSummary, RelationInferrer};
 use crate::runtime::cache::ClusterCache;
 use crate::runtime::InferenceConfig;
+
+// Re-export LlmInferrer
+pub use llm::LlmInferrer;
 
 // Type alias for backward compatibility
 pub type Inferrer = dyn RelationInferrer;

@@ -19,7 +19,7 @@ use crate::domain::{ResourceBudget, ScalingRecommendation};
 /// # Example
 ///
 /// ```
-/// use edgelord::core::service::LatencyTargets;
+/// use edgelord::runtime::governor::LatencyTargets;
 /// use std::time::Duration;
 ///
 /// let targets = LatencyTargets {
@@ -59,7 +59,7 @@ impl Default for LatencyTargets {
 /// # Example
 ///
 /// ```
-/// use edgelord::core::service::ScalingConfig;
+/// use edgelord::runtime::governor::ScalingConfig;
 /// use std::time::Duration;
 ///
 /// let config = ScalingConfig {
@@ -111,7 +111,7 @@ impl Default for ScalingConfig {
 /// # Example
 ///
 /// ```
-/// use edgelord::core::service::GovernorConfig;
+/// use edgelord::runtime::governor::GovernorConfig;
 ///
 /// // Use defaults
 /// let config = GovernorConfig::default();
@@ -151,7 +151,7 @@ impl Default for GovernorConfig {
 /// # Example
 ///
 /// ```
-/// use edgelord::core::service::LatencyMetrics;
+/// use edgelord::runtime::governor::LatencyMetrics;
 /// use std::time::Duration;
 ///
 /// let metrics = LatencyMetrics {

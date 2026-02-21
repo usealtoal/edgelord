@@ -18,9 +18,9 @@ use crate::adapters::statistics;
 use crate::adapters::statistics::StatsRecorder;
 use crate::adapters::stores::db;
 use crate::adapters::strategies::StrategyRegistry;
-use crate::core::inference::{MarketSummary, RelationInferrer};
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
+use crate::ports::{MarketSummary, RelationInferrer};
 use crate::runtime::cache::OrderBookCache;
 use crate::runtime::exchange::{
     ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,

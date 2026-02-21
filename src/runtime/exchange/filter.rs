@@ -13,7 +13,7 @@ use super::MarketInfo;
 /// # Example
 ///
 /// ```
-/// use edgelord::core::exchange::MarketFilterConfig;
+/// use edgelord::runtime::exchange::MarketFilterConfig;
 ///
 /// // Use defaults
 /// let config = MarketFilterConfig::default();

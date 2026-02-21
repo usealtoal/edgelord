@@ -59,7 +59,7 @@ impl Outcome {
 /// # Example
 ///
 /// ```ignore
-/// use edgelord::core::domain::{Market, Outcome, MarketId, TokenId};
+/// use edgelord::domain::{Market, Outcome, MarketId, TokenId};
 /// use rust_decimal_macros::dec;
 ///
 /// let market = Market::new(

@@ -20,8 +20,8 @@ pub const POLYMARKET_PAYOUT: Decimal = dec!(1);
 /// # Examples
 ///
 /// ```
-/// use edgelord::core::exchange::polymarket::PolymarketExchangeConfig;
-/// use edgelord::core::exchange::ExchangeConfig;
+/// use edgelord::adapters::polymarket::PolymarketExchangeConfig;
+/// use edgelord::runtime::exchange::ExchangeConfig;
 /// use rust_decimal_macros::dec;
 ///
 /// let config = PolymarketExchangeConfig;
