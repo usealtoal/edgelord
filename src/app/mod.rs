@@ -1,30 +1,26 @@
 //! Application layer - orchestration, configuration, and shared state.
-
-mod config;
-mod orchestrator;
-mod state;
+//!
+//! This module re-exports components from [`crate::runtime`] for backward compatibility.
 
 pub mod statistics;
 pub mod status;
 pub mod wallet;
 
-pub use config::{
-    ClusterDetectionConfig, Config, ConnectionPoolConfig, DedupStrategyConfig, Environment,
-    Exchange, ExchangeSpecificConfig, GovernorAppConfig, InferenceConfig, LatencyTargetsConfig,
-    LlmConfig, LlmProvider, LoggingConfig, NetworkConfig, OutcomeBonusConfig, PolymarketConfig,
-    PolymarketDedupConfig, PolymarketFilterConfig, PolymarketHttpConfig, PolymarketScoringConfig,
-    Profile, ReconnectionConfig, ResourceConfig, RiskConfig, ScalingAppConfig,
-    ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig, WalletConfig,
+// Re-export from runtime for backward compatibility
+pub use crate::runtime::{
+    health_check, process_market_event, ClusterDetectionConfig, Config, ConnectionPoolConfig,
+    DedupStrategyConfig, Environment, EventProcessingContext, Exchange, ExchangeSpecificConfig,
+    GovernorAppConfig, HealthCheck, HealthReport, HealthStatus, InferenceConfig,
+    LatencyTargetsConfig, LlmConfig, LlmProvider, LoggingConfig, NetworkConfig, Orchestrator,
+    OutcomeBonusConfig, PolymarketConfig, PolymarketDedupConfig, PolymarketFilterConfig,
+    PolymarketHttpConfig, PolymarketScoringConfig, Profile, ReconnectionConfig, ResourceConfig,
+    RiskConfig, ScalingAppConfig, ScoringWeightsConfig, StrategiesConfig, TelegramAppConfig,
+    WalletConfig,
 };
-pub use orchestrator::{
-    health_check, process_market_event, EventProcessingContext, HealthCheck, HealthReport,
-    HealthStatus,
-};
-pub use state::{AppState, RiskLimitKind, RiskLimitUpdateError, RiskLimits};
+pub use crate::runtime::{AppState, RiskLimitKind, RiskLimitUpdateError, RiskLimits};
 pub use wallet::{ApprovalOutcome, SweepOutcome, WalletApprovalStatus, WalletService};
 
 use crate::error::Result;
-use orchestrator::Orchestrator;
 use tokio::sync::watch;
 
 /// Main application entry point.

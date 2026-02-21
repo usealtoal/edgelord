@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
-use crate::app::state::AppState;
+use super::state::AppState;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::exchange::{ArbitrageExecutor, MarketEvent};

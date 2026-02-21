@@ -25,6 +25,8 @@ pub mod cli;
 pub mod core;
 pub mod domain;
 pub mod error;
+pub mod ports;
+pub mod runtime;
 
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;

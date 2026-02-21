@@ -3,20 +3,13 @@
 //! This module contains the main application logic for running
 //! the edgelord arbitrage detection and execution system.
 
-// Allow many arguments for handler functions that coordinate multiple services
-#![allow(clippy::too_many_arguments)]
-
-mod builder;
-mod execution;
-mod handler;
-
 use std::sync::Arc;
 
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
 
-use crate::app::config::Config;
-use crate::app::state::AppState;
+use super::config::Config;
+use super::state::AppState;
 use crate::core::cache::OrderBookCache;
 use crate::core::db;
 use crate::core::domain::{MarketRegistry, TokenId};
@@ -35,11 +28,11 @@ use crate::core::service::{
 use crate::core::strategy::StrategyRegistry;
 use crate::error::Result;
 
-use builder::{
+use super::orchestrator_builder::{
     build_cluster_cache, build_inferrer, build_llm_client, build_notifier_registry,
     build_strategy_registry, init_executor,
 };
-use handler::handle_market_event;
+use super::handler::handle_market_event;
 
 /// Inputs required to process one market event through detection and risk gates.
 pub struct EventProcessingContext<'a> {
@@ -73,7 +66,7 @@ pub fn process_market_event(event: MarketEvent, context: EventProcessingContext<
 }
 
 /// Main application orchestrator.
-pub(crate) struct Orchestrator;
+pub struct Orchestrator;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HealthStatus {
@@ -234,7 +227,7 @@ impl Orchestrator {
 
         // Extract max_markets from exchange config
         let max_markets = match &config.exchange_config {
-            crate::app::ExchangeSpecificConfig::Polymarket(pm_config) => {
+            super::config::ExchangeSpecificConfig::Polymarket(pm_config) => {
                 pm_config.market_filter.max_markets
             }
         };
@@ -548,7 +541,7 @@ impl Orchestrator {
 mod tests {
     use super::*;
 
-    use crate::app::Config;
+    use super::super::config::Config;
 
     #[test]
     fn health_check_struct_accessors() {
@@ -671,7 +664,7 @@ mod tests {
     fn health_check_detects_empty_api_url() {
         let mut config = Config::default();
         match &mut config.exchange_config {
-            crate::app::ExchangeSpecificConfig::Polymarket(pm) => {
+            super::super::config::ExchangeSpecificConfig::Polymarket(pm) => {
                 pm.api_url = String::new();
             }
         }
@@ -690,7 +683,7 @@ mod tests {
     fn health_check_detects_empty_ws_url() {
         let mut config = Config::default();
         match &mut config.exchange_config {
-            crate::app::ExchangeSpecificConfig::Polymarket(pm) => {
+            super::super::config::ExchangeSpecificConfig::Polymarket(pm) => {
                 pm.ws_url = String::new();
             }
         }
@@ -735,7 +728,7 @@ mod tests {
 
     #[test]
     fn event_processing_context_can_be_created() {
-        use crate::app::AppState;
+        use super::super::state::AppState;
         use crate::core::cache::OrderBookCache;
         use crate::core::domain::MarketRegistry;
         use crate::core::service::{NotifierRegistry, RiskManager};

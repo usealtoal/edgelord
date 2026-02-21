@@ -5,8 +5,8 @@ use std::sync::Arc;
 use chrono::Duration;
 use tracing::{info, warn};
 
-use crate::app::config::{Config, LlmProvider};
-use crate::app::AppState;
+use super::config::{Config, LlmProvider};
+use super::state::AppState;
 use crate::core::cache::ClusterCache;
 use crate::core::exchange::{ArbitrageExecutor, ExchangeFactory};
 use crate::core::inference::{Inferrer, LlmInferrer};

@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
-use crate::app::state::AppState;
+use super::state::AppState;
 use crate::core::domain::{
     ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
     PositionStatus, TokenId,

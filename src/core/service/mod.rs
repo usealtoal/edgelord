@@ -1,7 +1,6 @@
 //! Cross-cutting services - risk management, messaging, etc.
 
 pub mod cluster;
-mod governor;
 pub mod inference;
 mod messaging;
 pub mod position;
@@ -9,7 +8,8 @@ mod risk;
 pub mod statistics;
 mod subscription;
 
-pub use governor::{
+// Re-export governor from runtime module for backward compatibility
+pub use crate::runtime::governor::{
     AdaptiveGovernor, GovernorConfig, LatencyGovernor, LatencyMetrics, LatencyTargets,
     ScalingConfig,
 };
