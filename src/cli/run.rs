@@ -2,8 +2,8 @@
 
 #[cfg(feature = "polymarket")]
 use crate::app::App;
-use crate::app::{Config, Environment, ExchangeSpecificConfig};
-use crate::cli::{banner, RunArgs};
+use crate::app::{Config, Environment, ExchangeSpecificConfig, WalletService};
+use crate::cli::{banner, output, RunArgs};
 use crate::error::{Error, Result};
 use tokio::signal;
 use tokio::sync::watch;
@@ -141,9 +141,17 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     // Initialize logging
     config.init_logging();
 
+    // Show styled output unless using JSON logs (which implies machine-readable output)
+    let styled_output = !args.json_logs;
+
     // Show banner unless disabled
-    if !args.no_banner {
+    if !args.no_banner && styled_output {
         banner::print_banner();
+    }
+
+    // Display startup configuration
+    if styled_output {
+        print_startup_config(&config);
     }
 
     info!(
@@ -187,4 +195,47 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
 
     info!("edgelord stopped");
     Ok(())
+}
+
+/// Print startup configuration using Astral-style output.
+fn print_startup_config(config: &Config) {
+    let network = config.network();
+
+    // Format network display: "testnet (amoy)" or "mainnet (polygon)"
+    let chain_name = match network.chain_id {
+        137 => "polygon",
+        80002 => "amoy",
+        _ => "unknown",
+    };
+    let network_display = format!("{} ({})", network.environment, chain_name);
+
+    // Get wallet address (shortened format)
+    let wallet_display = match WalletService::wallet_address(config) {
+        Ok(addr) if addr.len() >= 10 => {
+            format!("{}...{}", &addr[..6], &addr[addr.len() - 4..])
+        }
+        Ok(addr) => addr,
+        Err(_) => "not configured".to_string(),
+    };
+
+    // Format strategies list
+    let strategies_display = if config.strategies.enabled.is_empty() {
+        "none".to_string()
+    } else {
+        config.strategies.enabled.join(", ")
+    };
+
+    // Print Astral-style config display
+    output::header(env!("CARGO_PKG_VERSION"));
+    output::field("Network", &network_display);
+    output::field("Wallet", &wallet_display);
+    output::field("Strategies", &strategies_display);
+
+    // Show dry-run warning if enabled
+    if config.dry_run {
+        println!();
+        output::warning("Dry-run mode enabled - trades will be simulated");
+    }
+
+    println!();
 }
