@@ -3,6 +3,7 @@
 pub mod banner;
 pub mod check;
 pub mod config;
+pub mod diagnostic;
 pub mod logs;
 pub mod output;
 pub mod provision;
