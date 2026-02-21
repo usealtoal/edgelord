@@ -3,9 +3,10 @@ use std::path::Path;
 
 use rust_decimal::Decimal;
 
-use crate::app::{ApprovalOutcome, Config, WalletService};
 use crate::cli::output;
+use crate::cli::wallet::{ApprovalOutcome, WalletService};
 use crate::error::{ExecutionError, Result};
+use crate::runtime::Config;
 
 /// Approve token spending for trading.
 ///

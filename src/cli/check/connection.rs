@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::app::Config;
 use crate::cli::output;
 use crate::error::{Error, Result};
+use crate::runtime::Config;
 
 /// Test WebSocket connection to the exchange.
 pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {

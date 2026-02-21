@@ -3,9 +3,10 @@ use std::path::Path;
 
 use rust_decimal::Decimal;
 
-use crate::app::{Config, Exchange, SweepOutcome, WalletService};
 use crate::cli::output;
+use crate::cli::wallet::{SweepOutcome, WalletService};
 use crate::error::{ConfigError, Result};
+use crate::runtime::{Config, Exchange};
 
 /// Sweep the full USDC balance to the provided address.
 pub async fn execute_sweep(

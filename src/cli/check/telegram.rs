@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::app::Config;
 use crate::cli::output;
 use crate::error::{Error, Result};
+use crate::runtime::Config;
 
 /// Test Telegram notification by sending a test message.
 pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {

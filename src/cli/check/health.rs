@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::app::{health_check, Config, HealthStatus};
 use crate::cli::output;
 use crate::error::{Error, Result};
+use crate::runtime::{health_check, Config, HealthStatus};
 
 /// Run a local health check using configuration.
 pub fn execute_health<P: AsRef<Path>>(config_path: P) -> Result<()> {

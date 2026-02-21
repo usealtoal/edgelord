@@ -4,10 +4,10 @@
 //! for adaptive market subscription.
 
 use edgelord::adapters::polymarket::{PolymarketFilter, PolymarketScorer};
-use edgelord::app::{PolymarketFilterConfig, PolymarketScoringConfig};
 use edgelord::domain::{MarketId, MarketScore, ScoreFactors, TokenId};
 use edgelord::runtime::exchange::{MarketFilter, MarketInfo, MarketScorer, OutcomeInfo};
 use edgelord::runtime::subscription::{PrioritySubscriptionManager, SubscriptionManager};
+use edgelord::runtime::{PolymarketFilterConfig, PolymarketScoringConfig};
 
 fn make_market(id: &str, outcomes: usize) -> MarketInfo {
     let outcome_infos: Vec<_> = (0..outcomes)

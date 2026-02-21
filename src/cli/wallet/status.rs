@@ -1,8 +1,9 @@
 use std::path::Path;
 
-use crate::app::{Config, WalletService};
 use crate::cli::output;
+use crate::cli::wallet::WalletService;
 use crate::error::Result;
+use crate::runtime::Config;
 
 /// Display current wallet approval status.
 ///

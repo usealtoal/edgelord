@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use edgelord::app::Config;
 use edgelord::error::{ConfigError, Error};
+use edgelord::runtime::Config;
 
 static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 

@@ -1,10 +1,11 @@
 //! Handler for the `run` command.
 
-#[cfg(feature = "polymarket")]
-use crate::app::App;
-use crate::app::{Config, Environment, ExchangeSpecificConfig, WalletService};
+use crate::cli::wallet::WalletService;
 use crate::cli::{banner, output, RunArgs};
 use crate::error::{Error, Result};
+#[cfg(feature = "polymarket")]
+use crate::runtime::Orchestrator;
+use crate::runtime::{Config, Environment, ExchangeSpecificConfig};
 use tokio::signal;
 use tokio::sync::watch;
 use tracing::{error, info};
@@ -165,7 +166,7 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let mut app_handle =
-            tokio::spawn(async move { App::run_with_shutdown(config, shutdown_rx).await });
+            tokio::spawn(async move { Orchestrator::run_with_shutdown(config, shutdown_rx).await });
 
         tokio::select! {
             result = &mut app_handle => {

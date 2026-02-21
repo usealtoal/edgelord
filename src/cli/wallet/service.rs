@@ -5,9 +5,9 @@
 
 use rust_decimal::Decimal;
 
-use crate::app::{Config, Exchange};
 use crate::error::ConfigError;
 use crate::error::Result;
+use crate::runtime::{Config, Exchange};
 
 #[cfg(feature = "polymarket")]
 use crate::adapters::polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult};

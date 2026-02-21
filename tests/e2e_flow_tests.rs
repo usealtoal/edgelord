@@ -10,10 +10,10 @@ use edgelord::adapters::statistics::create_recorder;
 use edgelord::adapters::strategies::{
     SingleConditionConfig, SingleConditionStrategy, StrategyRegistry,
 };
-use edgelord::app::{process_market_event, AppState, EventProcessingContext, RiskLimits};
 use edgelord::domain::TokenId;
 use edgelord::runtime::cache::OrderBookCache;
 use edgelord::runtime::exchange::MarketEvent;
+use edgelord::runtime::{process_market_event, AppState, EventProcessingContext, RiskLimits};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 

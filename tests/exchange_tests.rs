@@ -7,12 +7,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use edgelord::adapters::polymarket::PolymarketClient;
-use edgelord::app::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
 use edgelord::domain::TokenId;
 use edgelord::error::{ConfigError, Error};
 use edgelord::runtime::exchange::{
     ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
 };
+use edgelord::runtime::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
 use edgelord::testkit;
 use edgelord::testkit::stream::ScriptedStream;
 use tokio::io::AsyncReadExt;

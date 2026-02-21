@@ -108,3 +108,24 @@ pub fn highlight(value: impl Display) -> String {
 pub fn muted(value: impl Display) -> String {
     format!("{}", value.to_string().dimmed())
 }
+
+// Aliases for compatibility
+/// Alias for `success`.
+pub fn ok(message: &str) {
+    success(message);
+}
+
+/// Alias for `field`.
+pub fn key_value(label: &str, value: impl Display) {
+    field(label, value);
+}
+
+/// Print a note/hint.
+pub fn note(message: &str) {
+    println!("  {}", message.dimmed());
+}
+
+/// Alias for `warning`.
+pub fn warn(message: &str) {
+    warning(message);
+}

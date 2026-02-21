@@ -2,14 +2,196 @@
 
 use std::path::Path;
 
-use chrono::Duration;
+use chrono::{Duration, Utc};
+use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::app::status::{self, RecentActivity};
+use crate::adapters::stores::db::model::{DailyStatsRow, OpportunityRow, TradeRow};
+use crate::adapters::stores::db::schema::{daily_stats, opportunities, trades};
 use crate::cli::output;
+use crate::error::{ConfigError, Error, Result};
+
+// ============================================================================
+// Data types
+// ============================================================================
+
+/// A recent activity item for display.
+#[derive(Debug, Clone)]
+pub enum RecentActivity {
+    Executed {
+        timestamp: String,
+        profit: f32,
+        market_description: String,
+    },
+    Rejected {
+        timestamp: String,
+        reason: String,
+    },
+}
+
+/// Snapshot of current status from the database.
+pub struct StatusSnapshot {
+    pub today: Option<DailyStatsRow>,
+    pub week_rows: Vec<DailyStatsRow>,
+    pub open_positions: i64,
+    pub distinct_markets: i64,
+    pub current_exposure: f32,
+    pub recent_activity: Vec<RecentActivity>,
+}
+
+// ============================================================================
+// Data access
+// ============================================================================
+
+fn connect(db_path: &Path) -> Result<Pool<ConnectionManager<SqliteConnection>>> {
+    let db_url = format!("sqlite://{}", db_path.display());
+    let manager = ConnectionManager::<SqliteConnection>::new(&db_url);
+    Pool::builder()
+        .max_size(1)
+        .build(manager)
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))
+}
+
+/// Load status snapshot from the database.
+pub fn load_status(db_path: &Path) -> Result<StatusSnapshot> {
+    let pool = connect(db_path)?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| Error::Config(ConfigError::Other(e.to_string())))?;
+
+    let today = Utc::now().date_naive();
+    let week_ago = today - Duration::days(7);
+
+    let today_row: Option<DailyStatsRow> = daily_stats::table
+        .filter(daily_stats::date.eq(today.to_string()))
+        .first(&mut conn)
+        .ok();
+
+    let week_rows: Vec<DailyStatsRow> = daily_stats::table
+        .filter(daily_stats::date.ge(week_ago.to_string()))
+        .filter(daily_stats::date.le(today.to_string()))
+        .load(&mut conn)
+        .unwrap_or_default();
+
+    // Get open trades
+    let open_trades: Vec<TradeRow> = trades::table
+        .filter(trades::status.eq("open"))
+        .load(&mut conn)
+        .unwrap_or_default();
+
+    let open_positions = open_trades.len() as i64;
+
+    // Count distinct markets from open trades
+    let distinct_markets = open_trades
+        .iter()
+        .flat_map(|t| serde_json::from_str::<Vec<String>>(&t.market_ids).unwrap_or_default())
+        .collect::<std::collections::HashSet<_>>()
+        .len() as i64;
+
+    // Calculate current exposure from open trades
+    let current_exposure: f32 = open_trades.iter().map(|t| t.size).sum();
+
+    // Get recent activity (last 10 items)
+    let recent_trades: Vec<TradeRow> = trades::table
+        .filter(trades::status.eq("closed"))
+        .order(trades::closed_at.desc())
+        .limit(5)
+        .load(&mut conn)
+        .unwrap_or_default();
+
+    let recent_rejected: Vec<OpportunityRow> = opportunities::table
+        .filter(opportunities::executed.eq(0))
+        .filter(opportunities::rejected_reason.is_not_null())
+        .order(opportunities::detected_at.desc())
+        .limit(5)
+        .load(&mut conn)
+        .unwrap_or_default();
+
+    // Combine and sort recent activity
+    let mut recent_activity: Vec<RecentActivity> = Vec::new();
+
+    for trade in recent_trades {
+        if let Some(closed_at) = &trade.closed_at {
+            let timestamp = extract_time(closed_at);
+            recent_activity.push(RecentActivity::Executed {
+                timestamp,
+                profit: trade.realized_profit.unwrap_or(0.0),
+                market_description: extract_market_description(&trade.market_ids),
+            });
+        }
+    }
+
+    for opp in recent_rejected {
+        let timestamp = extract_time(&opp.detected_at);
+        recent_activity.push(RecentActivity::Rejected {
+            timestamp,
+            reason: opp.rejected_reason.unwrap_or_else(|| "unknown".to_string()),
+        });
+    }
+
+    // Sort by timestamp descending and take top 5
+    recent_activity.sort_by(|a, b| {
+        let ts_a = match a {
+            RecentActivity::Executed { timestamp, .. } => timestamp,
+            RecentActivity::Rejected { timestamp, .. } => timestamp,
+        };
+        let ts_b = match b {
+            RecentActivity::Executed { timestamp, .. } => timestamp,
+            RecentActivity::Rejected { timestamp, .. } => timestamp,
+        };
+        ts_b.cmp(ts_a)
+    });
+    recent_activity.truncate(5);
+
+    Ok(StatusSnapshot {
+        today: today_row,
+        week_rows,
+        open_positions,
+        distinct_markets,
+        current_exposure,
+        recent_activity,
+    })
+}
+
+/// Extract time portion from ISO timestamp (HH:MM:SS).
+fn extract_time(timestamp: &str) -> String {
+    if let Some(t_pos) = timestamp.find('T') {
+        let time_part = &timestamp[t_pos + 1..];
+        time_part.chars().take(8).collect()
+    } else if let Some(space_pos) = timestamp.find(' ') {
+        let time_part = &timestamp[space_pos + 1..];
+        time_part.chars().take(8).collect()
+    } else {
+        timestamp.to_string()
+    }
+}
+
+/// Extract a short market description from market_ids JSON.
+fn extract_market_description(market_ids_json: &str) -> String {
+    if let Ok(ids) = serde_json::from_str::<Vec<String>>(market_ids_json) {
+        if ids.is_empty() {
+            "unknown market".to_string()
+        } else if ids.len() == 1 {
+            let id = &ids[0];
+            if id.len() > 16 {
+                format!("{}...", &id[..12])
+            } else {
+                id.clone()
+            }
+        } else {
+            format!("{} markets", ids.len())
+        }
+    } else {
+        "unknown market".to_string()
+    }
+}
+
+// ============================================================================
+// CLI command
+// ============================================================================
 
 /// Execute the status command.
 pub fn execute(db_path: &Path) {
-    // Check if systemd service is running
     let (running, pid, uptime) = check_systemd_status();
 
     output::header(env!("CARGO_PKG_VERSION"));
@@ -26,13 +208,13 @@ pub fn execute(db_path: &Path) {
         output::field("Uptime", &uptime);
     }
 
-    // Network - try to detect from environment or show default
+    // Network
     let network = detect_network();
     output::field("Network", &network);
 
     // Try to connect to database for stats
     if db_path.exists() {
-        if let Ok(snapshot) = status::load_status(db_path) {
+        if let Ok(snapshot) = load_status(db_path) {
             display_db_stats(snapshot);
         } else {
             println!();
@@ -69,7 +251,6 @@ fn check_systemd_status() -> (bool, String, String) {
         String::new()
     };
 
-    // Get uptime if running
     let uptime = if running {
         Command::new("systemctl")
             .args([
@@ -92,12 +273,9 @@ fn check_systemd_status() -> (bool, String, String) {
     (running, pid, uptime)
 }
 
-/// Parse systemd timestamp and return human-readable uptime.
 fn parse_uptime(timestamp: &str) -> Option<String> {
-    // systemd format: "Wed 2026-02-21 10:30:00 UTC"
-    use chrono::{DateTime, Utc};
+    use chrono::DateTime;
 
-    // Try to parse the timestamp
     let formats = [
         "%a %Y-%m-%d %H:%M:%S %Z",
         "%Y-%m-%d %H:%M:%S %Z",
@@ -114,7 +292,6 @@ fn parse_uptime(timestamp: &str) -> Option<String> {
     None
 }
 
-/// Format a duration as human-readable string.
 fn format_duration(duration: Duration) -> String {
     let total_secs = duration.num_seconds();
     if total_secs < 0 {
@@ -134,9 +311,7 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
-/// Detect network from environment or default to mainnet.
 fn detect_network() -> String {
-    // Check common environment variables
     if let Ok(env) = std::env::var("EDGELORD_NETWORK") {
         return env;
     }
@@ -147,11 +322,10 @@ fn detect_network() -> String {
             _ => format!("chain {}", chain),
         };
     }
-    // Default
     "mainnet".to_string()
 }
 
-fn display_db_stats(snapshot: status::StatusSnapshot) {
+fn display_db_stats(snapshot: StatusSnapshot) {
     let today_row = snapshot.today;
     let open_positions = snapshot.open_positions;
     let distinct_markets = snapshot.distinct_markets;
@@ -160,12 +334,10 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
 
     println!();
 
-    // Exposure - we don't have max exposure from config here, so show current only
     if current_exposure > 0.0 {
         output::field("Exposure", format!("${:.2}", current_exposure));
     }
 
-    // Positions
     if open_positions > 0 {
         output::field(
             "Positions",
@@ -178,22 +350,18 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
         output::field("Positions", output::muted("none"));
     }
 
-    // Today's stats
     output::section("Today");
     if let Some(row) = today_row {
         output::field("Opportunities", row.opportunities_detected);
         output::field("Executed", row.opportunities_executed);
 
-        // Rejected with breakdown
         let rejected = row.opportunities_rejected;
         if rejected > 0 {
-            // We don't have detailed breakdown in daily_stats, just show total
             output::field("Rejected", rejected);
         } else {
             output::field("Rejected", output::muted("0"));
         }
 
-        // P&L
         let net = row.profit_realized - row.loss_realized;
         let pnl_display = if net >= 0.0 {
             output::positive(format!("+${:.2}", net))
@@ -205,7 +373,6 @@ fn display_db_stats(snapshot: status::StatusSnapshot) {
         println!("  {}", output::muted("No data for today"));
     }
 
-    // Recent activity
     if !recent_activity.is_empty() {
         output::section("Recent activity");
         for activity in recent_activity {
