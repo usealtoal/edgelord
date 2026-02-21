@@ -1,11 +1,6 @@
 //! Strategy abstraction for arbitrage detection.
 //!
-//! This module provides a pluggable strategy system supporting multiple
-//! detection algorithms:
-//!
-//! - **`SingleCondition`**: YES + NO < $1 (26.7% of historical profits)
-//! - **`MarketRebalancing`**: Sum of outcomes < $1 (73.1% of historical profits)
-//! - **Combinatorial**: Frank-Wolfe + ILP for correlated markets (0.24%)
+//! This module re-exports from `crate::adapters::strategies` for backward compatibility.
 //!
 //! # Architecture
 //!
@@ -15,35 +10,18 @@
 //! - `detect()` - Core detection logic
 //!
 //! The [`StrategyRegistry`] manages enabled strategies and coordinates detection.
-//!
-//! # Example
-//!
-//! ```ignore
-//! use edgelord::core::strategy::{StrategyRegistry, SingleConditionStrategy};
-//!
-//! let mut registry = StrategyRegistry::new();
-//! registry.register(Box::new(SingleConditionStrategy::new(Default::default())));
-//!
-//! let opportunities = registry.detect_all(&ctx);
-//! ```
-
-pub mod combinatorial;
-pub mod condition;
-mod context;
-pub mod rebalancing;
-mod registry;
 
 use std::sync::Arc;
 
 use crate::core::domain::{MarketRegistry, Opportunity};
 
-pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
-pub use condition::{SingleConditionConfig, SingleConditionStrategy};
-pub use context::{DetectionContext, DetectionResult, MarketContext};
-pub use rebalancing::{
-    MarketRebalancingConfig, MarketRebalancingStrategy, RebalancingLeg, RebalancingOpportunity,
+// Re-export everything from adapters::strategies
+pub use crate::adapters::strategies::{
+    combinatorial, condition, rebalancing, CombinatorialConfig, CombinatorialStrategy,
+    DetectionContext, DetectionResult, MarketContext, MarketRebalancingConfig,
+    MarketRebalancingStrategy, RebalancingLeg, RebalancingOpportunity, SingleConditionConfig,
+    SingleConditionStrategy, StrategyRegistry, StrategyRegistryBuilder,
 };
-pub use registry::{StrategyRegistry, StrategyRegistryBuilder};
 
 /// A detection strategy that finds arbitrage opportunities.
 ///

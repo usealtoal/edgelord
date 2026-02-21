@@ -6,7 +6,8 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext, Strategy};
+use super::{DetectionContext, MarketContext};
+use crate::core::strategy::Strategy;
 use crate::core::cache::OrderBookCache;
 use crate::core::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
 

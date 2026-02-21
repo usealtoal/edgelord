@@ -19,6 +19,7 @@
 //! - `telegram` - Enable Telegram notifications
 //! - `testkit` - Reusable test helpers (mock streams, factories, domain builders)
 
+pub mod adapters;
 pub mod app;
 pub mod cli;
 pub mod core;

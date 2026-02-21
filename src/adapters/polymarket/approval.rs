@@ -14,7 +14,7 @@ use rust_decimal::Decimal;
 use tracing::info;
 
 use crate::app::{Config, Environment};
-use crate::core::exchange::approval::{ApprovalResult, ApprovalStatus, TokenApproval};
+use crate::core::exchange::{ApprovalResult, ApprovalStatus, TokenApproval};
 use crate::error::{ConfigError, ExecutionError, Result};
 
 // USDC contract addresses

@@ -33,7 +33,8 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext, Strategy};
+use super::{DetectionContext, MarketContext};
+use crate::core::strategy::Strategy;
 use crate::core::cache::ClusterCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
 use crate::core::service::cluster::{ClusterDetectionConfig, ClusterDetector};

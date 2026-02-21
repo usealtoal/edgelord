@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use super::Strategy;
 use crate::core::cache::ClusterCache;
 use crate::core::domain::{MarketRegistry, Opportunity};
-use crate::core::strategy::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
-use crate::core::strategy::condition::{SingleConditionConfig, SingleConditionStrategy};
-use crate::core::strategy::context::DetectionContext;
-use crate::core::strategy::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
+use crate::core::strategy::Strategy;
+
+use super::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
+use super::condition::{SingleConditionConfig, SingleConditionStrategy};
+use super::context::DetectionContext;
+use super::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
 
 /// Registry of enabled strategies.
 ///
@@ -164,7 +165,7 @@ impl StrategyRegistryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::strategy::context::{DetectionContext, MarketContext};
+    use crate::adapters::strategies::{DetectionContext, MarketContext};
 
     struct MockStrategy {
         name: &'static str,
