@@ -22,6 +22,7 @@
 pub mod app;
 pub mod cli;
 pub mod core;
+pub mod domain;
 pub mod error;
 
 #[cfg(any(test, feature = "testkit"))]

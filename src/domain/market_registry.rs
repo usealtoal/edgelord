@@ -99,7 +99,7 @@ impl MarketRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{MarketId, Outcome};
+    use crate::domain::{MarketId, Outcome};
     use rust_decimal_macros::dec;
 
     // --- Helper functions ---
