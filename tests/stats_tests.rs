@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use edgelord::core::db::run_migrations;
-use edgelord::core::service::statistics::{RecordedOpportunity, StatsRecorder};
+use edgelord::adapters::statistics::{RecordedOpportunity, StatsRecorder};
+use edgelord::adapters::stores::db::run_migrations;
 use rust_decimal_macros::dec;
 
 /// Guard to clean up temporary database file after test
@@ -82,7 +82,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     // Collect all returned IDs
     let mut returned_ids: Vec<i32> = handles
         .into_iter()
-        .filter_map(|h| h.join().unwrap())
+        .filter_map(|h: std::thread::JoinHandle<Option<i32>>| h.join().unwrap())
         .collect();
 
     // Verify we got IDs for all inserts
@@ -110,7 +110,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
 
     // Verify IDs match what's actually in the database
     use diesel::prelude::*;
-    use edgelord::core::db::schema::opportunities;
+    use edgelord::adapters::stores::db::schema::opportunities;
     let mut conn = db_pool.get().unwrap();
     let db_ids: Vec<i32> = opportunities::table
         .select(opportunities::id)

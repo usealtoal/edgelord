@@ -6,10 +6,9 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext};
-use crate::core::strategy::Strategy;
-use crate::core::cache::OrderBookCache;
-use crate::core::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
+use super::{DetectionContext, MarketContext, Strategy};
+use crate::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
+use crate::runtime::cache::OrderBookCache;
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -259,7 +258,7 @@ pub fn detect_rebalancing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{OrderBook, PriceLevel};
+    use crate::domain::{OrderBook, PriceLevel};
     use rust_decimal_macros::dec;
 
     fn make_config() -> MarketRebalancingConfig {
@@ -475,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_custom_payout_affects_edge_calculation() {
-        use crate::core::domain::{Market, Outcome};
+        use crate::domain::{Market, Outcome};
 
         // With payout of $100, cost of $90 gives $10 edge (10%)
         // This should be profitable with custom payout

@@ -263,13 +263,14 @@ mod tests {
     use rust_decimal_macros::dec;
     use tokio::time::{sleep, Duration, Instant};
 
-    use crate::app::AppState;
-    use crate::core::domain::{
+    use crate::runtime::AppState;
+    use crate::domain::{
         ArbitrageExecutionResult, FailedLeg, FilledLeg, MarketId, Opportunity, OpportunityLeg,
         OrderId, PositionStatus, TokenId,
     };
-    use crate::core::exchange::ArbitrageExecutor;
-    use crate::core::service::{statistics, NotifierRegistry};
+    use crate::runtime::exchange::ArbitrageExecutor;
+    use crate::adapters::statistics;
+    use crate::adapters::notifiers::NotifierRegistry;
     use crate::error::{Error, ExecutionError};
 
     /// Mock executor that returns PartialFill and fails cancel on one leg.
@@ -354,7 +355,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
 
         spawn_execution(
@@ -438,7 +439,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
 
         assert!(state.try_lock_execution("timeout-market"));

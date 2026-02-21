@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use crate::core::domain::{MarketRegistry, Opportunity};
+use crate::domain::{MarketRegistry, Opportunity};
 
 // Re-export everything from adapters::strategies
 pub use crate::adapters::strategies::{

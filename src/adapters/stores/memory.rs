@@ -6,7 +6,7 @@ use chrono::Utc;
 use parking_lot::RwLock;
 
 use super::{ClusterStore, RelationStore};
-use crate::core::domain::{Cluster, ClusterId, Relation, RelationId};
+use crate::domain::{Cluster, ClusterId, Relation, RelationId};
 use crate::error::Result;
 
 /// In-memory store for testing purposes.
@@ -82,7 +82,7 @@ impl ClusterStore for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{MarketId, RelationKind};
+    use crate::domain::{MarketId, RelationKind};
 
     fn make_relation(suffix: &str) -> Relation {
         Relation::new(

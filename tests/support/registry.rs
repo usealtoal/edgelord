@@ -1,4 +1,4 @@
-use edgelord::core::domain::{Market, MarketRegistry};
+use edgelord::domain::{Market, MarketRegistry};
 
 pub fn make_registry(markets: Vec<Market>) -> MarketRegistry {
     let mut registry = MarketRegistry::new();

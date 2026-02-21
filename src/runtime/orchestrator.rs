@@ -732,10 +732,11 @@ mod tests {
     #[test]
     fn event_processing_context_can_be_created() {
         use super::super::state::AppState;
-        use crate::core::cache::OrderBookCache;
-        use crate::core::domain::MarketRegistry;
-        use crate::core::service::{NotifierRegistry, RiskManager};
-        use crate::core::strategy::StrategyRegistry;
+        use crate::runtime::cache::OrderBookCache;
+        use crate::domain::MarketRegistry;
+        use crate::adapters::notifiers::NotifierRegistry;
+        use crate::adapters::risk::RiskManager;
+        use crate::adapters::strategies::StrategyRegistry;
         use std::sync::Arc;
 
         let cache = OrderBookCache::new();
@@ -744,9 +745,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::core::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = crate::core::service::statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::core::service::position::PositionManager::new(
+        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = crate::adapters::statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 

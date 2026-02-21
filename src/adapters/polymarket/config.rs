@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
-use crate::core::exchange::ExchangeConfig;
+use crate::runtime::exchange::ExchangeConfig;
 
 /// Default payout amount for Polymarket ($1.00 per share).
 pub const POLYMARKET_PAYOUT: Decimal = dec!(1);

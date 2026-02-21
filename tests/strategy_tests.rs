@@ -2,12 +2,12 @@
 
 mod support;
 
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{Market, OrderBook, PriceLevel};
-use edgelord::core::strategy::{
+use edgelord::adapters::strategies::{
     DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };
+use edgelord::domain::{Market, OrderBook, PriceLevel};
+use edgelord::runtime::cache::OrderBookCache;
 use rust_decimal_macros::dec;
 
 fn setup_arbitrage_books(cache: &OrderBookCache, market: &Market) {

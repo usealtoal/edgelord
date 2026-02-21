@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use edgelord::core::service::{Event, Notifier};
+use edgelord::adapters::notifiers::{Event, Notifier};
 
 /// Thread-safe event collector for notification assertions in tests.
 #[derive(Clone, Default)]

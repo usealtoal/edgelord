@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn gamma_market_converts_to_market_info() {
-        use crate::core::exchange::MarketInfo;
+        use crate::runtime::exchange::MarketInfo;
 
         let json = r#"{
             "conditionId": "0xabc",

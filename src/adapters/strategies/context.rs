@@ -5,70 +5,12 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::cache::OrderBookCache;
-use crate::core::domain::{Market, MarketId, TokenId};
+use crate::domain::{Market, MarketId, TokenId};
+use crate::ports::DetectionContext as DetectionContextTrait;
+use crate::runtime::cache::OrderBookCache;
 
-/// Context describing the market being analyzed.
-///
-/// This provides metadata about the market structure that strategies
-/// use to determine applicability.
-#[derive(Debug, Clone)]
-pub struct MarketContext {
-    /// Number of outcomes in the market (2 for binary, 3+ for multi-outcome).
-    pub outcome_count: usize,
-    /// Whether this market has known dependencies with others.
-    pub has_dependencies: bool,
-    /// Market IDs of correlated markets (for combinatorial detection).
-    pub correlated_markets: Vec<MarketId>,
-}
-
-impl MarketContext {
-    /// Create context for a simple binary market (YES/NO).
-    #[must_use]
-    pub const fn binary() -> Self {
-        Self {
-            outcome_count: 2,
-            has_dependencies: false,
-            correlated_markets: vec![],
-        }
-    }
-
-    /// Create context for a multi-outcome market.
-    #[must_use]
-    pub const fn multi_outcome(count: usize) -> Self {
-        Self {
-            outcome_count: count,
-            has_dependencies: false,
-            correlated_markets: vec![],
-        }
-    }
-
-    /// Create context for a market with dependencies.
-    #[must_use]
-    pub fn with_dependencies(mut self, markets: Vec<MarketId>) -> Self {
-        self.has_dependencies = !markets.is_empty();
-        self.correlated_markets = markets;
-        self
-    }
-
-    /// Check if this is a binary market.
-    #[must_use]
-    pub const fn is_binary(&self) -> bool {
-        self.outcome_count == 2
-    }
-
-    /// Check if this is a multi-outcome market.
-    #[must_use]
-    pub const fn is_multi_outcome(&self) -> bool {
-        self.outcome_count > 2
-    }
-}
-
-impl Default for MarketContext {
-    fn default() -> Self {
-        Self::binary()
-    }
-}
+// Re-export types from ports for consistency
+pub use crate::ports::{DetectionResult, MarketContext};
 
 /// Full context for detection including market data.
 ///
@@ -129,35 +71,40 @@ impl<'a> DetectionContext<'a> {
     }
 }
 
-/// Result from a detection run (for warm-starting).
-///
-/// Strategies can use this to optimize subsequent detections.
-#[derive(Debug, Clone, Default)]
-pub struct DetectionResult {
-    /// Number of opportunities found.
-    pub opportunity_count: usize,
-    /// Solver state for warm-starting (opaque bytes).
-    pub solver_state: Option<Vec<u8>>,
-    /// Last computed prices (for delta detection).
-    pub last_prices: Vec<(TokenId, Decimal)>,
-}
-
-impl DetectionResult {
-    /// Create an empty result.
-    #[must_use]
-    pub fn empty() -> Self {
-        Self::default()
+impl<'a> DetectionContextTrait for DetectionContext<'a> {
+    fn market_id(&self) -> &MarketId {
+        self.market.market_id()
     }
 
-    /// Create a result with opportunity count.
-    #[must_use]
-    pub fn with_count(count: usize) -> Self {
-        Self {
-            opportunity_count: count,
-            ..Default::default()
-        }
+    fn question(&self) -> &str {
+        self.market.question()
+    }
+
+    fn token_ids(&self) -> Vec<TokenId> {
+        self.market.token_ids().into_iter().cloned().collect()
+    }
+
+    fn payout(&self) -> Decimal {
+        self.market.payout()
+    }
+
+    fn market_context(&self) -> MarketContext {
+        self.market_ctx.clone()
+    }
+
+    fn best_ask(&self, token_id: &TokenId) -> Option<Decimal> {
+        self.cache.get(token_id)?.best_ask().map(|l| l.price())
+    }
+
+    fn best_bid(&self, token_id: &TokenId) -> Option<Decimal> {
+        self.cache.get(token_id)?.best_bid().map(|l| l.price())
+    }
+
+    fn ask_volume(&self, token_id: &TokenId) -> Option<Decimal> {
+        self.cache.get(token_id)?.best_ask().map(|l| l.size())
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -199,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_detection_context_binary_market() {
-        use crate::core::domain::{Market, Outcome};
+        use crate::domain::{Market, Outcome};
         use rust_decimal_macros::dec;
 
         let outcomes = vec![
@@ -222,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_detection_context_custom_payout() {
-        use crate::core::domain::{Market, Outcome};
+        use crate::domain::{Market, Outcome};
         use rust_decimal_macros::dec;
 
         let outcomes = vec![
@@ -243,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_detection_context_multi_outcome() {
-        use crate::core::domain::{Market, Outcome};
+        use crate::domain::{Market, Outcome};
         use rust_decimal_macros::dec;
 
         let outcomes = vec![

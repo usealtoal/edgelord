@@ -9,7 +9,7 @@ pub use sqlite::SqliteRelationStore;
 
 use std::future::Future;
 
-use crate::core::domain::{Cluster, ClusterId, Relation, RelationId};
+use crate::domain::{Cluster, ClusterId, Relation, RelationId};
 use crate::error::Result;
 
 /// Storage operations for relations.
@@ -48,7 +48,7 @@ pub trait ClusterStore: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{MarketId, RelationKind};
+    use crate::domain::{MarketId, RelationKind};
 
     fn sample_relation() -> Relation {
         Relation::new(

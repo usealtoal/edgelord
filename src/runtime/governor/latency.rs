@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use crate::core::domain::{ResourceBudget, ScalingRecommendation};
+use crate::domain::{ResourceBudget, ScalingRecommendation};
 
 use super::{AdaptiveGovernor, GovernorConfig, LatencyMetrics};
 

@@ -2,8 +2,8 @@
 //!
 //! Implements [`MarketFilter`] to filter Polymarket markets for subscription eligibility.
 
-use crate::app::PolymarketFilterConfig;
-use crate::core::exchange::{MarketFilter, MarketFilterConfig, MarketInfo};
+use crate::runtime::exchange::{MarketFilter, MarketFilterConfig, MarketInfo};
+use crate::runtime::PolymarketFilterConfig;
 
 /// Filter for Polymarket markets.
 ///
@@ -91,7 +91,7 @@ impl MarketFilter for PolymarketFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::exchange::OutcomeInfo;
+    use crate::runtime::exchange::OutcomeInfo;
 
     fn default_config() -> PolymarketFilterConfig {
         PolymarketFilterConfig::default()

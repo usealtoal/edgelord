@@ -4,10 +4,10 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 
 use super::RelationStore;
-use crate::core::db::model::RelationRow;
-use crate::core::db::schema::relations;
-use crate::core::db::DbPool;
-use crate::core::domain::{MarketId, Relation, RelationId, RelationKind};
+use crate::adapters::stores::db::model::RelationRow;
+use crate::adapters::stores::db::schema::relations;
+use crate::adapters::stores::db::DbPool;
+use crate::domain::{MarketId, Relation, RelationId, RelationKind};
 use crate::error::{Error, Result};
 
 /// SQLite-backed relation store.
@@ -181,8 +181,8 @@ impl SqliteRelationStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::db::create_pool;
-    use crate::core::domain::MarketId;
+    use crate::adapters::stores::db::create_pool;
+    use crate::domain::MarketId;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
     pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

@@ -9,7 +9,7 @@ pub use latency::LatencyGovernor;
 
 use std::time::Duration;
 
-use crate::core::domain::{ResourceBudget, ScalingRecommendation};
+use crate::domain::{ResourceBudget, ScalingRecommendation};
 
 /// Latency targets for the adaptive governor.
 ///

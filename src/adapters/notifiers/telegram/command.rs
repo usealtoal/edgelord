@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use rust_decimal::Decimal;
 
-use crate::app::RiskLimitKind;
+use crate::runtime::RiskLimitKind;
 
 /// Supported Telegram commands.
 #[derive(Debug, Clone, PartialEq)]

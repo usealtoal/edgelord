@@ -16,8 +16,8 @@ use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
 use super::response::{GammaMarket, PolymarketMarket, PolymarketMarketsResponse};
-use crate::app::PolymarketConfig;
-use crate::core::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
+use crate::runtime::exchange::{MarketFetcher, MarketInfo, OutcomeInfo};
+use crate::runtime::PolymarketConfig;
 use crate::error::Result;
 
 /// HTTP client for the Polymarket REST APIs.

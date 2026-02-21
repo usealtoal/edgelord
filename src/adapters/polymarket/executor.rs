@@ -14,11 +14,11 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
-use crate::app::Config;
-use crate::core::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId};
-use crate::core::exchange::{
+use crate::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId};
+use crate::runtime::exchange::{
     ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide,
 };
+use crate::runtime::Config;
 use crate::error::{ConfigError, ExecutionError, Result};
 
 /// Type alias for the authenticated CLOB client.

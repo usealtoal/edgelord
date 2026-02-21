@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use diesel::prelude::*;
-use edgelord::core::db::{create_pool, run_migrations, DbPool};
+use edgelord::adapters::stores::db::{create_pool, run_migrations, DbPool};
 
 /// Temporary SQLite database for integration tests.
 pub struct TempDb {

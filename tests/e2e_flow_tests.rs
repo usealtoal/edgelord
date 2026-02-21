@@ -3,13 +3,15 @@ mod support;
 
 use std::sync::Arc;
 
+use edgelord::adapters::notifiers::NotifierRegistry;
+use edgelord::adapters::position::PositionManager;
+use edgelord::adapters::risk::RiskManager;
+use edgelord::adapters::statistics::create_recorder;
+use edgelord::adapters::strategies::{SingleConditionConfig, SingleConditionStrategy, StrategyRegistry};
 use edgelord::app::{process_market_event, AppState, EventProcessingContext, RiskLimits};
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::TokenId;
-use edgelord::core::exchange::MarketEvent;
-use edgelord::core::service::statistics::create_recorder;
-use edgelord::core::service::{NotifierRegistry, PositionManager, RiskManager};
-use edgelord::core::strategy::{SingleConditionConfig, SingleConditionStrategy, StrategyRegistry};
+use edgelord::domain::TokenId;
+use edgelord::runtime::cache::OrderBookCache;
+use edgelord::runtime::exchange::MarketEvent;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 

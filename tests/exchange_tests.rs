@@ -6,11 +6,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use edgelord::adapters::polymarket::PolymarketClient;
 use edgelord::app::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
-use edgelord::core::domain::TokenId;
-use edgelord::core::exchange::polymarket::PolymarketClient;
-use edgelord::core::exchange::ExchangeFactory;
-use edgelord::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
+use edgelord::domain::TokenId;
+use edgelord::runtime::exchange::{
+    ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
+};
 use edgelord::error::{ConfigError, Error};
 use edgelord::testkit;
 use edgelord::testkit::stream::ScriptedStream;

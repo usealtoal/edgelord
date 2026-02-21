@@ -29,8 +29,8 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, Web
 use tracing::{debug, error, info, trace, warn};
 
 use super::message::{PolymarketSubscribeMessage, PolymarketTaggedMessage, PolymarketWsMessage};
-use crate::core::domain::TokenId;
-use crate::core::exchange::{MarketDataStream, MarketEvent};
+use crate::domain::TokenId;
+use crate::runtime::exchange::{MarketDataStream, MarketEvent};
 use crate::error::Result;
 
 /// WebSocket handler for Polymarket real-time data feed.

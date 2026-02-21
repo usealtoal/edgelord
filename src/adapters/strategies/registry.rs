@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use crate::core::cache::ClusterCache;
-use crate::core::domain::{MarketRegistry, Opportunity};
-use crate::core::strategy::Strategy;
+use crate::domain::{MarketRegistry, Opportunity};
+use crate::runtime::cache::ClusterCache;
+
+use super::Strategy;
 
 use super::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use super::condition::{SingleConditionConfig, SingleConditionStrategy};

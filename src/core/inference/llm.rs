@@ -8,8 +8,8 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::core::domain::{MarketId, Relation, RelationKind};
-use crate::core::llm::Llm;
+use crate::domain::{MarketId, Relation, RelationKind};
+use crate::adapters::llm::Llm;
 use crate::error::Result;
 use crate::ports::{MarketSummary, RelationInferrer};
 
@@ -107,7 +107,7 @@ Rules:
 
                 match r.into_kind_mapped(&id_map) {
                     Some(Some(kind)) => Some(Relation {
-                        id: crate::core::domain::RelationId::default(),
+                        id: crate::domain::RelationId::default(),
                         kind,
                         confidence,
                         reasoning,
@@ -223,7 +223,7 @@ fn extract_json(text: &str) -> Result<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::llm::tests::MockLlm;
+    use crate::adapters::llm::tests::MockLlm;
 
     #[tokio::test]
     async fn parses_valid_response_with_short_ids() {

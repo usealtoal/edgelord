@@ -10,10 +10,9 @@ use crate::error::ConfigError;
 use crate::error::Result;
 
 #[cfg(feature = "polymarket")]
-use crate::core::exchange::{
-    polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult},
-    ApprovalResult, TokenApproval,
-};
+use crate::adapters::polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult};
+#[cfg(feature = "polymarket")]
+use crate::runtime::exchange::{ApprovalResult, TokenApproval};
 
 /// Current approval status for CLI display.
 ///

@@ -6,10 +6,10 @@ use std::sync::Arc;
 use chrono::Utc;
 use parking_lot::RwLock;
 
-use crate::app::AppState;
-use crate::core::cache::ClusterCache;
-use crate::core::domain::{PoolStats, PositionStatus, RelationKind};
-use crate::core::service::StatsRecorder;
+use crate::adapters::statistics::StatsRecorder;
+use crate::domain::{PoolStats, PositionStatus, RelationKind};
+use crate::runtime::cache::ClusterCache;
+use crate::runtime::AppState;
 
 use super::command::{command_help, TelegramCommand};
 
@@ -508,9 +508,9 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
 
-    use crate::app::{RiskLimitKind, RiskLimits};
-    use crate::core::db;
-    use crate::core::service::statistics;
+    use crate::adapters::statistics;
+    use crate::adapters::stores::db;
+    use crate::runtime::{RiskLimitKind, RiskLimits};
 
     #[test]
     fn execute_pause_and_resume() {
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn positions_with_data() {
-        use crate::core::domain::{MarketId, Position, PositionLeg, TokenId};
+        use crate::domain::{MarketId, Position, PositionLeg, TokenId};
 
         let state = Arc::new(AppState::default());
 

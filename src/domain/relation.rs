@@ -11,7 +11,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use super::id::{ClusterId, MarketId, RelationId};
-use crate::core::solver::{Constraint, ConstraintSense};
+use crate::ports::{Constraint, ConstraintSense};
 
 /// A logical relation between prediction markets.
 ///

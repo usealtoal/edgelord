@@ -4,8 +4,8 @@ use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::core::db::model::DailyStatsRow;
-use crate::core::db::schema::{daily_stats, trades};
+use crate::adapters::stores::db::model::DailyStatsRow;
+use crate::adapters::stores::db::schema::{daily_stats, trades};
 use crate::error::{ConfigError, Error, Result};
 
 fn connect(db_path: &Path) -> Result<Pool<ConnectionManager<SqliteConnection>>> {

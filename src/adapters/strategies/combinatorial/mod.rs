@@ -35,9 +35,8 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext};
+use super::{DetectionContext, MarketContext, Strategy};
 use crate::adapters::cluster::{ClusterDetectionConfig, ClusterDetector};
-use crate::core::strategy::Strategy;
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::runtime::cache::ClusterCache;
 
@@ -161,7 +160,7 @@ impl CombinatorialStrategy {
     }
 
     /// Check if a market has known relations in the cache.
-    fn has_cached_relations(&self, market_id: &crate::core::domain::MarketId) -> bool {
+    fn has_cached_relations(&self, market_id: &crate::domain::MarketId) -> bool {
         self.cluster_cache
             .as_ref()
             .map(|c| c.has_relations(market_id))
@@ -277,9 +276,9 @@ impl Strategy for CombinatorialStrategy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::cache::OrderBookCache;
-    use crate::core::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
-    use crate::core::solver::Constraint;
+    use crate::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
+    use crate::ports::Constraint;
+    use crate::runtime::cache::OrderBookCache;
     use chrono::{Duration, Utc};
     use rust_decimal_macros::dec;
 
@@ -332,7 +331,7 @@ mod tests {
 
         // Should apply to markets with dependencies
         let ctx_with_deps = MarketContext::binary()
-            .with_dependencies(vec![crate::core::domain::MarketId::from("other")]);
+            .with_dependencies(vec![crate::domain::MarketId::from("other")]);
         assert!(strategy.applies_to(&ctx_with_deps));
     }
 
@@ -437,12 +436,12 @@ mod tests {
 
         // Set prices that are fair (no arbitrage)
         let cache = OrderBookCache::new();
-        cache.update(crate::core::domain::OrderBook::with_levels(
+        cache.update(crate::domain::OrderBook::with_levels(
             TokenId::from("yes1"),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
-        cache.update(crate::core::domain::OrderBook::with_levels(
+        cache.update(crate::domain::OrderBook::with_levels(
             TokenId::from("yes2"),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],

@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 
-use crate::app::PolymarketDedupConfig;
-use crate::core::exchange::{MarketEvent, MessageDeduplicator};
+use crate::runtime::exchange::{MarketEvent, MessageDeduplicator};
+use crate::runtime::PolymarketDedupConfig;
 
 /// Thread-safe message deduplicator for Polymarket.
 ///
@@ -158,7 +158,7 @@ impl MessageDeduplicator for PolymarketDeduplicator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::domain::{OrderBook, PriceLevel, TokenId};
+    use crate::domain::{OrderBook, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
     fn test_config() -> PolymarketDedupConfig {

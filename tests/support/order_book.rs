@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{OrderBook, PriceLevel, TokenId};
+use edgelord::domain::{OrderBook, PriceLevel, TokenId};
+use edgelord::runtime::cache::OrderBookCache;
 
 pub fn make_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> OrderBook {
     OrderBook::with_levels(

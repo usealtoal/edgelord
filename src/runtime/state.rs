@@ -6,8 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Mutex, RwLock};
 use rust_decimal::Decimal;
 
-use crate::core::cache::PositionTracker;
-use crate::core::domain::Price;
+use crate::runtime::cache::PositionTracker;
+use crate::domain::Price;
 
 /// Risk limits configuration.
 #[derive(Debug, Clone)]
@@ -331,7 +331,7 @@ mod tests {
 
     #[test]
     fn test_total_exposure() {
-        use crate::core::domain::{MarketId, Position, PositionLeg, PositionStatus, TokenId};
+        use crate::domain::{MarketId, Position, PositionLeg, PositionStatus, TokenId};
 
         let state = AppState::default();
 
