@@ -103,3 +103,5 @@ rand = "0.8"
 [dev-dependencies]
 edgelord = { path = ".", features = ["testkit"] }
 tokio-test = "0.4"
+assert_cmd = "2"
+predicates = "3"
