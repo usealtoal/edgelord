@@ -9,10 +9,10 @@ use async_trait::async_trait;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-use crate::domain::TokenId;
+use crate::domain::id::TokenId;
 use crate::error::Error;
-use crate::port::{MarketDataStream, MarketEvent};
-use crate::infrastructure::ReconnectionConfig;
+use crate::infrastructure::config::service::ReconnectionConfig;
+use crate::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 
 /// Circuit breaker state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

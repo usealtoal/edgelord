@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 
-use edgelord::domain::{Book, PriceLevel, TokenId};
-use edgelord::infrastructure::cache::BookCache;
+use edgelord::application::cache::book::BookCache;
+use edgelord::domain::{book::Book, book::PriceLevel, id::TokenId};
 
 pub fn make_book(token_id: &str, bid: Decimal, ask: Decimal) -> Book {
     Book::with_levels(

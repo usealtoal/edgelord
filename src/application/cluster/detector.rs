@@ -1,14 +1,20 @@
 //! Cluster detection logic using Frank-Wolfe projection.
 
+use std::sync::Arc;
+
 use rust_decimal::Decimal;
 use tracing::{info, trace};
 
-use crate::adapter::solver::{FrankWolfe, FrankWolfeConfig, HiGHSSolver};
-use crate::port::{IlpProblem, LpProblem, VariableBounds};
-use crate::domain::{Book, Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
+use crate::domain::{
+    book::Book, cluster::Cluster, constraint::VariableBounds, id::TokenId, market::MarketRegistry,
+    opportunity::Opportunity, opportunity::OpportunityLeg,
+};
 use crate::error::{Error, Result};
+use crate::port::{
+    outbound::solver::IlpProblem, outbound::solver::LpProblem, outbound::solver::ProjectionSolver,
+};
 
-use super::{ClusterDetectionConfig, ClusterOpportunity};
+use super::service::{ClusterDetectionConfig, ClusterOpportunity};
 
 /// Errors specific to cluster detection.
 #[derive(Debug, Clone)]
@@ -53,22 +59,18 @@ pub type BookLookup<'a> = &'a dyn Fn(&TokenId) -> Option<Book>;
 /// Encapsulates the detection logic separate from the service lifecycle.
 pub struct ClusterDetector {
     config: ClusterDetectionConfig,
-    fw_solver: FrankWolfe,
-    ilp_solver: HiGHSSolver,
+    projection_solver: Arc<dyn ProjectionSolver>,
 }
 
 impl ClusterDetector {
     /// Create a new detector with the given configuration.
-    pub fn new(config: ClusterDetectionConfig) -> Self {
-        let fw_config = FrankWolfeConfig {
-            max_iterations: 20,
-            tolerance: Decimal::new(1, 4), // 0.0001
-        };
-
+    pub fn new(
+        config: ClusterDetectionConfig,
+        projection_solver: Arc<dyn ProjectionSolver>,
+    ) -> Self {
         Self {
             config,
-            fw_solver: FrankWolfe::new(fw_config),
-            ilp_solver: HiGHSSolver::new(),
+            projection_solver,
         }
     }
 
@@ -113,8 +115,8 @@ impl ClusterDetector {
 
         // Run Frank-Wolfe projection
         let result = self
-            .fw_solver
-            .project(&prices, &ilp, &self.ilp_solver)
+            .projection_solver
+            .project(&prices, &ilp)
             .map_err(|e| Error::Parse(DetectionError::SolverFailed(e.to_string()).to_string()))?;
 
         // Check threshold
@@ -137,7 +139,7 @@ impl ClusterDetector {
 
         // Build opportunity
         let opportunity =
-            self.build_opportunity(cluster, &token_ids, &result.mu, result.gap, registry)?;
+            self.build_opportunity(cluster, &token_ids, &result.values, result.gap, registry)?;
 
         Ok(Some(ClusterOpportunity {
             cluster_id,
@@ -232,11 +234,29 @@ impl ClusterDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::port::{outbound::solver::ProjectionResult, outbound::solver::ProjectionSolver};
+
+    struct MockProjectionSolver;
+
+    impl ProjectionSolver for MockProjectionSolver {
+        fn name(&self) -> &'static str {
+            "mock_projection"
+        }
+
+        fn project(&self, theta: &[Decimal], _problem: &IlpProblem) -> Result<ProjectionResult> {
+            Ok(ProjectionResult {
+                values: theta.to_vec(),
+                gap: Decimal::ZERO,
+                iterations: 1,
+                converged: true,
+            })
+        }
+    }
 
     #[test]
     fn test_detector_creation() {
         let config = ClusterDetectionConfig::default();
-        let detector = ClusterDetector::new(config);
+        let detector = ClusterDetector::new(config, Arc::new(MockProjectionSolver));
         assert_eq!(detector.config.debounce_ms, 100);
     }
 

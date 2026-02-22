@@ -3,7 +3,7 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::application::cluster::ClusterDetectionConfig as CoreConfig;
+use crate::application::cluster::service::ClusterDetectionConfig as CoreConfig;
 
 /// Configuration for the cluster detection service.
 #[derive(Debug, Clone, Deserialize)]

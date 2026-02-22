@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 
+use super::constraint::Constraint;
 use super::id::{ClusterId, MarketId};
 use super::relation::Relation;
-use crate::port::Constraint;
 
 /// A cluster of related markets with pre-computed solver constraints.
 ///

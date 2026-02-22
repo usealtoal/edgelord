@@ -3,7 +3,7 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::super::state::RiskLimits;
+use crate::application::state::RiskLimits;
 
 /// Wallet configuration for signing orders.
 /// Private key is loaded from `WALLET_PRIVATE_KEY` env var at runtime (never from config file).

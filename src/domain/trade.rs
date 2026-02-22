@@ -4,7 +4,7 @@
 //! - [`Fill`] - A successfully executed leg
 //! - [`Failure`] - A failed leg with error info
 
-use super::TokenId;
+use super::id::TokenId;
 
 /// A successfully executed leg in a trade.
 #[derive(Debug, Clone)]

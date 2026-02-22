@@ -9,9 +9,9 @@ use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-use super::{ResourceBudget, ScalingRecommendation};
-
-use super::{AdaptiveGovernor, GovernorConfig, LatencyMetrics};
+use super::resource::ResourceBudget;
+use super::runtime::{AdaptiveGovernor, GovernorConfig, LatencyMetrics};
+use super::scaling::ScalingRecommendation;
 
 /// Maximum number of latency/throughput samples to retain.
 const MAX_SAMPLES: usize = 1000;
@@ -30,7 +30,8 @@ const MAX_SAMPLES: usize = 1000;
 /// # Example
 ///
 /// ```
-/// use edgelord::infrastructure::governor::{GovernorConfig, LatencyGovernor, AdaptiveGovernor};
+/// use edgelord::infrastructure::governor::runtime::{AdaptiveGovernor, GovernorConfig};
+/// use edgelord::infrastructure::governor::latency::LatencyGovernor;
 /// use std::time::Duration;
 ///
 /// let governor = LatencyGovernor::new(GovernorConfig::default());
@@ -69,7 +70,8 @@ impl LatencyGovernor {
     /// # Example
     ///
     /// ```
-    /// use edgelord::infrastructure::governor::{GovernorConfig, LatencyGovernor};
+    /// use edgelord::infrastructure::governor::runtime::GovernorConfig;
+    /// use edgelord::infrastructure::governor::latency::LatencyGovernor;
     ///
     /// let governor = LatencyGovernor::new(GovernorConfig::default());
     /// ```
@@ -228,7 +230,7 @@ impl AdaptiveGovernor for LatencyGovernor {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{LatencyTargets, ScalingConfig};
+    use super::super::runtime::{LatencyTargets, ScalingConfig};
     use super::*;
 
     // --- LatencyGovernor::new tests ---

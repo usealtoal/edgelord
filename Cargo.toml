@@ -99,6 +99,7 @@ rust_decimal_macros = "1"
 num_cpus = "1.17.0"
 dashmap = "6.1.0"
 rand = "0.8"
+dirs = "6.0.0"
 
 [dev-dependencies]
 edgelord = { path = ".", features = ["testkit"] }

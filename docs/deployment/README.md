@@ -9,7 +9,7 @@ This section covers production deployment and operations for edgelord.
 - [Wallet Setup](wallet.md)
   - Prepare a dedicated Polygon wallet and funding model.
 - [Infrastructure](infrastructure.md)
-  - Provision a VPS, install runtime dependencies, and run as a service.
+  - Provision a VPS, install runtime dependencies, and run under systemd.
 - [Telegram Integration](telegram.md)
   - Configure alerting and runtime bot control commands.
 - [Operations](operations.md)
@@ -20,6 +20,7 @@ This section covers production deployment and operations for edgelord.
 - Non-testnet configuration (`environment = "mainnet"`, `chain_id = 137`)
 - `dry_run = false`
 - Wallet available through private key or keystore
+- `edgelord check health --config <path>` returns healthy
 - `edgelord check live --config <path>` returns no blockers
 
 ## Regulatory and Compliance Note

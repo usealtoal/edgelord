@@ -1,26 +1,29 @@
 # Custom Strategies
 
-Implement `adapter::strategy::Strategy` to add your own detection algorithm.
+Implement `port::inbound::strategy::Strategy` to add your own detection algorithm.
 
-## Trait Definition
+## Strategy Contract
 
 ```rust
 pub trait Strategy: Send + Sync {
     fn name(&self) -> &'static str;
     fn applies_to(&self, ctx: &MarketContext) -> bool;
-    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity>;
+    fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity>;
 }
 ```
+
+Primary types are defined in `src/port/inbound/strategy.rs`:
+- `Strategy`
+- `MarketContext`
+- `DetectionContext`
 
 ## Example
 
 ```rust
-use edgelord::adapter::strategy::{Strategy, MarketContext, DetectionContext};
-use edgelord::domain::Opportunity;
+use edgelord::domain::opportunity::Opportunity;
+use edgelord::port::inbound::strategy::{DetectionContext, MarketContext, Strategy};
 
-pub struct MomentumStrategy {
-    lookback: usize,
-}
+pub struct MomentumStrategy;
 
 impl Strategy for MomentumStrategy {
     fn name(&self) -> &'static str {
@@ -28,23 +31,29 @@ impl Strategy for MomentumStrategy {
     }
 
     fn applies_to(&self, ctx: &MarketContext) -> bool {
-        ctx.outcome_count == 2  // Binary markets only
+        ctx.is_binary()
     }
 
-    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        // Your detection logic here
+    fn detect(&self, _ctx: &dyn DetectionContext) -> Vec<Opportunity> {
         vec![]
     }
 }
 ```
 
+## Where to Place It
+
+- Add strategy implementation in `src/application/strategy/`.
+- Keep strategy-specific config and logic in the same module.
+- Keep infrastructure and exchange code out of strategy modules.
+
 ## Registration
 
-Add your strategy to the registry in your fork:
+`StrategyRegistry` lives in `src/application/strategy/registry.rs`.
 
-```rust
-let registry = StrategyRegistry::builder()
-    .strategy(MomentumStrategy::new(20))
-    .strategy(SingleConditionStrategy::default())
-    .build();
-```
+To wire a custom strategy in your fork:
+
+1. Add a config entry in `src/infrastructure/config/strategy.rs`.
+2. Extend `StrategyRegistryBuilder` in `src/application/strategy/registry.rs`.
+3. Register it in `build_strategy_registry` in `src/infrastructure/bootstrap.rs`.
+
+This keeps strategy enablement fully config-driven while preserving hexagonal boundaries.

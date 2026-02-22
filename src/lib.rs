@@ -14,24 +14,24 @@
 //!
 //! Fork this repo and extend:
 //!
-//! - Add strategies: implement `port::Strategy`
-//! - Add exchanges: implement `port::MarketDataStream` + `port::ArbitrageExecutor`
-//! - Add notifiers: implement `port::Notifier`
+//! - Add strategies: implement `port::inbound::strategy::Strategy`
+//! - Add exchanges: implement `port::outbound::exchange::*`
+//! - Add notifiers: implement `port::outbound::notifier::Notifier`
 //!
 //! # Architecture
 //!
 //! ```text
 //! domain/          Pure types, no I/O
 //! port/            Trait definitions (extension points)
-//! adapter/         Port implementations (external integrations)
+//! adapter/
+//!   inbound/       Driving adapters (CLI)
+//!   outbound/      Driven adapters (exchange, storage, notifier, solver, llm)
 //! application/     Application services (use cases)
 //! infrastructure/  Runtime concerns (caching, config, orchestration)
-//! cli/             Command-line interface
 //! ```
 
 pub mod adapter;
 pub mod application;
-pub mod cli;
 pub mod domain;
 pub mod error;
 pub mod infrastructure;

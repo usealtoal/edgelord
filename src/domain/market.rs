@@ -9,8 +9,8 @@ use std::result::Result;
 
 use rust_decimal::Decimal;
 
+use super::error::DomainError;
 use super::id::{MarketId, TokenId};
-use crate::error::DomainError;
 
 /// A single outcome within a market.
 ///
@@ -57,7 +57,7 @@ impl Outcome {
 /// # Example
 ///
 /// ```ignore
-/// use edgelord::domain::{Market, Outcome, MarketId, TokenId};
+/// use edgelord::domain::{market::Market, market::Outcome, id::MarketId, id::TokenId};
 /// use rust_decimal_macros::dec;
 ///
 /// let market = Market::new(
@@ -444,7 +444,12 @@ mod tests {
             Outcome::new(TokenId::from(yes_token), "Yes"),
             Outcome::new(TokenId::from(no_token), "No"),
         ];
-        Market::new(MarketId::from(id), format!("Market {id}?"), outcomes, dec!(1.00))
+        Market::new(
+            MarketId::from(id),
+            format!("Market {id}?"),
+            outcomes,
+            dec!(1.00),
+        )
     }
 
     #[test]

@@ -5,7 +5,7 @@ This guide gets edgelord running in a safe baseline configuration.
 ## 1. Prerequisites
 
 - Rust 1.75+
-- [dugout](https://crates.io/crates/dugout) for secrets management
+- [dugout](https://crates.io/crates/dugout) for secrets management (recommended)
 - Access to a Polymarket-compatible wallet setup
 - Polygon USDC + MATIC if you intend to trade live
 
@@ -23,29 +23,30 @@ Binary location:
 ./target/release/edgelord
 ```
 
-## 3. Create Config
+## 3. Initialize Config
+
+Recommended (interactive wizard):
 
 ```bash
-cp config.toml.example config.toml
+./target/release/edgelord init config.toml
 ```
 
-Recommended first-run posture in `config.toml`:
+The wizard configures:
+- Network (`testnet`/`mainnet`)
+- Enabled strategies (`single_condition`, `market_rebalancing`, `combinatorial`)
+- Risk limits
 
-```toml
-profile = "local"
-dry_run = true
+Non-interactive (template only):
 
-[exchange_config]
-environment = "testnet"
-chain_id = 80002
-
-[strategies]
-enabled = ["single_condition", "market_rebalancing"]
+```bash
+./target/release/edgelord config init config.toml
 ```
+
+If you need to overwrite, add `--force`.
 
 ## 4. Set Up Secrets with Dugout
 
-edgelord uses dugout for secure secrets management. Secrets are encrypted at rest and injected at runtime.
+edgelord works best with dugout so secrets are encrypted at rest and injected at runtime.
 
 ```bash
 # Install dugout (if not already installed)
@@ -64,21 +65,27 @@ dugout set WALLET_PRIVATE_KEY
 dugout set TELEGRAM_BOT_TOKEN
 dugout set TELEGRAM_CHAT_ID
 
+# Optional: Add LLM credentials for combinatorial inference
+dugout set ANTHROPIC_API_KEY
+dugout set OPENAI_API_KEY
+
 # Commit the encrypted vault
 git add .dugout.toml
 git commit -m "feat: add encrypted secrets vault"
 ```
 
-## 5. Provision Wallet (Alternative)
+## 5. Provision Wallet (Keystore Alternative)
 
-If you prefer the keystore-based approach instead of dugout:
+If you prefer keystore-based wallet handling instead of `WALLET_PRIVATE_KEY`:
+
+Generate new keystore:
 
 ```bash
 export EDGELORD_KEYSTORE_PASSWORD="change-me"
-./target/release/edgelord provision polymarket --config config.toml
+./target/release/edgelord provision polymarket --wallet generate --config config.toml
 ```
 
-Import existing key:
+Import an existing private key:
 
 ```bash
 export EDGELORD_PRIVATE_KEY="0x..."
@@ -86,10 +93,11 @@ export EDGELORD_KEYSTORE_PASSWORD="change-me"
 ./target/release/edgelord provision polymarket --wallet import --config config.toml
 ```
 
-## 6. Validate Configuration and Connectivity
+## 6. Validate Configuration and Readiness
 
 ```bash
 dugout run -- ./target/release/edgelord check config --config config.toml
+dugout run -- ./target/release/edgelord check health --config config.toml
 dugout run -- ./target/release/edgelord check connection --config config.toml
 dugout run -- ./target/release/edgelord check live --config config.toml
 ```
@@ -114,10 +122,10 @@ dugout env
 Quickly switch between testnet and mainnet without editing config:
 
 ```bash
-# Run on testnet (default)
+# Run on testnet
 dugout run -- ./target/release/edgelord run --testnet
 
-# Run on mainnet (sets chain_id=137, environment=mainnet)
+# Run on mainnet (shortcut for chain_id=137)
 dugout run -- ./target/release/edgelord run --mainnet --dry-run
 ```
 
@@ -132,38 +140,27 @@ dugout run -- ./target/release/edgelord run \
   --max-slippage 0.02
 ```
 
-### CLI Overrides
-
-Any config setting can be overridden via CLI flags:
-
-```bash
-# Custom market filters
-dugout run -- ./target/release/edgelord run --max-markets 100 --min-volume 5000
-
-# Connection tuning
-dugout run -- ./target/release/edgelord run --max-connections 5 --connection-ttl 60
-
-# Risk limits
-dugout run -- ./target/release/edgelord run --max-exposure 5000 --max-position 500
-```
-
-See `edgelord run --help` for all available flags.
-
 ## 8. Observe and Inspect
 
 ```bash
-./target/release/edgelord status --db edgelord.db
+./target/release/edgelord status --db edgelord.db --config config.toml
 ./target/release/edgelord statistics today --db edgelord.db
-./target/release/edgelord logs --follow
+./target/release/edgelord statistics week --db edgelord.db
+```
+
+If running under systemd, use:
+
+```bash
+journalctl -u edgelord -f
 ```
 
 ## Moving to Mainnet
 
 Before switching from testnet to mainnet:
 
-1. Set `dry_run = false` only after repeated stable dry-run sessions.
+1. Keep `dry_run = true` until repeated stable dry-run sessions are clean.
 2. Switch `[exchange_config] environment = "mainnet"` and `chain_id = 137`.
-3. Re-run `check live` and confirm no blockers.
+3. Re-run `check health` and `check live` and confirm no blockers.
 4. Start with conservative `risk` limits.
 
 For infrastructure and operations details, continue to [Deployment](deployment/README.md).

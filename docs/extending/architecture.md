@@ -1,40 +1,47 @@
 # Architecture
 
-Edgelord uses hexagonal architecture with clear separation between
-domain logic, ports (interfaces), and adapters (implementations).
+Edgelord uses hexagonal architecture with directional ports and adapters.
 
 ## Module Structure
 
 ```
 src/
-├── domain/      Pure types. No I/O, no dependencies.
-├── ports/       Trait definitions. Extension points.
-├── adapters/    Implementations. Polymarket, strategies, etc.
-├── runtime/     Orchestration. Wires components together.
-└── cli/         Command-line interface.
+├── domain/                 Pure types and invariants (no I/O)
+├── port/
+│   ├── inbound/            Use-case capability contracts
+│   └── outbound/           Infrastructure dependency contracts
+├── application/            Use-case orchestration
+├── adapter/
+│   ├── inbound/cli/        CLI entrypoints and command handlers
+│   └── outbound/           Exchange/storage/notifier/solver/llm implementations
+└── infrastructure/         Wiring, runtime orchestration, bootstrap
 ```
 
 ## Dependency Rules
 
-- `domain/` imports nothing
-- `ports/` imports only `domain/`
-- `adapters/` imports `domain/` and `ports/`
-- `runtime/` imports all above
-- `cli/` imports `runtime/`
+- `domain/` imports nothing from crate layers
+- `port/` imports only `domain/`
+- `application/` imports only `domain/` and `port/`
+- `adapter/outbound/` imports only `domain/` and `port/`
+- `adapter/inbound/` never imports `adapter/outbound/` directly
+- `adapter/inbound/` does not import `infrastructure/` directly
+- `infrastructure/` owns composition/wiring across layers
 
 ## Key Extension Points
 
 | Port | Purpose |
 |------|---------|
-| `Strategy` | Detection algorithms |
-| `MarketDataStream` | Real-time data feeds |
-| `ArbitrageExecutor` | Order execution |
-| `Notifier` | Event notifications |
-| `Store` | Persistence |
-| `Solver` | LP/ILP optimization |
+| `port/inbound/strategy` | Strategy capability surface |
+| `port/inbound/operator/*` | CLI/operator capability surfaces (configuration, diagnostics, runtime, status, statistics, wallet) |
+| `port/outbound/exchange` | Market data + execution integration |
+| `port/outbound/notifier` | Event notifications |
+| `port/outbound/store` | Persistence |
+| `port/outbound/solver` | Optimization backend |
 
 ## Adding Features
 
-1. Define trait in `ports/`
-2. Implement in `adapters/`
-3. Wire in `runtime/`
+1. Define or extend a contract in `port/` when needed.
+2. Implement business flow in `application/`.
+3. Implement driven integrations in `adapter/outbound/`.
+4. Add/extend command handling in `adapter/inbound/cli/`.
+5. Wire concrete dependencies in `infrastructure/`.

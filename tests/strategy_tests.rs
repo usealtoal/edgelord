@@ -2,13 +2,15 @@
 
 mod support;
 
-use edgelord::adapter::strategy::{
-    ConcreteDetectionContext, MarketRebalancingStrategy, SingleConditionConfig,
-    SingleConditionStrategy, StrategyRegistry,
+use edgelord::application::cache::book::BookCache;
+use edgelord::application::strategy::context::ConcreteDetectionContext;
+use edgelord::application::strategy::market_rebalancing::MarketRebalancingStrategy;
+use edgelord::application::strategy::registry::StrategyRegistry;
+use edgelord::application::strategy::single_condition::{
+    SingleConditionConfig, SingleConditionStrategy,
 };
-use edgelord::port::{DetectionContext, MarketContext, Strategy};
-use edgelord::domain::{Market, Book, PriceLevel};
-use edgelord::infrastructure::cache::BookCache;
+use edgelord::domain::{book::Book, book::PriceLevel, market::Market};
+use edgelord::port::{inbound::strategy::MarketContext, inbound::strategy::Strategy};
 use rust_decimal_macros::dec;
 
 fn setup_arbitrage_books(cache: &BookCache, market: &Market) {

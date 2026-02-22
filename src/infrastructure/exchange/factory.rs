@@ -4,15 +4,26 @@
 
 use std::sync::Arc;
 
+use crate::adapter::outbound::polymarket::client::PolymarketClient;
+use crate::adapter::outbound::polymarket::dedup::PolymarketDeduplicator;
+use crate::adapter::outbound::polymarket::executor::PolymarketExecutor;
+use crate::adapter::outbound::polymarket::filter::PolymarketFilter;
+use crate::adapter::outbound::polymarket::market::PolymarketMarketParser;
+use crate::adapter::outbound::polymarket::scorer::PolymarketScorer;
+use crate::adapter::outbound::polymarket::settings::{PolymarketConfig, PolymarketRuntimeConfig};
+use crate::adapter::outbound::polymarket::stream::PolymarketDataStream;
 use crate::error::ConfigError;
 use crate::error::Result;
-use crate::infrastructure::{Config, Exchange, PolymarketConfig};
+use crate::infrastructure::config::settings::{Config, Exchange};
 
+use super::pool::ConnectionPool;
 use super::pool::StreamFactory;
 
-use super::{ExchangeConfig, MarketFilter, MarketScorer, MessageDeduplicator};
-use crate::port::{ArbitrageExecutor, MarketDataStream, MarketFetcher, OrderExecutor};
-use crate::adapter::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
+use crate::port::outbound::dedup::MessageDeduplicator;
+use crate::port::outbound::exchange::{
+    ArbitrageExecutor, MarketDataStream, MarketFetcher, MarketParser, OrderExecutor,
+};
+use crate::port::outbound::filter::{MarketFilter, MarketScorer};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -35,18 +46,33 @@ impl ExchangeFactory {
         Ok(poly_config)
     }
 
+    fn polymarket_runtime_config(config: &Config) -> Result<PolymarketRuntimeConfig> {
+        let private_key =
+            config
+                .wallet
+                .private_key
+                .as_ref()
+                .cloned()
+                .ok_or(ConfigError::MissingField {
+                    field: "WALLET_PRIVATE_KEY",
+                })?;
+        let network = config.network();
+        Ok(PolymarketRuntimeConfig {
+            private_key,
+            chain_id: network.chain_id,
+            api_url: network.api_url,
+            environment: network.environment,
+        })
+    }
+
     /// Create a market fetcher for the configured exchange.
     pub fn create_market_fetcher(config: &Config) -> Box<dyn MarketFetcher> {
         match config.exchange {
             Exchange::Polymarket => {
                 let client = config
                     .polymarket_config()
-                    .map(crate::adapter::polymarket::PolymarketClient::from_config)
-                    .unwrap_or_else(|| {
-                        crate::adapter::polymarket::PolymarketClient::new(
-                            config.network().api_url.clone(),
-                        )
-                    });
+                    .map(PolymarketClient::from_config)
+                    .unwrap_or_else(|| PolymarketClient::new(config.network().api_url.clone()));
                 Box::new(client)
             }
         }
@@ -56,9 +82,7 @@ impl ExchangeFactory {
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(crate::adapter::polymarket::PolymarketDataStream::new(
-                    config.network().ws_url.clone(),
-                ))
+                Box::new(PolymarketDataStream::new(config.network().ws_url.clone()))
             }
         }
     }
@@ -73,7 +97,8 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = crate::adapter::polymarket::PolymarketExecutor::new(config).await?;
+                let runtime = Self::polymarket_runtime_config(config)?;
+                let executor = PolymarketExecutor::new(&runtime).await?;
                 Ok(Some(Box::new(executor)))
             }
         }
@@ -91,19 +116,20 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = crate::adapter::polymarket::PolymarketExecutor::new(config).await?;
+                let runtime = Self::polymarket_runtime_config(config)?;
+                let executor = PolymarketExecutor::new(&runtime).await?;
                 Ok(Some(Arc::new(executor)))
             }
         }
     }
 
-    /// Create an exchange configuration for the configured exchange.
+    /// Create a market parser for the configured exchange.
     ///
-    /// Returns a boxed trait object that provides exchange-specific settings
-    /// like payout amounts and outcome naming conventions.
-    pub fn create_exchange_config(config: &Config) -> Box<dyn ExchangeConfig> {
+    /// Returns a boxed trait object that parses exchange payloads into domain
+    /// markets using exchange-specific conventions.
+    pub fn create_market_parser(config: &Config) -> Box<dyn MarketParser> {
         match config.exchange {
-            Exchange::Polymarket => Box::new(crate::adapter::polymarket::PolymarketExchangeConfig),
+            Exchange::Polymarket => Box::new(PolymarketMarketParser),
         }
     }
 
@@ -141,9 +167,19 @@ impl ExchangeFactory {
     ///
     /// Returns `None` if `max_connections` is 1 (use single connection instead).
     /// Returns an error if the pool configuration is invalid.
-    pub fn create_connection_pool(config: &Config) -> Result<Option<super::ConnectionPool>> {
+    pub fn create_connection_pool(config: &Config) -> Result<Option<ConnectionPool>> {
         let pool_config = match &config.exchange_config {
-            crate::infrastructure::ExchangeSpecificConfig::Polymarket(pm) => pm.connections.clone(),
+            crate::infrastructure::config::settings::ExchangeSpecificConfig::Polymarket(pm) => {
+                crate::infrastructure::config::service::ConnectionPoolConfig {
+                    max_connections: pm.connections.max_connections,
+                    subscriptions_per_connection: pm.connections.subscriptions_per_connection,
+                    connection_ttl_secs: pm.connections.connection_ttl_secs,
+                    preemptive_reconnect_secs: pm.connections.preemptive_reconnect_secs,
+                    health_check_interval_secs: pm.connections.health_check_interval_secs,
+                    max_silent_secs: pm.connections.max_silent_secs,
+                    channel_capacity: pm.connections.channel_capacity,
+                }
+            }
         };
 
         if pool_config.max_connections <= 1 {
@@ -156,7 +192,7 @@ impl ExchangeFactory {
 
         let stream_factory = Self::create_stream_factory(config);
 
-        let pool = super::ConnectionPool::new(
+        let pool = ConnectionPool::new(
             pool_config,
             config.reconnection.clone(),
             stream_factory,
@@ -171,9 +207,7 @@ impl ExchangeFactory {
         let ws_url = config.network().ws_url.clone();
         match config.exchange {
             Exchange::Polymarket => Arc::new(move || {
-                Box::new(crate::adapter::polymarket::PolymarketDataStream::new(
-                    ws_url.clone(),
-                )) as Box<dyn MarketDataStream>
+                Box::new(PolymarketDataStream::new(ws_url.clone())) as Box<dyn MarketDataStream>
             }),
         }
     }

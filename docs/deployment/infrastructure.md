@@ -59,20 +59,16 @@ After deployment:
 
 ## Systemd Service
 
-The deploy workflow installs the service automatically. Manual install:
+The deploy workflow installs and updates the `edgelord` systemd unit automatically.
+
+Common lifecycle commands:
 
 ```bash
-sudo edgelord service install \
-  --config /opt/edgelord/config/config.toml \
-  --user root \
-  --working-dir /opt/edgelord \
-  --dugout
-```
-
-Uninstall:
-
-```bash
-sudo edgelord service uninstall
+sudo systemctl status edgelord
+sudo systemctl restart edgelord
+sudo systemctl stop edgelord
+sudo systemctl start edgelord
+journalctl -u edgelord -f
 ```
 
 ## Validation
@@ -82,6 +78,7 @@ Before going live:
 ```bash
 cd /opt/edgelord
 edgelord check config --config config/config.toml
+edgelord check health --config config/config.toml
 dugout run -- edgelord check connection --config config/config.toml
 dugout run -- edgelord check live --config config/config.toml
 ```

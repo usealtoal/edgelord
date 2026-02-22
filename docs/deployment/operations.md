@@ -9,9 +9,8 @@ Commands that don't need secrets:
 ```bash
 systemctl status edgelord
 journalctl -u edgelord -f
-edgelord status --db edgelord.db
-edgelord statistics today --db edgelord.db
-edgelord logs -f
+edgelord status --db /opt/edgelord/data/edgelord.db --config /opt/edgelord/config/config.toml
+edgelord statistics today --db /opt/edgelord/data/edgelord.db
 ```
 
 Commands that need secrets (use dugout):
@@ -20,10 +19,12 @@ Commands that need secrets (use dugout):
 # Option A: Spawn shell with secrets loaded
 dugout env
 edgelord wallet status
+edgelord check health --config /opt/edgelord/config/config.toml
 edgelord check live --config /opt/edgelord/config/config.toml
 
 # Option B: Run individual commands
 dugout run -- edgelord wallet status
+dugout run -- edgelord check health --config /opt/edgelord/config/config.toml
 dugout run -- edgelord check connection --config /opt/edgelord/config/config.toml
 ```
 
@@ -50,7 +51,7 @@ Before each deployment:
 
 1. `cargo fmt --all -- --check`
 2. `cargo test`
-3. `check config` and `check live` against production config
+3. `check config`, `check health`, and `check live` against production config
 4. Restart service and validate logs/status
 
 ## Recommended Rollout Pattern

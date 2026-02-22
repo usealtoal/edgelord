@@ -4,11 +4,11 @@ Edgelord supports multiple complementary arbitrage strategies. Each strategy emi
 
 ## Available Strategies
 
-| Strategy | Market Scope | Signal |
-|---|---|---|
-| [Single-Condition](single-condition.md) | Binary markets | `YES + NO < payout` |
-| [Market Rebalancing](market-rebalancing.md) | Multi-outcome markets | `sum(outcomes) < payout` |
-| [Combinatorial](combinatorial.md) | Related market clusters | Cross-market constraint violations |
+| Strategy | Config Key | Market Scope | Signal |
+|---|---|---|---|
+| [Single-Condition](single-condition.md) | `single_condition` | Binary markets | `YES + NO < payout` |
+| [Market Rebalancing](market-rebalancing.md) | `market_rebalancing` | Multi-outcome markets | `sum(outcomes) < payout` |
+| [Combinatorial](combinatorial.md) | `combinatorial` | Related market clusters | Cross-market constraint violations |
 
 ## Selection Guidance
 

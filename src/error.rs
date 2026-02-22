@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::domain::error::DomainError;
+
 /// Configuration-related errors with structured variants.
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -39,28 +41,6 @@ pub enum ExecutionError {
 
     #[error("failed to submit order: {0}")]
     SubmissionFailed(String),
-}
-
-/// Domain validation errors for domain types.
-#[derive(Error, Debug, Clone)]
-pub enum DomainError {
-    #[error("volume must be positive, got {volume}")]
-    NonPositiveVolume { volume: rust_decimal::Decimal },
-
-    #[error("payout {payout} must be greater than cost {cost}")]
-    PayoutNotGreaterThanCost {
-        payout: rust_decimal::Decimal,
-        cost: rust_decimal::Decimal,
-    },
-
-    #[error("outcomes cannot be empty")]
-    EmptyOutcomes,
-
-    #[error("payout must be positive, got {payout}")]
-    NonPositivePayout { payout: rust_decimal::Decimal },
-
-    #[error("legs cannot be empty")]
-    EmptyLegs,
 }
 
 /// Risk management errors.

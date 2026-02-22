@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::constraint::{Constraint, ConstraintSense};
 use super::id::{MarketId, RelationId};
-use crate::port::{Constraint, ConstraintSense};
 
 /// A logical relation between prediction markets.
 ///

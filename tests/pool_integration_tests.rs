@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::port::{MarketDataStream, MarketEvent};
-use edgelord::infrastructure::exchange::{ConnectionPool, StreamFactory};
+use edgelord::infrastructure::exchange::pool::{ConnectionPool, StreamFactory};
+use edgelord::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 use edgelord::testkit;
 use edgelord::testkit::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
 

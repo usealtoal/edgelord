@@ -4,8 +4,8 @@
 //! [`MarketEvent`], and related types so tests focus on assertions
 //! rather than construction boilerplate.
 
-use crate::domain::{Book, MarketId, TokenId};
-use crate::port::MarketEvent;
+use crate::domain::{book::Book, id::MarketId, id::TokenId};
+use crate::port::outbound::exchange::MarketEvent;
 
 /// Generate `n` token IDs named `t0`, `t1`, ..., `t{n-1}`.
 pub fn make_tokens(n: usize) -> Vec<TokenId> {

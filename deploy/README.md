@@ -128,6 +128,7 @@ Commands that need secrets (use dugout):
 # Start a shell with secrets loaded
 dugout env
 edgelord wallet status --config /opt/edgelord/config/config.toml
+edgelord check health --config /opt/edgelord/config/config.toml
 edgelord check live --config /opt/edgelord/config/config.toml
 
 # Or run individual commands
@@ -137,10 +138,11 @@ dugout run -- edgelord wallet status --config /opt/edgelord/config/config.toml
 Commands that don't need secrets:
 
 ```bash
-edgelord logs -f
+edgelord status --db /opt/edgelord/data/edgelord.db --config /opt/edgelord/config/config.toml
 edgelord statistics today --db /opt/edgelord/data/edgelord.db
 sudo systemctl status edgelord
 sudo systemctl restart edgelord
+journalctl -u edgelord -f
 ```
 
 ## Updating Secrets

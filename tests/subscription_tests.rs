@@ -3,13 +3,18 @@
 //! Tests the end-to-end flow of filtering, scoring, and subscription management
 //! for adaptive market subscription.
 
-use edgelord::adapter::polymarket::{PolymarketFilter, PolymarketScorer};
-use edgelord::domain::{MarketId, TokenId};
-use edgelord::infrastructure::{MarketScore, ScoreFactors};
-use edgelord::port::{MarketInfo, OutcomeInfo};
-use edgelord::infrastructure::exchange::{MarketFilter, MarketScorer};
-use edgelord::infrastructure::subscription::{PrioritySubscriptionManager, SubscriptionManager};
-use edgelord::infrastructure::{PolymarketFilterConfig, PolymarketScoringConfig};
+use edgelord::adapter::outbound::polymarket::filter::PolymarketFilter;
+use edgelord::adapter::outbound::polymarket::scorer::PolymarketScorer;
+use edgelord::adapter::outbound::polymarket::settings::{
+    PolymarketFilterConfig, PolymarketScoringConfig,
+};
+use edgelord::domain::{id::MarketId, id::TokenId, score::MarketScore, score::ScoreFactors};
+use edgelord::infrastructure::subscription::manager::SubscriptionManager;
+use edgelord::infrastructure::subscription::priority::PrioritySubscriptionManager;
+use edgelord::port::{
+    outbound::exchange::MarketInfo, outbound::exchange::OutcomeInfo,
+    outbound::filter::MarketFilter, outbound::filter::MarketScorer,
+};
 
 fn make_market(id: &str, outcomes: usize) -> MarketInfo {
     let outcome_infos: Vec<_> = (0..outcomes)

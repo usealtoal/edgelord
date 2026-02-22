@@ -7,11 +7,17 @@ use std::sync::Arc;
 use chrono::Duration;
 use rust_decimal_macros::dec;
 
-use edgelord::application::cluster::{
-    ClusterDetectionConfig, ClusterDetectionService, ClusterDetector,
+use edgelord::adapter::outbound::solver::highs::HiGHSSolver;
+use edgelord::application::cache::book::BookCache;
+use edgelord::application::cache::cluster::ClusterCache;
+use edgelord::application::cluster::detector::ClusterDetector;
+use edgelord::application::cluster::service::{ClusterDetectionConfig, ClusterDetectionService};
+use edgelord::application::solver::frank_wolfe::FrankWolfeConfig;
+use edgelord::application::solver::projection::FrankWolfeProjectionSolver;
+use edgelord::domain::{
+    id::MarketId, market::MarketRegistry, relation::Relation, relation::RelationKind,
 };
-use edgelord::domain::{MarketId, MarketRegistry, Relation, RelationKind};
-use edgelord::infrastructure::cache::{ClusterCache, BookCache};
+use edgelord::port::outbound::solver::ProjectionSolver;
 
 fn setup_test_environment() -> (Arc<BookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
     let markets = vec![
@@ -54,6 +60,13 @@ fn setup_test_environment() -> (Arc<BookCache>, Arc<ClusterCache>, Arc<MarketReg
     (Arc::new(cache), Arc::new(cluster_cache), Arc::new(registry))
 }
 
+fn projection_solver() -> Arc<dyn ProjectionSolver> {
+    Arc::new(FrankWolfeProjectionSolver::new(
+        FrankWolfeConfig::default(),
+        Arc::new(HiGHSSolver::new()),
+    ))
+}
+
 #[test]
 fn test_detector_with_valid_cluster() {
     let (cache, cluster_cache, registry) = setup_test_environment();
@@ -62,7 +75,7 @@ fn test_detector_with_valid_cluster() {
         min_gap: dec!(0.001), // Very low threshold to detect anything
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let clusters = cluster_cache.all_clusters();
     assert!(!clusters.is_empty(), "Should have at least one cluster");
@@ -106,7 +119,7 @@ fn test_detector_missing_price_data() {
     let relation = support::relation::mutually_exclusive(&["market-x", "market-y"], 0.95, "Test");
     cluster_cache.put_relations(vec![relation]);
 
-    let detector = ClusterDetector::new(ClusterDetectionConfig::default());
+    let detector = ClusterDetector::new(ClusterDetectionConfig::default(), projection_solver());
     let cluster = &cluster_cache.all_clusters()[0];
 
     let book_lookup = |token_id: &_| cache.get(token_id);
@@ -123,7 +136,7 @@ fn test_detector_gap_below_threshold() {
         min_gap: dec!(0.99),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
     let book_lookup = |token_id: &_| cache.get(token_id);
@@ -141,7 +154,8 @@ fn test_service_creation() {
     let (cache, cluster_cache, registry) = setup_test_environment();
     let config = ClusterDetectionConfig::default();
 
-    let service = ClusterDetectionService::new(config, cache, cluster_cache, registry);
+    let service =
+        ClusterDetectionService::new(config, cache, cluster_cache, registry, projection_solver());
     assert_eq!(service.dirty_count(), 0);
 }
 
@@ -161,8 +175,13 @@ async fn test_service_with_notifications() {
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig::default();
-    let service =
-        ClusterDetectionService::new(config, Arc::clone(&order_cache), cluster_cache, registry);
+    let service = ClusterDetectionService::new(
+        config,
+        Arc::clone(&order_cache),
+        cluster_cache,
+        registry,
+        projection_solver(),
+    );
 
     let (handle, _opp_rx) = service.start(update_rx);
 
@@ -220,7 +239,7 @@ fn test_cluster_with_three_markets() {
         min_gap: dec!(0.001),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
     let book_lookup = |token_id: &_| cache.get(token_id);
@@ -272,7 +291,7 @@ fn test_implies_relation() {
         min_gap: dec!(0.001),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
     let book_lookup = |token_id: &_| cache.get(token_id);
@@ -288,7 +307,8 @@ fn test_empty_cluster_cache() {
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
     let config = ClusterDetectionConfig::default();
-    let service = ClusterDetectionService::new(config, cache, cluster_cache, registry);
+    let service =
+        ClusterDetectionService::new(config, cache, cluster_cache, registry, projection_solver());
 
     // Should handle empty state gracefully
     assert_eq!(service.dirty_count(), 0);

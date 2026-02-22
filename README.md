@@ -9,6 +9,8 @@ Arbitrage detection for prediction markets.
 ## Quick start
 
     edgelord init
+    edgelord check config
+    edgelord check health
     edgelord check live
     edgelord run
 
@@ -19,8 +21,8 @@ Three strategies ship by default:
 
 | Strategy | Signal | Typical edge |
 |----------|--------|--------------|
-| single-condition | YES + NO < $1 | 2-5% |
-| market-rebalancing | sum(outcomes) < $1 | 1-3% |
+| single_condition | YES + NO < $1 | 2-5% |
+| market_rebalancing | sum(outcomes) < $1 | 1-3% |
 | combinatorial | cross-market constraints | <1% |
 
 ## Commands
@@ -29,7 +31,9 @@ Three strategies ship by default:
     edgelord run               Start trading
     edgelord status            Show current state
     edgelord strategies list   Available strategies
-    edgelord check live        Validate config
+    edgelord check config      Validate config
+    edgelord check health      Local health checks
+    edgelord check live        Live readiness checks
     edgelord wallet status     Show approvals
 
 Run `edgelord --help` for all commands.
@@ -40,18 +44,20 @@ See [docs/configuration.md](docs/configuration.md).
 
 ## Extending
 
-Fork this repo. Implement `ports::Strategy`. See
+Fork this repo. Implement `port::inbound::strategy::Strategy`. See
 [docs/strategies/overview.md](docs/strategies/overview.md).
 
 ## Architecture
 
 ```
-domain/     Pure types, no I/O
-ports/      Trait definitions (extension points)
-adapters/   Implementations (Polymarket, strategies, etc.)
-runtime/    Orchestration and wiring
-cli/        Command-line interface
+domain/         Pure types and runtime state, no external integrations
+port/           Contracts split by direction (inbound/, outbound/)
+adapter/        Adapters split by direction (inbound/cli, outbound/integrations)
+application/    Use-case orchestration and business flow
+infrastructure/ Wiring, config, bootstrap, and runtime facades
 ```
+
+CLI commands call focused `port/inbound/operator/*` capabilities (configuration, diagnostics, runtime, status, statistics, wallet) through an injected operator capability surface.
 
 ## License
 

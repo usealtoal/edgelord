@@ -4,8 +4,9 @@ use std::result::Result;
 
 use chrono::{DateTime, Utc};
 
-use super::{MarketId, PositionId, Price, TokenId, Volume};
-use crate::error::DomainError;
+use super::error::DomainError;
+use super::id::{MarketId, PositionId, TokenId};
+use super::money::{Price, Volume};
 
 /// Status of a position.
 #[derive(Debug, Clone, PartialEq, Eq)]

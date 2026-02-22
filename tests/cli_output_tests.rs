@@ -1,10 +1,11 @@
 //! CLI output integration tests.
 
+use assert_cmd::cargo::cargo_bin_cmd;
 use assert_cmd::Command;
 use predicates::prelude::*;
 
 fn edgelord() -> Command {
-    Command::cargo_bin("edgelord").unwrap()
+    cargo_bin_cmd!("edgelord")
 }
 
 #[test]
@@ -34,18 +35,45 @@ fn test_strategies_list() {
         .args(["strategies", "list"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("single-condition"))
-        .stdout(predicate::str::contains("market-rebalancing"))
+        .stdout(predicate::str::contains("single_condition"))
+        .stdout(predicate::str::contains("market_rebalancing"))
         .stdout(predicate::str::contains("combinatorial"));
 }
 
 #[test]
 fn test_strategies_explain() {
     edgelord()
-        .args(["strategies", "explain", "single-condition"])
+        .args(["strategies", "explain", "single_condition"])
         .assert()
         .success()
         .stdout(predicate::str::contains("YES/NO"));
+}
+
+#[test]
+fn test_strategies_explain_accepts_hyphen_alias() {
+    edgelord()
+        .args(["strategies", "explain", "single-condition"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[strategies.single_condition]"));
+}
+
+#[test]
+fn test_check_help_lists_health() {
+    edgelord()
+        .args(["check", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("health"));
+}
+
+#[test]
+fn test_init_json_mode_is_rejected_with_guidance() {
+    edgelord()
+        .args(["--json", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("config init"));
 }
 
 #[test]

@@ -215,16 +215,17 @@ dugout env
 
 # Then run any command
 edgelord wallet status --config /opt/edgelord/config/config.toml
+edgelord check health --config /opt/edgelord/config/config.toml
 edgelord check live --config /opt/edgelord/config/config.toml
 ```
 
 Commands that don't need secrets:
 
 ```bash
-edgelord status --db /opt/edgelord/data/edgelord.db
+edgelord status --db /opt/edgelord/data/edgelord.db --config /opt/edgelord/config/config.toml
 edgelord statistics today --db /opt/edgelord/data/edgelord.db
-edgelord logs --follow
 sudo systemctl status edgelord
+journalctl -u edgelord -f
 ```
 
 ## Rollback Procedure
@@ -289,7 +290,7 @@ git add .dugout.toml && git commit -m "chore: update secrets" && git push
 ### Recommended Rollout Pattern
 
 1. **Initial deploy**: `dry_run=true`, `max_markets=50`, observe for 24h
-2. **Validation**: Check logs, verify strategies detect opportunities
+2. **Validation**: Review `journalctl -u edgelord -f` and verify strategies detect opportunities
 3. **Low-risk live**: `dry_run=false`, `max_exposure=500`, `max_position=100`
 4. **Scale up**: Gradually increase limits as confidence grows
 5. **Production**: Full limits, `telegram_enabled=true` for alerts

@@ -1,6 +1,6 @@
 use rust_decimal::Decimal;
 
-use edgelord::domain::{Market, MarketId, Outcome, TokenId};
+use edgelord::domain::{id::MarketId, id::TokenId, market::Market, market::Outcome};
 
 pub fn make_binary_market(
     id: &str,

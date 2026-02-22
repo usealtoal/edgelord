@@ -2,24 +2,28 @@
 
 mod support;
 
-use edgelord::adapter::polymarket::PolymarketExchangeConfig;
-use edgelord::domain::{MarketId, Opportunity, OpportunityLeg, TokenId};
-use edgelord::port::{MarketInfo, OutcomeInfo};
-use edgelord::infrastructure::exchange::ExchangeConfig;
+use edgelord::adapter::outbound::polymarket::market::PolymarketMarketParser;
+use edgelord::domain::{
+    id::MarketId, id::TokenId, opportunity::Opportunity, opportunity::OpportunityLeg,
+};
+use edgelord::port::{
+    outbound::exchange::MarketInfo, outbound::exchange::MarketParser,
+    outbound::exchange::OutcomeInfo,
+};
 use rust_decimal_macros::dec;
 
 #[test]
-fn test_polymarket_config_values() {
-    let config = PolymarketExchangeConfig;
+fn test_polymarket_parser_values() {
+    let parser = PolymarketMarketParser;
 
-    assert_eq!(config.name(), "polymarket");
-    assert_eq!(config.default_payout(), dec!(1.00));
-    assert_eq!(config.binary_outcome_names(), ("Yes", "No"));
+    assert_eq!(parser.name(), "polymarket");
+    assert_eq!(parser.default_payout(), dec!(1.00));
+    assert_eq!(parser.binary_outcome_names(), ("Yes", "No"));
 }
 
 #[test]
-fn test_exchange_config_parses_binary_markets() {
-    let config = PolymarketExchangeConfig;
+fn test_market_parser_parses_binary_markets() {
+    let parser = PolymarketMarketParser;
 
     let market_infos = vec![MarketInfo {
         id: "market-1".to_string(),
@@ -41,7 +45,7 @@ fn test_exchange_config_parses_binary_markets() {
         liquidity: None,
     }];
 
-    let markets = config.parse_markets(&market_infos);
+    let markets = parser.parse_markets(&market_infos);
 
     assert_eq!(markets.len(), 1);
     assert!(markets[0].is_binary());

@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use chrono::Duration;
 
-use edgelord::application::inference::LlmInferrer;
-use edgelord::adapter::llm::Llm;
-use edgelord::domain::{MarketId, Relation, RelationKind};
+use edgelord::adapter::outbound::inference::inferrer::LlmInferrer;
+use edgelord::application::cache::cluster::ClusterCache;
+use edgelord::domain::{id::MarketId, relation::Relation, relation::RelationKind};
 use edgelord::error::Result;
-use edgelord::port::{MarketSummary, RelationInferrer};
-use edgelord::infrastructure::cache::ClusterCache;
+use edgelord::port::outbound::llm::Llm;
+use edgelord::port::{outbound::inference::MarketSummary, outbound::inference::RelationInferrer};
 
 /// Mock LLM that returns predefined responses.
 struct MockLlm {

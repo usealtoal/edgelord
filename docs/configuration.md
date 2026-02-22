@@ -280,6 +280,7 @@ All config values can be overridden via CLI flags. Here's a quick reference:
 
 ```bash
 ./target/release/edgelord check config --config config.toml
+./target/release/edgelord check health --config config.toml
 ./target/release/edgelord config show --config config.toml
 ./target/release/edgelord check live --config config.toml
 ```

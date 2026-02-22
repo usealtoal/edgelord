@@ -1,11 +1,7 @@
-//! Port implementations (hexagonal adapters).
+//! Adapter layer split by direction.
 //!
-//! These modules provide concrete implementations of the traits
-//! defined in `port/`, integrating with external systems.
+//! - `inbound`: driving adapters (CLI, entrypoints)
+//! - `outbound`: driven adapters (exchange, storage, notifier, solver, llm)
 
-pub mod llm;
-pub mod notifier;
-pub mod polymarket;
-pub mod solver;
-pub mod store;
-pub mod strategy;
+pub mod inbound;
+pub mod outbound;

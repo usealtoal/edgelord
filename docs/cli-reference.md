@@ -2,107 +2,101 @@
 
 Use `edgelord --help` for full generated help.
 
+## Global Flags
+
+Available on every command:
+
+| Flag | Description |
+|------|-------------|
+| `--color <auto|always|never>` | Force color behavior |
+| `--json` | Structured machine-readable output |
+| `-q, --quiet` | Suppress regular human output |
+| `-v, --verbose` | Increase verbosity (`-v`, `-vv`, `-vvv`) |
+
 ## Running Commands with Secrets
 
-Commands that require secrets (wallet key, API keys) should be run via dugout:
+Commands that need wallet/API secrets should be run via dugout:
 
 ```bash
-# Run a single command with secrets
+# Single command with secrets
 dugout run -- edgelord <command>
 
-# Or spawn a shell with secrets loaded
+# Or open a shell with secrets loaded
 dugout env
 edgelord <command>
 ```
 
-Commands that **need secrets**: `run`, `check connection`, `check live`, `check telegram`, `wallet *`, `provision *`
+Commands that typically need secrets:
+- `run`
+- `check connection`
+- `check live`
+- `check telegram`
+- `wallet *`
+- `provision polymarket`
 
-Commands that **don't need secrets**: `status`, `statistics *`, `logs`, `config *`, `service *`
+Commands that typically do not need secrets:
+- `init`
+- `config *`
+- `check config`
+- `check health`
+- `status`
+- `statistics *`
+- `strategies *`
 
 ## Core Commands
 
+### `init`
+
+Interactive setup wizard:
+
+```bash
+edgelord init config.toml
+```
+
+For scripted setup use:
+
+```bash
+edgelord config init config.toml
+```
+
 ### `run`
 
-Run the detector/executor in foreground mode.
+Run the detector/executor in foreground mode:
 
 ```bash
 dugout run -- edgelord run --config config.toml
 ```
 
-#### Environment Shortcuts
-
-Quick environment switching without editing config:
-
-```bash
-# Use mainnet (sets chain_id=137, environment=mainnet)
-dugout run -- edgelord run --mainnet
-
-# Use testnet (sets chain_id=80002, environment=testnet)
-dugout run -- edgelord run --testnet
-```
-
-#### All Run Flags
+#### Important run flags
 
 | Flag | Description | Example |
 |------|-------------|---------|
 | `-c, --config` | Path to config file | `--config config.toml` |
-| `--chain-id` | Override chain ID | `--chain-id 137` |
-| `--mainnet` | Shortcut for mainnet (chain_id=137) | `--mainnet` |
-| `--testnet` | Shortcut for testnet (chain_id=80002) | `--testnet` |
-| `--log-level` | Override log level | `--log-level debug` |
-| `--dry-run` | Detect but don't execute | `--dry-run` |
-| `--no-banner` | Skip ASCII art banner | `--no-banner` |
-| `--json-logs` | Use JSON log format | `--json-logs` |
-| `--strategies` | Comma-separated strategies | `--strategies "single_condition"` |
-| `--min-edge` | Override minimum edge | `--min-edge 0.05` |
-| `--min-profit` | Override minimum profit | `--min-profit 0.50` |
-| `--max-exposure` | Override max total exposure | `--max-exposure 5000` |
+| `--mainnet` | Shortcut for chain_id=137 | `--mainnet` |
+| `--testnet` | Shortcut for chain_id=80002 | `--testnet` |
+| `--dry-run` | Detect but do not execute | `--dry-run` |
+| `--json-logs` | Use JSON runtime logs | `--json-logs` |
+| `--strategies` | Comma-separated strategy keys | `--strategies "single_condition,market_rebalancing"` |
+| `--max-exposure` | Override risk max exposure | `--max-exposure 5000` |
 | `--max-position` | Override max position per market | `--max-position 500` |
-| `--max-slippage` | Override max slippage (0.02=2%) | `--max-slippage 0.03` |
-| `--telegram-enabled` | Enable Telegram notifications | `--telegram-enabled` |
-| `--max-markets` | Max markets to track | `--max-markets 100` |
-| `--min-volume` | Min 24h volume filter (USD) | `--min-volume 5000` |
-| `--min-liquidity` | Min liquidity filter (USD) | `--min-liquidity 1000` |
-| `--max-connections` | Max WebSocket connections | `--max-connections 5` |
-| `--subs-per-connection` | Subscriptions per connection | `--subs-per-connection 250` |
-| `--connection-ttl` | Connection TTL in seconds | `--connection-ttl 60` |
-| `--execution-timeout` | Execution timeout in seconds | `--execution-timeout 60` |
-| `--stats-interval` | Stats update interval in seconds | `--stats-interval 60` |
-| `--database` | Path to SQLite database | `--database /var/lib/edgelord/data.db` |
-
-#### Example Invocations
-
-```bash
-# Quick mainnet dry-run with custom filters
-dugout run -- edgelord run --mainnet --dry-run --max-markets 100 --min-volume 5000
-
-# Production with conservative settings
-dugout run -- edgelord run \
-  --mainnet \
-  --no-banner \
-  --json-logs \
-  --max-exposure 5000 \
-  --max-position 500 \
-  --max-slippage 0.02
-
-# Development with verbose logging
-dugout run -- edgelord run --testnet --log-level debug --dry-run
-
-# Custom connection pool settings
-dugout run -- edgelord run --max-connections 5 --subs-per-connection 250 --connection-ttl 60
-```
+| `--max-slippage` | Override slippage tolerance | `--max-slippage 0.02` |
+| `--max-markets` | Override tracked market count | `--max-markets 100` |
+| `--max-connections` | Override WS connection cap | `--max-connections 5` |
+| `--subs-per-connection` | Override fanout per connection | `--subs-per-connection 250` |
+| `--connection-ttl` | Override connection lifetime seconds | `--connection-ttl 60` |
+| `--database` | Override sqlite file path | `--database /var/lib/edgelord/edgelord.db` |
 
 ### `status`
 
-Show current status from database-backed state.
+Show current status from database-backed state:
 
 ```bash
-edgelord status --db edgelord.db
+edgelord status --db edgelord.db --config config.toml
 ```
 
 ### `statistics`
 
-Query and export historical stats.
+Query and export historical stats:
 
 ```bash
 edgelord statistics today --db edgelord.db
@@ -120,23 +114,31 @@ edgelord config show --config config.toml
 edgelord config validate --config config.toml
 ```
 
-## Diagnostics
+## Diagnostics (`check`)
 
 ```bash
-# Config validation (no secrets needed)
 edgelord check config --config config.toml
+edgelord check health --config config.toml
 
-# These require secrets
-dugout run -- edgelord check live --config config.toml
 dugout run -- edgelord check connection --config config.toml
+dugout run -- edgelord check live --config config.toml
 dugout run -- edgelord check telegram --config config.toml
 ```
 
 `check telegram` validates delivery only. Interactive bot commands are documented in `docs/deployment/telegram.md`.
 
+## Strategy Discovery
+
+```bash
+edgelord strategies list
+edgelord strategies explain single_condition
+```
+
+`strategies explain` also accepts hyphen aliases (for example `single-condition`) but canonical keys are snake_case.
+
 ## Provisioning
 
-Provision exchange-specific wallet/config defaults (requires secrets):
+Provision Polymarket wallet/config defaults:
 
 ```bash
 dugout run -- edgelord provision polymarket --config config.toml
@@ -145,8 +147,6 @@ dugout run -- edgelord provision polymarket --wallet import --config config.toml
 
 ## Wallet Commands
 
-All wallet commands require secrets:
-
 ```bash
 dugout run -- edgelord wallet address --config config.toml
 dugout run -- edgelord wallet status --config config.toml
@@ -154,70 +154,24 @@ dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
 dugout run -- edgelord wallet sweep --config config.toml --to 0x... --asset usdc --network polygon --yes
 ```
 
-## Service Management
+## Output Modes
 
-Install with dugout for secrets injection (recommended):
-
-```bash
-sudo edgelord service install \
-  --config /opt/edgelord/config.toml \
-  --user edgelord \
-  --working-dir /opt/edgelord \
-  --dugout
-```
-
-### Service Install Flags
-
-| Flag | Description | Example |
-|------|-------------|---------|
-| `--config` | Path to config file | `--config /opt/edgelord/config.toml` |
-| `--user` | User to run service as | `--user edgelord` |
-| `--working-dir` | Working directory | `--working-dir /opt/edgelord` |
-| `--dugout` | Use dugout for secrets | `--dugout` |
-| `--strategies` | Comma-separated strategies | `--strategies "single_condition"` |
-| `--min-edge` | Minimum edge threshold | `--min-edge 0.05` |
-| `--min-profit` | Minimum profit threshold | `--min-profit 0.50` |
-| `--max-exposure` | Maximum total exposure | `--max-exposure 5000` |
-| `--max-position` | Maximum position per market | `--max-position 500` |
-| `--max-slippage` | Maximum slippage tolerance | `--max-slippage 0.02` |
-| `--max-markets` | Maximum markets to track | `--max-markets 100` |
-| `--max-connections` | Maximum WebSocket connections | `--max-connections 5` |
-| `--execution-timeout` | Execution timeout in seconds | `--execution-timeout 60` |
-| `--dry-run` | Enable dry run mode | `--dry-run` |
-| `--telegram-enabled` | Enable Telegram | `--telegram-enabled` |
-
-Example with overrides baked into systemd unit:
+Human-readable default:
 
 ```bash
-sudo edgelord service install \
-  --config /opt/edgelord/config.toml \
-  --user edgelord \
-  --dugout \
-  --max-exposure 5000 \
-  --max-slippage 0.02 \
-  --telegram-enabled
+edgelord status
 ```
 
-Uninstall:
+Machine-readable JSON:
 
 ```bash
-sudo edgelord service uninstall
+edgelord --json status
+edgelord --json statistics today
+edgelord --json check health -c config.toml
 ```
 
-## Logs
+Quiet mode:
 
 ```bash
-edgelord logs --lines 100
-edgelord logs --follow
-edgelord logs --since "1 hour ago"
+edgelord --quiet run -c config.toml
 ```
-
-## Flag Priority
-
-When the same setting is specified in multiple places, CLI flags take precedence:
-
-1. Built-in defaults (lowest)
-2. Config file (`config.toml`)
-3. CLI flags (highest)
-
-For example, if `config.toml` sets `max_slippage = 0.02` but you run with `--max-slippage 0.05`, the effective value is `0.05`.

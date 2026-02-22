@@ -7,9 +7,9 @@
 use rust_decimal::Decimal;
 use std::result::Result;
 
+use super::error::DomainError;
 use super::id::{MarketId, TokenId};
 use super::money::Price;
-use crate::error::DomainError;
 
 /// A single leg of an opportunity representing one outcome to purchase.
 #[derive(Debug, Clone, PartialEq, Eq)]

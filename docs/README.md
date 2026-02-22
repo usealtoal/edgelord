@@ -7,7 +7,7 @@ Edgelord is a Rust CLI for detecting and executing prediction-market arbitrage w
 - [Getting Started](getting-started.md)
   - Install the binary, bootstrap config, provision a wallet, and run safely.
 - [CLI Reference](cli-reference.md)
-  - Command-by-command usage for `run`, `check`, `provision`, `wallet`, `service`, and reporting commands.
+  - Command-by-command usage for `init`, `run`, `status`, `statistics`, `config`, `check`, `provision`, `wallet`, and `strategies`.
 - [Configuration Reference](configuration.md)
   - Production-focused configuration guidance with practical defaults.
 - [Testing Guide](testing.md)
