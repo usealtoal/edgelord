@@ -7,8 +7,8 @@ use tracing::warn;
 
 use super::convert::f32_to_decimal;
 use super::stat::{OpportunitySummary, StatsSummary};
-use crate::adapter::cache::db::model::{DailyStatsRow, OpportunityRow};
-use crate::adapter::cache::db::schema::{daily_stats, opportunities};
+use crate::adapter::store::db::model::{DailyStatsRow, OpportunityRow};
+use crate::adapter::store::db::schema::{daily_stats, opportunities};
 
 /// Export daily stats to CSV format.
 pub fn export_daily_csv(

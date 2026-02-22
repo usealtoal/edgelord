@@ -10,8 +10,8 @@ use rust_decimal::Decimal;
 use crate::adapter::statistic::{
     export_daily_csv as export_csv_impl, f32_to_decimal, StatsRecorder, StatsSummary,
 };
-use crate::adapter::cache::db::model::{DailyStatsRow, StrategyDailyStatsRow};
-use crate::adapter::cache::db::schema::{daily_stats, strategy_daily_stats, trades};
+use crate::adapter::store::db::model::{DailyStatsRow, StrategyDailyStatsRow};
+use crate::adapter::store::db::schema::{daily_stats, strategy_daily_stats, trades};
 use crate::cli::output;
 use crate::error::{ConfigError, Error, Result};
 

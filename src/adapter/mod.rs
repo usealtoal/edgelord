@@ -9,5 +9,5 @@ pub mod position;
 pub mod risk;
 pub mod solver;
 pub mod statistic;
-pub mod cache;
+pub mod store;
 pub mod strategy;

@@ -1,4 +1,4 @@
-//! Persistence backends for relation and cluster caching.
+//! Persistence layer with pluggable storage backends.
 
 pub mod db;
 mod memory;

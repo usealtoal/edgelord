@@ -354,7 +354,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::adapter::cache::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistic::create_recorder(db_pool);
 
         spawn_execution(
@@ -438,7 +438,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::adapter::cache::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistic::create_recorder(db_pool);
 
         assert!(state.try_lock_execution("timeout-market"));
