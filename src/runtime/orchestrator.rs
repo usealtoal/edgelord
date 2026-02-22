@@ -16,7 +16,7 @@ use crate::adapter::position::PositionManager;
 use crate::adapter::risk::RiskManager;
 use crate::adapter::statistic;
 use crate::adapter::statistic::StatsRecorder;
-use crate::adapter::store::db;
+use crate::adapter::cache::db;
 use crate::adapter::strategy::StrategyRegistry;
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
@@ -743,7 +743,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::cache::db::create_pool("sqlite://:memory:").unwrap();
         let stats = crate::adapter::statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),

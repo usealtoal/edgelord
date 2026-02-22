@@ -3,10 +3,10 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 
+use super::db::model::RelationRow;
+use super::db::schema::relations;
+use super::db::DbPool;
 use super::RelationStore;
-use crate::adapter::store::db::model::RelationRow;
-use crate::adapter::store::db::schema::relations;
-use crate::adapter::store::db::DbPool;
 use crate::domain::{MarketId, Relation, RelationId, RelationKind};
 use crate::error::{Error, Result};
 
@@ -181,7 +181,7 @@ impl SqliteRelationStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::store::db::create_pool;
+    use crate::adapter::cache::db::create_pool;
     use crate::domain::MarketId;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 

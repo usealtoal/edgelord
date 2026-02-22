@@ -29,7 +29,7 @@
 //! - [`RelationInferrer`] - Market relation discovery
 //! - [`Strategy`] - Arbitrage detection strategies
 //!
-//! Note: Risk management (`adapter::risk`) and storage (`adapter::store`) use
+//! Note: Risk management (`adapter::risk`) and storage (`adapter::cache`) use
 //! concrete implementations rather than ports, as they are tightly coupled to
 //! the application's internal state and data model.
 

@@ -510,7 +510,7 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use crate::adapter::statistic;
-    use crate::adapter::store::db;
+    use crate::adapter::cache::db;
     use crate::runtime::{RiskLimitKind, RiskLimits};
 
     #[test]

@@ -6,8 +6,8 @@ use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::adapter::store::db::model::{DailyStatsRow, OpportunityRow, TradeRow};
-use crate::adapter::store::db::schema::{daily_stats, opportunities, trades};
+use crate::adapter::cache::db::model::{DailyStatsRow, OpportunityRow, TradeRow};
+use crate::adapter::cache::db::schema::{daily_stats, opportunities, trades};
 use crate::cli::output;
 use crate::error::{ConfigError, Error, Result};
 
