@@ -15,7 +15,7 @@ use reqwest::Client as HttpClient;
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
-use super::r#type::{GammaMarket, PolymarketMarket, PolymarketMarketsResponse};
+use super::dto::{GammaMarket, PolymarketMarket, PolymarketMarketsResponse};
 use crate::error::Result;
 use crate::port::{MarketFetcher, MarketInfo, OutcomeInfo};
 use crate::runtime::PolymarketConfig;

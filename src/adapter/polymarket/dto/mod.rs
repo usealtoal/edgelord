@@ -1,8 +1,8 @@
-//! Polymarket data types.
+//! Polymarket data transfer objects.
 //!
-//! This module contains types for:
+//! Contains types for API and WebSocket communication:
 //! - WebSocket messages (subscriptions, book snapshots, price changes)
-//! - API responses (market data, tokens)
+//! - REST API responses (market data, tokens)
 
 mod message;
 mod response;
