@@ -5,7 +5,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::domain::{ArbitrageExecutionResult, Opportunity};
+use crate::domain::{TradeResult, Opportunity};
 use crate::error::RiskError;
 
 /// Events that can trigger notifications.
@@ -71,29 +71,29 @@ pub struct ExecutionEvent {
 impl ExecutionEvent {
     /// Create an execution event from an arbitrage execution result.
     #[must_use]
-    pub fn from_result(market_id: &str, result: &ArbitrageExecutionResult) -> Self {
+    pub fn from_result(market_id: &str, result: &TradeResult) -> Self {
         match result {
-            ArbitrageExecutionResult::Success { filled } => {
-                let order_ids: Vec<_> = filled.iter().map(|f| f.order_id.as_str()).collect();
+            TradeResult::Success { fills } => {
+                let order_ids: Vec<_> = fills.iter().map(|f| f.order_id.as_str()).collect();
                 Self {
                     market_id: market_id.to_string(),
                     success: true,
                     details: format!("Orders: {}", order_ids.join(", ")),
                 }
             }
-            ArbitrageExecutionResult::PartialFill { filled, failed } => {
-                let filled_ids: Vec<_> = filled.iter().map(|f| f.token_id.to_string()).collect();
-                let failed_ids: Vec<_> = failed.iter().map(|f| f.token_id.to_string()).collect();
+            TradeResult::Partial { fills, failures } => {
+                let fill_ids: Vec<_> = fills.iter().map(|f| f.token_id.to_string()).collect();
+                let failure_ids: Vec<_> = failures.iter().map(|f| f.token_id.to_string()).collect();
                 Self {
                     market_id: market_id.to_string(),
                     success: false,
                     details: format!(
-                        "Partial fill - filled: {:?}, failed: {:?}",
-                        filled_ids, failed_ids
+                        "Partial fill - fills: {:?}, failures: {:?}",
+                        fill_ids, failure_ids
                     ),
                 }
             }
-            ArbitrageExecutionResult::Failed { reason } => Self {
+            TradeResult::Failed { reason } => Self {
                 market_id: market_id.to_string(),
                 success: false,
                 details: format!("Failed: {reason}"),

@@ -170,6 +170,71 @@ impl From<&str> for ClusterId {
     }
 }
 
+/// Unique identifier for an order.
+///
+/// The inner String is private to ensure all construction goes through
+/// the defined constructors.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OrderId(String);
+
+impl OrderId {
+    /// Create a new order ID.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    /// Get the order ID as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for OrderId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for OrderId {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
+impl From<&str> for OrderId {
+    fn from(s: &str) -> Self {
+        Self::new(s)
+    }
+}
+
+/// Unique position identifier.
+///
+/// The inner u64 is private to ensure all construction goes through
+/// the defined constructors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PositionId(u64);
+
+impl PositionId {
+    /// Create a new `PositionId` from a u64 value.
+    #[must_use]
+    pub const fn new(id: u64) -> Self {
+        Self(id)
+    }
+
+    /// Get the underlying value.
+    #[must_use]
+    pub const fn value(&self) -> u64 {
+        self.0
+    }
+}
+
+impl fmt::Display for PositionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "pos-{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,5 +354,43 @@ mod tests {
         let id1 = ClusterId::default();
         let id2 = ClusterId::default();
         assert_ne!(id1, id2);
+    }
+
+    // OrderId tests
+    #[test]
+    fn order_id_new_and_as_str() {
+        let id = OrderId::new("order-123");
+        assert_eq!(id.as_str(), "order-123");
+    }
+
+    #[test]
+    fn order_id_from_string() {
+        let id = OrderId::from("order-456".to_string());
+        assert_eq!(id.as_str(), "order-456");
+    }
+
+    #[test]
+    fn order_id_from_str() {
+        let id = OrderId::from("order-789");
+        assert_eq!(id.as_str(), "order-789");
+    }
+
+    #[test]
+    fn order_id_display() {
+        let id = OrderId::new("order-display");
+        assert_eq!(format!("{}", id), "order-display");
+    }
+
+    // PositionId tests
+    #[test]
+    fn position_id_new_and_value() {
+        let id = PositionId::new(42);
+        assert_eq!(id.value(), 42);
+    }
+
+    #[test]
+    fn position_id_display() {
+        let id = PositionId::new(123);
+        assert_eq!(format!("{}", id), "pos-123");
     }
 }

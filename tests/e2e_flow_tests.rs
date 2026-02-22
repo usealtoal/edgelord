@@ -11,7 +11,7 @@ use edgelord::adapters::strategies::{
     SingleConditionConfig, SingleConditionStrategy, StrategyRegistry,
 };
 use edgelord::domain::TokenId;
-use edgelord::runtime::cache::OrderBookCache;
+use edgelord::runtime::cache::BookCache;
 use edgelord::runtime::exchange::MarketEvent;
 use edgelord::runtime::{process_market_event, AppState, EventProcessingContext, RiskLimits};
 use rust_decimal::Decimal;
@@ -43,7 +43,7 @@ fn e2e_ingest_detect_persist_notify() {
         SingleConditionConfig::default(),
     )));
 
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     let state = Arc::new(AppState::new(RiskLimits {
         min_profit_threshold: Decimal::ZERO,
         ..Default::default()
@@ -59,11 +59,11 @@ fn e2e_ingest_detect_persist_notify() {
     notifier_registry.register(Box::new(notifier.clone()));
     let notifiers = Arc::new(notifier_registry);
 
-    let yes_book = support::order_book::make_order_book("yes-token", dec!(0.39), dec!(0.40));
-    let no_book = support::order_book::make_order_book("no-token", dec!(0.49), dec!(0.50));
+    let yes_book = support::book::make_book("yes-token", dec!(0.39), dec!(0.40));
+    let no_book = support::book::make_book("no-token", dec!(0.49), dec!(0.50));
 
     process_market_event(
-        MarketEvent::OrderBookSnapshot {
+        MarketEvent::BookSnapshot {
             token_id: TokenId::new("yes-token"),
             book: yes_book,
         },
@@ -82,7 +82,7 @@ fn e2e_ingest_detect_persist_notify() {
     );
 
     process_market_event(
-        MarketEvent::OrderBookSnapshot {
+        MarketEvent::BookSnapshot {
             token_id: TokenId::new("no-token"),
             book: no_book,
         },

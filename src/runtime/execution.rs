@@ -11,8 +11,8 @@ use crate::adapters::notifiers::NotifierRegistry;
 use crate::adapters::notifiers::{Event, ExecutionEvent};
 use crate::adapters::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::domain::{
-    ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId, Position, PositionLeg,
-    PositionStatus, TokenId,
+    Failure, Fill, Opportunity, OrderId, Position, PositionLeg, PositionStatus, TokenId,
+    TradeResult,
 };
 use crate::runtime::exchange::ArbitrageExecutor;
 
@@ -61,7 +61,7 @@ pub(crate) fn spawn_execution(
             Ok(exec_result) => match exec_result {
                 Ok(exec_result) => {
                     match &exec_result {
-                        ArbitrageExecutionResult::Success { filled: _ } => {
+                        TradeResult::Success { fills: _ } => {
                             // Record trade open first to get trade_id
                             let trade_id = if let Some(opp_id) = opportunity_id {
                                 let legs: Vec<TradeLeg> = opportunity
@@ -97,20 +97,20 @@ pub(crate) fn spawn_execution(
                             let exposure = state.total_exposure();
                             stats.update_peak_exposure(exposure);
                         }
-                        ArbitrageExecutionResult::PartialFill { filled, failed } => {
-                            let filled_ids: Vec<_> =
-                                filled.iter().map(|f| f.token_id.to_string()).collect();
-                            let failed_ids: Vec<_> =
-                                failed.iter().map(|f| f.token_id.to_string()).collect();
+                        TradeResult::Partial { fills, failures } => {
+                            let fill_ids: Vec<_> =
+                                fills.iter().map(|f| f.token_id.to_string()).collect();
+                            let failure_ids: Vec<_> =
+                                failures.iter().map(|f| f.token_id.to_string()).collect();
                             warn!(
-                                filled = ?filled_ids,
-                                failed = ?failed_ids,
+                                fills = ?fill_ids,
+                                failures = ?failure_ids,
                                 "Partial fill detected, attempting recovery"
                             );
 
                             // Try to cancel all filled orders
                             let mut cancel_failed = false;
-                            for fill in filled.iter() {
+                            for fill in fills.iter() {
                                 let order_id = OrderId::new(fill.order_id.clone());
                                 if let Err(cancel_err) =
                                     ArbitrageExecutor::cancel(executor.as_ref(), &order_id).await
@@ -122,7 +122,7 @@ pub(crate) fn spawn_execution(
 
                             if cancel_failed {
                                 warn!("Some cancellations failed, recording partial position");
-                                record_partial_position(&state, &opportunity, filled, failed, None);
+                                record_partial_position(&state, &opportunity, fills, failures, None);
                                 // Release reserved exposure (partial position recorded)
                                 state.release_exposure(reserved_exposure);
                             } else {
@@ -133,7 +133,7 @@ pub(crate) fn spawn_execution(
                                 state.release_exposure(reserved_exposure);
                             }
                         }
-                        ArbitrageExecutionResult::Failed { .. } => {
+                        TradeResult::Failed { .. } => {
                             // Release reserved exposure on failure
                             state.release_exposure(reserved_exposure);
                         }
@@ -206,12 +206,12 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade
 pub(crate) fn record_partial_position(
     state: &AppState,
     opportunity: &Opportunity,
-    filled: &[FilledLeg],
-    failed: &[FailedLeg],
+    fills: &[Fill],
+    failures: &[Failure],
     trade_id: Option<i32>,
 ) {
-    let filled_token_ids: Vec<TokenId> = filled.iter().map(|f| f.token_id.clone()).collect();
-    let missing_token_ids: Vec<TokenId> = failed.iter().map(|f| f.token_id.clone()).collect();
+    let filled_token_ids: Vec<TokenId> = fills.iter().map(|f| f.token_id.clone()).collect();
+    let missing_token_ids: Vec<TokenId> = failures.iter().map(|f| f.token_id.clone()).collect();
 
     // Build position legs from filled legs
     let position_legs: Vec<PositionLeg> = opportunity
@@ -266,8 +266,8 @@ mod tests {
     use crate::adapters::notifiers::NotifierRegistry;
     use crate::adapters::statistics;
     use crate::domain::{
-        ArbitrageExecutionResult, FailedLeg, FilledLeg, MarketId, Opportunity, OpportunityLeg,
-        OrderId, PositionStatus, TokenId,
+        Failure, Fill, MarketId, Opportunity, OpportunityLeg,
+        OrderId, PositionStatus, TokenId, TradeResult,
     };
     use crate::error::{Error, ExecutionError};
     use crate::runtime::exchange::ArbitrageExecutor;
@@ -284,13 +284,13 @@ mod tests {
         async fn execute_arbitrage(
             &self,
             _opportunity: &Opportunity,
-        ) -> Result<ArbitrageExecutionResult, Error> {
-            Ok(ArbitrageExecutionResult::PartialFill {
-                filled: vec![
-                    FilledLeg::new(TokenId::from("token-1"), "order-1"),
-                    FilledLeg::new(TokenId::from("token-2"), "order-2"),
+        ) -> Result<TradeResult, Error> {
+            Ok(TradeResult::Partial {
+                fills: vec![
+                    Fill::new(TokenId::from("token-1"), "order-1"),
+                    Fill::new(TokenId::from("token-2"), "order-2"),
                 ],
-                failed: vec![FailedLeg::new(TokenId::from("token-3"), "execution failed")],
+                failures: vec![Failure::new(TokenId::from("token-3"), "execution failed")],
             })
         }
 
@@ -320,7 +320,7 @@ mod tests {
         async fn execute_arbitrage(
             &self,
             _opportunity: &Opportunity,
-        ) -> Result<ArbitrageExecutionResult, Error> {
+        ) -> Result<TradeResult, Error> {
             pending::<()>().await;
             unreachable!("pending should never resolve");
         }

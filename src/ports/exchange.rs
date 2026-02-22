@@ -6,9 +6,8 @@
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 
-use crate::domain::{
-    ArbitrageExecutionResult, Opportunity, OrderBook, OrderId, PoolStats, TokenId,
-};
+use crate::domain::{TradeResult, Opportunity, Book, OrderId, TokenId};
+use crate::runtime::PoolStats;
 use crate::error::Error;
 
 /// Result of attempting to execute an order.
@@ -169,18 +168,18 @@ pub trait MarketFetcher: Send + Sync {
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
     /// Full order book snapshot for a token.
-    OrderBookSnapshot {
+    BookSnapshot {
         /// The token this order book belongs to.
         token_id: TokenId,
         /// The full order book state.
-        book: OrderBook,
+        book: Book,
     },
     /// Incremental order book update (deltas).
-    OrderBookDelta {
+    BookDelta {
         /// The token this update applies to.
         token_id: TokenId,
         /// The order book delta.
-        book: OrderBook,
+        book: Book,
     },
     /// Market has settled (prediction resolved).
     MarketSettled {
@@ -205,18 +204,18 @@ impl MarketEvent {
     #[must_use]
     pub fn token_id(&self) -> Option<&TokenId> {
         match self {
-            Self::OrderBookSnapshot { token_id, .. } => Some(token_id),
-            Self::OrderBookDelta { token_id, .. } => Some(token_id),
+            Self::BookSnapshot { token_id, .. } => Some(token_id),
+            Self::BookDelta { token_id, .. } => Some(token_id),
             _ => None,
         }
     }
 
     /// Get the order book if this event contains one.
     #[must_use]
-    pub fn order_book(&self) -> Option<&OrderBook> {
+    pub fn order_book(&self) -> Option<&Book> {
         match self {
-            Self::OrderBookSnapshot { book, .. } => Some(book),
-            Self::OrderBookDelta { book, .. } => Some(book),
+            Self::BookSnapshot { book, .. } => Some(book),
+            Self::BookDelta { book, .. } => Some(book),
             _ => None,
         }
     }
@@ -262,7 +261,7 @@ pub trait ArbitrageExecutor: Send + Sync {
     async fn execute_arbitrage(
         &self,
         opportunity: &Opportunity,
-    ) -> Result<ArbitrageExecutionResult, Error>;
+    ) -> Result<TradeResult, Error>;
 
     /// Cancel a specific order by ID.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;

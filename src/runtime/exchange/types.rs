@@ -2,8 +2,9 @@ use async_trait::async_trait;
 use rust_decimal::Decimal;
 
 use crate::domain::{
-    ArbitrageExecutionResult, MarketId, Opportunity, OrderBook, OrderId, PoolStats, TokenId,
+    TradeResult, MarketId, Opportunity, Book, OrderId, TokenId,
 };
+use crate::runtime::PoolStats;
 use crate::error::Error;
 
 /// Result of attempting to execute an order.
@@ -154,9 +155,9 @@ pub trait MarketFetcher: Send + Sync {
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
     /// Full order book snapshot for a token.
-    OrderBookSnapshot { token_id: TokenId, book: OrderBook },
+    BookSnapshot { token_id: TokenId, book: Book },
     /// Incremental order book update (deltas).
-    OrderBookDelta { token_id: TokenId, book: OrderBook },
+    BookDelta { token_id: TokenId, book: Book },
     /// Market has settled (prediction resolved).
     MarketSettled {
         market_id: MarketId,
@@ -174,18 +175,18 @@ impl MarketEvent {
     #[must_use]
     pub fn token_id(&self) -> Option<&TokenId> {
         match self {
-            Self::OrderBookSnapshot { token_id, .. } => Some(token_id),
-            Self::OrderBookDelta { token_id, .. } => Some(token_id),
+            Self::BookSnapshot { token_id, .. } => Some(token_id),
+            Self::BookDelta { token_id, .. } => Some(token_id),
             _ => None,
         }
     }
 
     /// Get the order book if this event contains one.
     #[must_use]
-    pub fn order_book(&self) -> Option<&OrderBook> {
+    pub fn order_book(&self) -> Option<&Book> {
         match self {
-            Self::OrderBookSnapshot { book, .. } => Some(book),
-            Self::OrderBookDelta { book, .. } => Some(book),
+            Self::BookSnapshot { book, .. } => Some(book),
+            Self::BookDelta { book, .. } => Some(book),
             _ => None,
         }
     }
@@ -255,7 +256,7 @@ pub trait ArbitrageExecutor: Send + Sync {
     async fn execute_arbitrage(
         &self,
         opportunity: &Opportunity,
-    ) -> Result<ArbitrageExecutionResult, Error>;
+    ) -> Result<TradeResult, Error>;
 
     /// Cancel a specific order by ID.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;

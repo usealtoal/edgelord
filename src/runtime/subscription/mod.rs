@@ -18,7 +18,8 @@ pub use priority::PrioritySubscriptionManager;
 
 use async_trait::async_trait;
 
-use crate::domain::{MarketId, MarketScore, TokenId};
+use crate::domain::{MarketId, TokenId};
+use crate::runtime::MarketScore;
 use crate::error::Result;
 
 /// Events related to WebSocket connection state changes.
@@ -80,7 +81,8 @@ pub enum ConnectionEvent {
 ///
 /// ```ignore
 /// use edgelord::runtime::subscription::{SubscriptionManager, ConnectionEvent};
-/// use edgelord::domain::{MarketScore, MarketId, TokenId};
+/// use edgelord::domain::{MarketId, TokenId};
+/// use edgelord::runtime::MarketScore;
 ///
 /// struct MySubscriptionManager {
 ///     // ... internal state

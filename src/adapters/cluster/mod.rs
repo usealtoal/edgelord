@@ -7,7 +7,7 @@
 //! # Architecture
 //!
 //! ```text
-//! OrderBookCache ──(broadcast)──► ClusterDetectionService
+//! BookCache ──(broadcast)──► ClusterDetectionService
 //!                                        │
 //!                                        ├─ tracks dirty clusters
 //!                                        ├─ debounces detection
@@ -31,7 +31,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, info, trace, warn};
 
 use crate::domain::{MarketId, MarketRegistry, Opportunity, TokenId};
-use crate::runtime::cache::{ClusterCache, OrderBookCache, OrderBookUpdate};
+use crate::runtime::cache::{ClusterCache, BookCache, BookUpdate};
 
 /// Configuration for the cluster detection service.
 #[derive(Debug, Clone)]
@@ -85,7 +85,7 @@ impl ClusterDetectionHandle {
 /// Uses [`ClusterDetector`] for the actual detection logic.
 pub struct ClusterDetectionService {
     config: ClusterDetectionConfig,
-    order_book_cache: Arc<OrderBookCache>,
+    order_book_cache: Arc<BookCache>,
     cluster_cache: Arc<ClusterCache>,
     registry: Arc<MarketRegistry>,
     detector: ClusterDetector,
@@ -99,7 +99,7 @@ impl ClusterDetectionService {
     /// Create a new cluster detection service.
     pub fn new(
         config: ClusterDetectionConfig,
-        order_book_cache: Arc<OrderBookCache>,
+        order_book_cache: Arc<BookCache>,
         cluster_cache: Arc<ClusterCache>,
         registry: Arc<MarketRegistry>,
     ) -> Self {
@@ -132,7 +132,7 @@ impl ClusterDetectionService {
     /// The service runs in a background task until shutdown is signaled.
     pub fn start(
         self,
-        mut update_rx: broadcast::Receiver<OrderBookUpdate>,
+        mut update_rx: broadcast::Receiver<BookUpdate>,
     ) -> (ClusterDetectionHandle, mpsc::Receiver<ClusterOpportunity>) {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         let (opportunity_tx, opportunity_rx) = mpsc::channel::<ClusterOpportunity>(64);
@@ -183,7 +183,7 @@ impl ClusterDetectionService {
     }
 
     /// Handle an order book update by marking affected clusters as dirty.
-    fn handle_update(&self, update: &OrderBookUpdate) {
+    fn handle_update(&self, update: &BookUpdate) {
         let Some(market_id) = self.token_to_market.get(&update.token_id) else {
             return;
         };

@@ -7,7 +7,8 @@ use chrono::Utc;
 use parking_lot::RwLock;
 
 use crate::adapters::statistics::StatsRecorder;
-use crate::domain::{PoolStats, PositionStatus, RelationKind};
+use crate::domain::{PositionStatus, RelationKind};
+use crate::runtime::PoolStats;
 use crate::runtime::cache::ClusterCache;
 use crate::runtime::AppState;
 

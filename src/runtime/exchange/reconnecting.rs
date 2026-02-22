@@ -268,7 +268,7 @@ mod tests {
         stream.connect().await.unwrap();
 
         let event = stream.next_event().await;
-        assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+        assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
     }
 
     #[tokio::test]
@@ -288,7 +288,7 @@ mod tests {
 
         // First call triggers reconnect, second returns snapshot
         let event = stream.next_event().await;
-        assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+        assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
 
         assert!(connect_count.load(Ordering::SeqCst) >= 2);
         assert!(subscribe_count.load(Ordering::SeqCst) >= 2);

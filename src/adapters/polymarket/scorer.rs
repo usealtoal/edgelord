@@ -4,7 +4,8 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{MarketId, MarketScore, ScoreFactors, ScoreWeights};
+use crate::domain::MarketId;
+use crate::runtime::{MarketScore, ScoreFactors, ScoreWeights};
 use crate::error::Result;
 use crate::runtime::exchange::{MarketInfo, MarketScorer};
 use crate::runtime::{OutcomeBonusConfig, PolymarketScoringConfig, ScoringWeightsConfig};

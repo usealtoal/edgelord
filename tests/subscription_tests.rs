@@ -4,7 +4,8 @@
 //! for adaptive market subscription.
 
 use edgelord::adapters::polymarket::{PolymarketFilter, PolymarketScorer};
-use edgelord::domain::{MarketId, MarketScore, ScoreFactors, TokenId};
+use edgelord::domain::{MarketId, TokenId};
+use edgelord::runtime::{MarketScore, ScoreFactors};
 use edgelord::runtime::exchange::{MarketFilter, MarketInfo, MarketScorer, OutcomeInfo};
 use edgelord::runtime::subscription::{PrioritySubscriptionManager, SubscriptionManager};
 use edgelord::runtime::{PolymarketFilterConfig, PolymarketScoringConfig};

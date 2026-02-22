@@ -14,7 +14,7 @@ use polymarket_client_sdk::types::U256;
 use rust_decimal::Decimal;
 use tracing::{info, warn};
 
-use crate::domain::{ArbitrageExecutionResult, FailedLeg, FilledLeg, Opportunity, OrderId};
+use crate::domain::{Failure, Fill, Opportunity, OrderId, TradeResult};
 use crate::error::{ConfigError, ExecutionError, Result};
 use crate::runtime::exchange::{
     ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide,
@@ -80,7 +80,7 @@ impl PolymarketExecutor {
     async fn execute_arbitrage_impl(
         &self,
         opportunity: &Opportunity,
-    ) -> Result<ArbitrageExecutionResult> {
+    ) -> Result<TradeResult> {
         info!(
             market = %opportunity.market_id(),
             edge = %opportunity.edge(),
@@ -91,7 +91,7 @@ impl PolymarketExecutor {
 
         let legs = opportunity.legs();
         if legs.len() < 2 {
-            return Ok(ArbitrageExecutionResult::Failed {
+            return Ok(TradeResult::Failed {
                 reason: "Opportunity must have at least 2 legs".to_string(),
             });
         }
@@ -117,19 +117,19 @@ impl PolymarketExecutor {
         let results = futures_util::future::join_all(futures).await;
 
         // Separate successful and failed legs
-        let mut filled = Vec::new();
-        let mut failed = Vec::new();
+        let mut fills = Vec::new();
+        let mut failures = Vec::new();
 
         for (token_id, result) in results {
             match result {
                 Ok(resp) => {
-                    filled.push(FilledLeg {
+                    fills.push(Fill {
                         token_id,
                         order_id: resp.order_id,
                     });
                 }
                 Err(err) => {
-                    failed.push(FailedLeg {
+                    failures.push(Failure {
                         token_id,
                         error: err.to_string(),
                     });
@@ -137,22 +137,22 @@ impl PolymarketExecutor {
             }
         }
 
-        if failed.is_empty() {
-            info!(filled = filled.len(), "All legs executed successfully");
-            Ok(ArbitrageExecutionResult::Success { filled })
-        } else if filled.is_empty() {
-            let errors: Vec<_> = failed.iter().map(|f| f.error.as_str()).collect();
+        if failures.is_empty() {
+            info!(fills = fills.len(), "All legs executed successfully");
+            Ok(TradeResult::Success { fills })
+        } else if fills.is_empty() {
+            let errors: Vec<_> = failures.iter().map(|f| f.error.as_str()).collect();
             warn!(errors = ?errors, "All legs failed");
-            Ok(ArbitrageExecutionResult::Failed {
+            Ok(TradeResult::Failed {
                 reason: errors.join("; "),
             })
         } else {
             warn!(
-                filled = filled.len(),
-                failed = failed.len(),
+                fills = fills.len(),
+                failures = failures.len(),
                 "Partial fill detected"
             );
-            Ok(ArbitrageExecutionResult::PartialFill { filled, failed })
+            Ok(TradeResult::Partial { fills, failures })
         }
     }
 
@@ -268,7 +268,7 @@ impl ArbitrageExecutor for PolymarketExecutor {
     async fn execute_arbitrage(
         &self,
         opportunity: &Opportunity,
-    ) -> Result<ArbitrageExecutionResult> {
+    ) -> Result<TradeResult> {
         self.execute_arbitrage_impl(opportunity).await
     }
 

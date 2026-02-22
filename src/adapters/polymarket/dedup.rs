@@ -43,7 +43,7 @@ impl PolymarketDeduplicator {
     /// to uniquely identify each message.
     fn make_key(event: &MarketEvent) -> Option<String> {
         match event {
-            MarketEvent::OrderBookSnapshot { token_id, book } => {
+            MarketEvent::BookSnapshot { token_id, book } => {
                 let mut key = format!("snap:{}", token_id.as_str());
 
                 // Add best bid/ask to the key for content-based dedup
@@ -59,7 +59,7 @@ impl PolymarketDeduplicator {
 
                 Some(key)
             }
-            MarketEvent::OrderBookDelta { token_id, book } => {
+            MarketEvent::BookDelta { token_id, book } => {
                 let mut key = format!("delta:{}", token_id.as_str());
 
                 // Add best bid/ask to the key for content-based dedup
@@ -158,7 +158,7 @@ impl MessageDeduplicator for PolymarketDeduplicator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{OrderBook, PriceLevel, TokenId};
+    use crate::domain::{Book, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
     fn test_config() -> PolymarketDedupConfig {
@@ -180,8 +180,8 @@ mod tests {
             rust_decimal::Decimal::from_f64_retain(ask_price).unwrap(),
             dec!(100),
         )];
-        let book = OrderBook::with_levels(token.clone(), bids, asks);
-        MarketEvent::OrderBookSnapshot {
+        let book = Book::with_levels(token.clone(), bids, asks);
+        MarketEvent::BookSnapshot {
             token_id: token,
             book,
         }
@@ -197,8 +197,8 @@ mod tests {
             rust_decimal::Decimal::from_f64_retain(ask_price).unwrap(),
             dec!(100),
         )];
-        let book = OrderBook::with_levels(token.clone(), bids, asks);
-        MarketEvent::OrderBookDelta {
+        let book = Book::with_levels(token.clone(), bids, asks);
+        MarketEvent::BookDelta {
             token_id: token,
             book,
         }

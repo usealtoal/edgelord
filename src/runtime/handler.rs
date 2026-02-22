@@ -17,14 +17,14 @@ use crate::adapters::strategies::DetectionContext;
 use crate::adapters::strategies::StrategyRegistry;
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::error::RiskError;
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 use crate::runtime::exchange::{ArbitrageExecutor, MarketEvent};
 
 /// Handle incoming market events from the data stream.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_market_event(
     event: MarketEvent,
-    cache: &OrderBookCache,
+    cache: &BookCache,
     registry: &MarketRegistry,
     strategies: &StrategyRegistry,
     executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
@@ -38,7 +38,7 @@ pub(crate) fn handle_market_event(
     let start = Instant::now();
 
     match event {
-        MarketEvent::OrderBookSnapshot { token_id, book } => {
+        MarketEvent::BookSnapshot { token_id, book } => {
             cache.update(book);
 
             if let Some(market) = registry.get_by_token(&token_id) {
@@ -69,7 +69,7 @@ pub(crate) fn handle_market_event(
             let elapsed = start.elapsed();
             stats.record_latency(elapsed.as_millis() as u32);
         }
-        MarketEvent::OrderBookDelta { token_id, book } => {
+        MarketEvent::BookDelta { token_id, book } => {
             // For now, treat deltas as snapshots (simple approach)
             cache.update(book);
 
@@ -149,7 +149,7 @@ pub(crate) fn handle_opportunity(
     notifiers: &Arc<NotifierRegistry>,
     state: &Arc<AppState>,
     stats: &Arc<StatsRecorder>,
-    cache: &OrderBookCache,
+    cache: &BookCache,
     dry_run: bool,
 ) {
     // Check for duplicate execution
@@ -261,7 +261,7 @@ pub(crate) fn handle_opportunity(
 /// Returns None if prices cannot be determined (books not in cache or empty).
 pub(crate) fn get_max_slippage(
     opportunity: &Opportunity,
-    cache: &OrderBookCache,
+    cache: &BookCache,
 ) -> Option<Decimal> {
     let mut max_slippage = Decimal::ZERO;
 
@@ -293,13 +293,13 @@ mod tests {
     use crate::adapters::statistics;
     use crate::adapters::strategies::StrategyRegistry;
     use crate::domain::{
-        Market, MarketId, Opportunity, OpportunityLeg, OrderBook, Outcome, PriceLevel, TokenId,
+        Market, MarketId, Opportunity, OpportunityLeg, Book, Outcome, PriceLevel, TokenId,
     };
-    use crate::runtime::cache::OrderBookCache;
+    use crate::runtime::cache::BookCache;
     use crate::runtime::{AppState, RiskLimits};
 
-    fn make_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> OrderBook {
-        OrderBook::with_levels(
+    fn make_order_book(token_id: &str, bid: Decimal, ask: Decimal) -> Book {
+        Book::with_levels(
             TokenId::from(token_id),
             vec![PriceLevel::new(bid, Decimal::new(100, 0))],
             vec![PriceLevel::new(ask, Decimal::new(100, 0))],
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_returns_none_when_token_not_in_cache() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let opp = make_test_opportunity();
         let result = get_max_slippage(&opp, &cache);
         assert!(result.is_none());
@@ -353,9 +353,9 @@ mod tests {
 
     #[test]
     fn get_max_slippage_returns_none_when_book_has_no_asks() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         // Create order book with bids but no asks
-        let empty_ask_book = OrderBook::with_levels(
+        let empty_ask_book = Book::with_levels(
             TokenId::from("yes-token"),
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
             vec![], // no asks
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_returns_none_when_expected_price_is_zero() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
 
@@ -392,7 +392,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_returns_zero_when_prices_match() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
 
@@ -403,7 +403,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_calculates_slippage_when_price_increased() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         // Price increased from 0.40 to 0.42 = 5% slippage
         cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_calculates_slippage_when_price_decreased() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         // Price decreased from 0.40 to 0.38 = 5% slippage (absolute)
         cache.update(make_order_book("yes-token", dec!(0.37), dec!(0.38)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn get_max_slippage_returns_max_across_legs() {
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         // Yes: 5% slippage, No: 10% slippage
         cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
         cache.update(make_order_book("no-token", dec!(0.54), dec!(0.55)));
@@ -447,7 +447,7 @@ mod tests {
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         // Lock the market first
         state.try_lock_execution("test-market");
@@ -478,7 +478,7 @@ mod tests {
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         // Set up cache with 5% slippage
         cache.update(make_order_book("yes-token", dec!(0.41), dec!(0.42)));
@@ -514,7 +514,7 @@ mod tests {
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
@@ -546,7 +546,7 @@ mod tests {
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
@@ -585,7 +585,7 @@ mod tests {
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
         cache.update(make_order_book("no-token", dec!(0.49), dec!(0.50)));
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_updates_cache_on_snapshot() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(make_registry(vec![make_binary_market(
             "market-1",
             "Test?",
@@ -635,7 +635,7 @@ mod tests {
         let book = make_order_book("yes-1", dec!(0.40), dec!(0.42));
 
         handle_market_event(
-            MarketEvent::OrderBookSnapshot {
+            MarketEvent::BookSnapshot {
                 token_id: TokenId::from("yes-1"),
                 book,
             },
@@ -663,7 +663,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_updates_cache_on_delta() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(make_registry(vec![make_binary_market(
             "market-1",
             "Test?",
@@ -684,7 +684,7 @@ mod tests {
         let book = make_order_book("yes-1", dec!(0.40), dec!(0.42));
 
         handle_market_event(
-            MarketEvent::OrderBookDelta {
+            MarketEvent::BookDelta {
                 token_id: TokenId::from("yes-1"),
                 book,
             },
@@ -707,7 +707,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_settles_positions() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(MarketRegistry::new());
         let strategies = StrategyRegistry::new();
         let state = Arc::new(AppState::default());
@@ -774,7 +774,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_connected_does_not_panic() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(MarketRegistry::new());
         let strategies = StrategyRegistry::new();
         let state = Arc::new(AppState::default());
@@ -804,7 +804,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_disconnected_does_not_panic() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(MarketRegistry::new());
         let strategies = StrategyRegistry::new();
         let state = Arc::new(AppState::default());
@@ -836,7 +836,7 @@ mod tests {
 
     #[test]
     fn handle_market_event_ignores_unknown_token() {
-        let cache = Arc::new(OrderBookCache::new());
+        let cache = Arc::new(BookCache::new());
         let registry = Arc::new(MarketRegistry::new()); // Empty registry
         let strategies = StrategyRegistry::new();
         let state = Arc::new(AppState::default());
@@ -852,7 +852,7 @@ mod tests {
 
         // Should not panic, just update cache and skip strategy detection
         handle_market_event(
-            MarketEvent::OrderBookSnapshot {
+            MarketEvent::BookSnapshot {
                 token_id: TokenId::from("unknown-token"),
                 book,
             },

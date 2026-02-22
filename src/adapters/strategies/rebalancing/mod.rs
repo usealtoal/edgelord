@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
 use crate::domain::{MarketId, Opportunity, OpportunityLeg, Price, TokenId, Volume};
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 
 /// Configuration for market rebalancing detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -198,7 +198,7 @@ pub fn detect_rebalancing(
     market_id: &MarketId,
     question: &str,
     token_ids: &[TokenId],
-    cache: &OrderBookCache,
+    cache: &BookCache,
     config: &MarketRebalancingConfig,
     payout: Decimal,
 ) -> Option<RebalancingOpportunity> {
@@ -258,7 +258,7 @@ pub fn detect_rebalancing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{OrderBook, PriceLevel};
+    use crate::domain::{Book, PriceLevel};
     use rust_decimal_macros::dec;
 
     fn make_config() -> MarketRebalancingConfig {
@@ -294,21 +294,21 @@ mod tests {
             TokenId::from("candidate-b"),
             TokenId::from("candidate-c"),
         ];
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         // 0.30 + 0.30 + 0.30 = 0.90 (10% edge)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[2].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
@@ -339,21 +339,21 @@ mod tests {
             TokenId::from("candidate-b"),
             TokenId::from("candidate-c"),
         ];
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         // 0.40 + 0.40 + 0.40 = 1.20 (no edge)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[2].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
@@ -374,21 +374,21 @@ mod tests {
     fn test_no_opportunity_when_edge_too_small() {
         let market_id = MarketId::from("election");
         let tokens = vec![TokenId::from("a"), TokenId::from("b"), TokenId::from("c")];
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         // 0.33 + 0.33 + 0.33 = 0.99 (only 1% edge, below 3% threshold)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[2].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.33), dec!(100))],
@@ -409,21 +409,21 @@ mod tests {
     fn test_volume_limited_by_smallest_leg() {
         let market_id = MarketId::from("election");
         let tokens = vec![TokenId::from("a"), TokenId::from("b"), TokenId::from("c")];
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         // Different volumes: 50, 100, 200 -> limited to 50
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(50))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[2].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.30), dec!(200))],
@@ -446,15 +446,15 @@ mod tests {
     fn test_rejects_binary_markets() {
         let market_id = MarketId::from("binary");
         let tokens = vec![TokenId::from("yes"), TokenId::from("no")];
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -498,22 +498,22 @@ mod tests {
         ];
         let market_1 = Market::new(MarketId::from("election"), "Who wins?", outcomes_1, dec!(1));
 
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         // Total cost = 30 + 30 + 30 = 90
         // With $1 payout: edge = -$89 (no arbitrage)
         // With $100 payout: edge = $10 (arbitrage exists!)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[0].clone(),
             vec![],
             vec![PriceLevel::new(dec!(30), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[1].clone(),
             vec![],
             vec![PriceLevel::new(dec!(30), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             tokens[2].clone(),
             vec![],
             vec![PriceLevel::new(dec!(30), dec!(100))],

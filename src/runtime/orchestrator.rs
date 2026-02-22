@@ -21,7 +21,7 @@ use crate::adapters::strategies::StrategyRegistry;
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
 use crate::ports::{MarketSummary, RelationInferrer};
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 use crate::runtime::exchange::{
     ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
 };
@@ -39,7 +39,7 @@ use super::orchestrator_builder::{
 
 /// Inputs required to process one market event through detection and risk gates.
 pub struct EventProcessingContext<'a> {
-    pub cache: &'a OrderBookCache,
+    pub cache: &'a BookCache,
     pub registry: &'a MarketRegistry,
     pub strategies: &'a StrategyRegistry,
     pub executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
@@ -385,7 +385,7 @@ impl Orchestrator {
         // Create order book cache (with notifications if cluster detection enabled)
         let (cache, cluster_handle) = if config.cluster_detection.enabled {
             let (cache, update_rx) =
-                OrderBookCache::with_notifications(config.cluster_detection.channel_capacity);
+                BookCache::with_notifications(config.cluster_detection.channel_capacity);
             let cache = Arc::new(cache);
 
             // Start cluster detection service
@@ -417,7 +417,7 @@ impl Orchestrator {
             info!("Cluster detection service started");
             (cache, Some(handle))
         } else {
-            (Arc::new(OrderBookCache::new()), None)
+            (Arc::new(BookCache::new()), None)
         };
 
         let cluster_handle = cluster_handle;
@@ -736,10 +736,10 @@ mod tests {
         use crate::adapters::risk::RiskManager;
         use crate::adapters::strategies::StrategyRegistry;
         use crate::domain::MarketRegistry;
-        use crate::runtime::cache::OrderBookCache;
+        use crate::runtime::cache::BookCache;
         use std::sync::Arc;
 
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let registry = MarketRegistry::new();
         let strategies = StrategyRegistry::new();
         let state = Arc::new(AppState::default());

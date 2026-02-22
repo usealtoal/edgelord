@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 
 use crate::domain::{Market, MarketId, TokenId};
 use crate::ports::DetectionContext as DetectionContextTrait;
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 
 // Re-export types from ports for consistency
 pub use crate::ports::MarketContext;
@@ -22,7 +22,7 @@ pub struct DetectionContext<'a> {
     /// The market being analyzed.
     pub market: &'a Market,
     /// Order book cache with current prices.
-    pub cache: &'a OrderBookCache,
+    pub cache: &'a BookCache,
     /// Additional market context.
     market_ctx: MarketContext,
 }
@@ -32,7 +32,7 @@ impl<'a> DetectionContext<'a> {
     ///
     /// Uses the market's payout and determines the market context
     /// (binary vs multi-outcome) automatically from the market.
-    pub fn new(market: &'a Market, cache: &'a OrderBookCache) -> Self {
+    pub fn new(market: &'a Market, cache: &'a BookCache) -> Self {
         let market_ctx = if market.is_binary() {
             MarketContext::binary()
         } else {
@@ -159,7 +159,7 @@ mod tests {
             outcomes,
             dec!(1),
         );
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), Decimal::ONE);
@@ -182,7 +182,7 @@ mod tests {
             outcomes,
             dec!(100),
         );
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), dec!(100));
@@ -204,7 +204,7 @@ mod tests {
             outcomes,
             dec!(1),
         );
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), Decimal::ONE);

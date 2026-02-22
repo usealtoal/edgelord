@@ -1,39 +1,11 @@
 //! Position types for exchange-agnostic position management.
 
-use std::fmt;
 use std::result::Result;
 
 use chrono::{DateTime, Utc};
 
-use super::{MarketId, Price, TokenId, Volume};
+use super::{MarketId, PositionId, Price, TokenId, Volume};
 use crate::error::DomainError;
-
-/// Unique position identifier.
-///
-/// The inner u64 is private to ensure all construction goes through
-/// the defined constructors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PositionId(u64);
-
-impl PositionId {
-    /// Create a new `PositionId` from a u64 value.
-    #[must_use]
-    pub const fn new(id: u64) -> Self {
-        Self(id)
-    }
-
-    /// Get the underlying value.
-    #[must_use]
-    pub const fn value(&self) -> u64 {
-        self.0
-    }
-}
-
-impl fmt::Display for PositionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "pos-{}", self.0)
-    }
-}
 
 /// Status of a position.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -284,18 +256,6 @@ impl Position {
 mod tests {
     use super::*;
     use rust_decimal_macros::dec;
-
-    #[test]
-    fn position_id_new_and_value() {
-        let id = PositionId::new(42);
-        assert_eq!(id.value(), 42);
-    }
-
-    #[test]
-    fn position_id_display() {
-        let id = PositionId::new(123);
-        assert_eq!(format!("{}", id), "pos-123");
-    }
 
     #[test]
     fn position_status_is_open() {

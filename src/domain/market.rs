@@ -1,15 +1,13 @@
-//! Market-related domain types with proper encapsulation.
-//!
-//! This module provides exchange-agnostic market representations:
+//! Market-related domain types.
 //!
 //! - [`Market`] - A prediction market with N outcomes and configurable payout
 //! - [`Outcome`] - A single tradeable outcome within a market
-//!
-//! These types work across any prediction market exchange, with exchange-specific
-//! details (like payout amounts) configured at market creation time.
+//! - [`MarketRegistry`] - Index of markets by token ID and market ID
+
+use std::collections::HashMap;
+use std::result::Result;
 
 use rust_decimal::Decimal;
-use std::result::Result;
 
 use super::id::{MarketId, TokenId};
 use crate::error::DomainError;
@@ -179,6 +177,84 @@ impl Market {
     #[must_use]
     pub fn token_ids(&self) -> Vec<&TokenId> {
         self.outcomes.iter().map(|o| &o.token_id).collect()
+    }
+}
+
+/// Index of markets by token ID and market ID.
+///
+/// Enables efficient lookup from order book events.
+#[derive(Debug, Default)]
+pub struct MarketRegistry {
+    token_to_market: HashMap<TokenId, Market>,
+    market_id_to_market: HashMap<MarketId, Market>,
+    markets: Vec<Market>,
+}
+
+impl MarketRegistry {
+    /// Create an empty market registry.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            token_to_market: HashMap::new(),
+            market_id_to_market: HashMap::new(),
+            markets: Vec::new(),
+        }
+    }
+
+    /// Add a market to the registry, indexing all its token IDs.
+    pub fn add(&mut self, market: Market) {
+        self.market_id_to_market
+            .insert(market.market_id().clone(), market.clone());
+        for outcome in market.outcomes() {
+            self.token_to_market
+                .insert(outcome.token_id().clone(), market.clone());
+        }
+        self.markets.push(market);
+    }
+
+    /// Look up a market by its market ID.
+    #[must_use]
+    pub fn get_by_market_id(&self, market_id: &MarketId) -> Option<&Market> {
+        self.market_id_to_market.get(market_id)
+    }
+
+    /// Look up the market for a given token ID.
+    #[must_use]
+    pub fn get_by_token(&self, token_id: &TokenId) -> Option<&Market> {
+        self.token_to_market.get(token_id)
+    }
+
+    /// Get all registered markets.
+    #[must_use]
+    pub fn markets(&self) -> &[Market] {
+        &self.markets
+    }
+
+    /// Get markets with exactly 2 outcomes (binary markets).
+    pub fn binary_markets(&self) -> impl Iterator<Item = &Market> {
+        self.markets.iter().filter(|m| m.outcome_count() == 2)
+    }
+
+    /// Get markets with 3 or more outcomes.
+    pub fn multi_outcome_markets(&self) -> impl Iterator<Item = &Market> {
+        self.markets.iter().filter(|m| m.outcome_count() >= 3)
+    }
+
+    /// Get all token IDs across all registered markets.
+    pub fn all_token_ids(&self) -> impl Iterator<Item = &TokenId> {
+        self.token_to_market.keys()
+    }
+
+    /// Get the number of registered markets.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.markets.len()
+    }
+
+    /// Check if the registry is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.markets.is_empty()
     }
 }
 
@@ -359,5 +435,66 @@ mod tests {
             dec!(-1),
         );
         assert!(result.is_err());
+    }
+
+    // --- MarketRegistry tests ---
+
+    fn create_binary_market_with_id(id: &str, yes_token: &str, no_token: &str) -> Market {
+        let outcomes = vec![
+            Outcome::new(TokenId::from(yes_token), "Yes"),
+            Outcome::new(TokenId::from(no_token), "No"),
+        ];
+        Market::new(MarketId::from(id), format!("Market {id}?"), outcomes, dec!(1.00))
+    }
+
+    #[test]
+    fn registry_new_creates_empty() {
+        let registry = MarketRegistry::new();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn registry_add_indexes_all_tokens() {
+        let mut registry = MarketRegistry::new();
+        registry.add(create_binary_market_with_id("m1", "yes-1", "no-1"));
+
+        assert_eq!(registry.len(), 1);
+        assert!(registry.get_by_token(&TokenId::from("yes-1")).is_some());
+        assert!(registry.get_by_token(&TokenId::from("no-1")).is_some());
+    }
+
+    #[test]
+    fn registry_get_by_market_id() {
+        let mut registry = MarketRegistry::new();
+        registry.add(create_binary_market_with_id("m1", "yes-1", "no-1"));
+
+        let market = registry.get_by_market_id(&MarketId::from("m1"));
+        assert!(market.is_some());
+        assert_eq!(market.unwrap().market_id().as_str(), "m1");
+    }
+
+    #[test]
+    fn registry_get_by_token_returns_correct_market() {
+        let mut registry = MarketRegistry::new();
+        registry.add(create_binary_market_with_id("m1", "yes-1", "no-1"));
+        registry.add(create_binary_market_with_id("m2", "yes-2", "no-2"));
+
+        let market = registry.get_by_token(&TokenId::from("yes-1")).unwrap();
+        assert_eq!(market.market_id().as_str(), "m1");
+
+        let market = registry.get_by_token(&TokenId::from("no-2")).unwrap();
+        assert_eq!(market.market_id().as_str(), "m2");
+    }
+
+    #[test]
+    fn registry_binary_markets_filters_correctly() {
+        let mut registry = MarketRegistry::new();
+        registry.add(create_binary_market_with_id("b1", "yes-1", "no-1"));
+        registry.add(create_multi_outcome_market());
+
+        let binary: Vec<_> = registry.binary_markets().collect();
+        assert_eq!(binary.len(), 1);
+        assert!(binary[0].is_binary());
     }
 }

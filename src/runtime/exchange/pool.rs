@@ -27,7 +27,8 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-use crate::domain::{PoolStats, TokenId};
+use crate::domain::TokenId;
+use crate::runtime::PoolStats;
 use crate::error::{ConfigError, Result};
 use crate::runtime::{ConnectionPoolConfig, ReconnectionConfig};
 
@@ -874,11 +875,11 @@ mod tests {
 
         assert!(matches!(
             pool.next_event().await,
-            Some(MarketEvent::OrderBookSnapshot { .. })
+            Some(MarketEvent::BookSnapshot { .. })
         ));
         assert!(matches!(
             pool.next_event().await,
-            Some(MarketEvent::OrderBookSnapshot { .. })
+            Some(MarketEvent::BookSnapshot { .. })
         ));
     }
 

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::adapters::strategies::{DetectionContext, MarketContext, Strategy};
 use crate::domain::{Market, Opportunity, OpportunityLeg};
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -91,7 +91,7 @@ impl Strategy for SingleConditionStrategy {
 /// `Some(Opportunity)` if arbitrage exists, `None` otherwise.
 pub fn detect_single_condition(
     market: &Market,
-    cache: &OrderBookCache,
+    cache: &BookCache,
     config: &SingleConditionConfig,
 ) -> Option<Opportunity> {
     // Get outcomes by index (binary markets have exactly 2 outcomes)
@@ -153,7 +153,7 @@ pub fn detect_single_condition(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{MarketId, OrderBook, Outcome, PriceLevel, TokenId};
+    use crate::domain::{MarketId, Book, Outcome, PriceLevel, TokenId};
     use rust_decimal_macros::dec;
 
     fn make_market() -> Market {
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn test_detects_arbitrage_when_sum_below_one() {
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         let outcomes = market.outcomes();
@@ -202,12 +202,12 @@ mod tests {
         let negative_token = outcomes[1].token_id();
 
         // Positive: 0.40, Negative: 0.50 = 0.90 total (10% edge)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -225,19 +225,19 @@ mod tests {
     #[test]
     fn test_no_arbitrage_when_sum_equals_one() {
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         let outcomes = market.outcomes();
         let positive_token = outcomes[0].token_id();
         let negative_token = outcomes[1].token_id();
 
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn test_no_arbitrage_when_edge_too_small() {
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         let outcomes = market.outcomes();
@@ -257,12 +257,12 @@ mod tests {
         let negative_token = outcomes[1].token_id();
 
         // 0.48 + 0.50 = 0.98 (only 2% edge, below 5% threshold)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.48), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_no_arbitrage_when_profit_too_small() {
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         let outcomes = market.outcomes();
@@ -282,12 +282,12 @@ mod tests {
         let negative_token = outcomes[1].token_id();
 
         // 10% edge but only 1 share = $0.10 profit (below $0.50 threshold)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(1))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(1))],
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn test_volume_limited_by_smaller_side() {
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let config = make_config();
 
         let outcomes = market.outcomes();
@@ -307,12 +307,12 @@ mod tests {
         let negative_token = outcomes[1].token_id();
 
         // Positive has 50, Negative has 100 -> volume = 50
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(50))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -327,18 +327,18 @@ mod tests {
     fn test_strategy_detect_uses_context() {
         let strategy = SingleConditionStrategy::new(make_config());
         let market = make_market();
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         let outcomes = market.outcomes();
         let positive_token = outcomes[0].token_id();
         let negative_token = outcomes[1].token_id();
 
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -371,7 +371,7 @@ mod tests {
             dec!(1),
         );
 
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
 
         let outcomes = market_1.outcomes();
         let positive_token = outcomes[0].token_id();
@@ -380,12 +380,12 @@ mod tests {
         // Positive: $40, Negative: $50 = $90 total cost
         // With $1 payout: edge = -$89 (no arbitrage)
         // With $100 payout: edge = $10 (arbitrage exists!)
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(40), dec!(100))],
         ));
-        cache.update(OrderBook::with_levels(
+        cache.update(Book::with_levels(
             negative_token.clone(),
             vec![],
             vec![PriceLevel::new(dec!(50), dec!(100))],

@@ -9,7 +9,7 @@
 
 use std::cmp::Ordering;
 
-use super::id::MarketId;
+use crate::domain::MarketId;
 
 /// Individual scoring factors for a market.
 ///

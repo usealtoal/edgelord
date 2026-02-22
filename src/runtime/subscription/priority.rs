@@ -11,7 +11,8 @@ use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
 use super::{ConnectionEvent, SubscriptionManager};
-use crate::domain::{MarketId, MarketScore, TokenId};
+use crate::domain::{MarketId, TokenId};
+use crate::runtime::MarketScore;
 use crate::error::{Error, Result};
 
 /// A priority-based subscription manager that maintains subscriptions
@@ -32,7 +33,8 @@ use crate::error::{Error, Result};
 ///
 /// ```
 /// use edgelord::runtime::subscription::{PrioritySubscriptionManager, SubscriptionManager};
-/// use edgelord::domain::{MarketId, MarketScore, ScoreFactors, TokenId};
+/// use edgelord::domain::{MarketId, TokenId};
+/// use edgelord::runtime::{MarketScore, ScoreFactors};
 ///
 /// let manager = PrioritySubscriptionManager::new(100);
 ///
@@ -335,7 +337,7 @@ impl SubscriptionManager for PrioritySubscriptionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::ScoreFactors;
+    use crate::runtime::ScoreFactors;
     use crate::error::Error;
 
     fn make_market_id(name: &str) -> MarketId {

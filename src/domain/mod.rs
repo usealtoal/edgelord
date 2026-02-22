@@ -1,29 +1,21 @@
 //! Pure domain types. No I/O, no external dependencies.
 
-mod execution;
+mod book;
+mod cluster;
 mod id;
 mod market;
-mod market_registry;
 mod money;
-mod monitoring;
 mod opportunity;
-mod order_book;
 mod position;
 mod relation;
-mod resource;
-mod scaling;
-mod score;
+mod trade;
 
-pub use execution::{ArbitrageExecutionResult, FailedLeg, FilledLeg, OrderId};
-pub use id::{ClusterId, MarketId, RelationId, TokenId};
-pub use market::{Market, Outcome};
-pub use market_registry::MarketRegistry;
+pub use book::{Book, PriceLevel};
+pub use cluster::Cluster;
+pub use id::{ClusterId, MarketId, OrderId, PositionId, RelationId, TokenId};
+pub use market::{Market, MarketRegistry, Outcome};
 pub use money::{Price, Volume};
-pub use monitoring::PoolStats;
 pub use opportunity::{Opportunity, OpportunityLeg};
-pub use order_book::{OrderBook, PriceLevel};
-pub use position::{Position, PositionId, PositionLeg, PositionStatus};
-pub use relation::{Cluster, Relation, RelationKind};
-pub use resource::ResourceBudget;
-pub use scaling::ScalingRecommendation;
-pub use score::{MarketScore, ScoreFactors, ScoreWeights};
+pub use position::{Position, PositionLeg, PositionStatus};
+pub use relation::{Relation, RelationKind};
+pub use trade::{Failure, Fill, TradeResult};

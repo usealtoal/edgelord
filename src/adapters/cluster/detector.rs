@@ -8,7 +8,7 @@ use crate::adapters::solvers::{
 };
 use crate::domain::{Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
 use crate::error::{Error, Result};
-use crate::runtime::cache::OrderBookCache;
+use crate::runtime::cache::BookCache;
 
 use super::{ClusterDetectionConfig, ClusterOpportunity};
 
@@ -79,7 +79,7 @@ impl ClusterDetector {
     pub fn detect(
         &self,
         cluster: &Cluster,
-        order_book_cache: &OrderBookCache,
+        order_book_cache: &BookCache,
         registry: &MarketRegistry,
     ) -> Result<Option<ClusterOpportunity>> {
         let cluster_id = cluster.id.to_string();
@@ -145,7 +145,7 @@ impl ClusterDetector {
     fn gather_prices(
         &self,
         cluster: &Cluster,
-        order_book_cache: &OrderBookCache,
+        order_book_cache: &BookCache,
         registry: &MarketRegistry,
     ) -> Result<(Vec<Decimal>, Vec<TokenId>)> {
         let mut prices = Vec::with_capacity(cluster.markets.len());

@@ -281,7 +281,7 @@ impl MarketDataStream for PolymarketDataStream {
         if let Some(book) = self.pending_books.pop() {
             let order_book = book.to_orderbook();
             let token_id = TokenId::from(book.asset_id);
-            return Some(MarketEvent::OrderBookSnapshot {
+            return Some(MarketEvent::BookSnapshot {
                 token_id,
                 book: order_book,
             });
@@ -301,7 +301,7 @@ impl MarketDataStream for PolymarketDataStream {
                                 self.pending_books = books;
                                 let order_book = book.to_orderbook();
                                 let token_id = TokenId::from(book.asset_id);
-                                return Some(MarketEvent::OrderBookSnapshot {
+                                return Some(MarketEvent::BookSnapshot {
                                     token_id,
                                     book: order_book,
                                 });
@@ -315,7 +315,7 @@ impl MarketDataStream for PolymarketDataStream {
                                 PolymarketTaggedMessage::Book(book) => {
                                     let order_book = book.to_orderbook();
                                     let token_id = TokenId::from(book.asset_id);
-                                    return Some(MarketEvent::OrderBookSnapshot {
+                                    return Some(MarketEvent::BookSnapshot {
                                         token_id,
                                         book: order_book,
                                     });

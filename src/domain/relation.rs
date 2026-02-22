@@ -1,8 +1,7 @@
-//! Relation and cluster types for market dependency inference.
+//! Relation types for market dependency inference.
 //!
-//! This module defines the domain types for expressing logical relationships
-//! between prediction markets. These relations are inferred by the LLM and
-//! converted to solver constraints for combinatorial arbitrage.
+//! - [`Relation`] - A logical relation between prediction markets
+//! - [`RelationKind`] - The type of relationship (implies, exclusive, etc.)
 
 use std::collections::HashMap;
 
@@ -10,7 +9,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use super::id::{ClusterId, MarketId, RelationId};
+use super::id::{MarketId, RelationId};
 use crate::ports::{Constraint, ConstraintSense};
 
 /// A logical relation between prediction markets.
@@ -187,88 +186,14 @@ impl RelationKind {
     }
 }
 
-/// A cluster of related markets with pre-computed solver constraints.
-///
-/// Clusters are built from connected relations and cache the converted
-/// solver constraints for fast access during the detection hot path.
-#[derive(Debug, Clone)]
-pub struct Cluster {
-    /// Unique identifier for this cluster.
-    pub id: ClusterId,
-    /// Markets in this cluster (ordered for ILP variable mapping).
-    pub markets: Vec<MarketId>,
-    /// Source relations within this cluster.
-    pub relations: Vec<Relation>,
-    /// Pre-computed ILP constraints for the solver (hot path).
-    pub constraints: Vec<Constraint>,
-    /// Last update timestamp.
-    pub updated_at: DateTime<Utc>,
-}
-
-impl Cluster {
-    /// Create a new cluster from a set of relations.
-    ///
-    /// Automatically extracts all referenced markets and builds
-    /// the market index mapping for constraint conversion.
-    pub fn from_relations(relations: Vec<Relation>) -> Self {
-        // Collect all unique markets, sorted for deterministic ordering
-        let mut markets: Vec<MarketId> = relations
-            .iter()
-            .flat_map(|r| r.market_ids().into_iter().cloned())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        markets.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-
-        // Build index mapping
-        let market_indices: HashMap<MarketId, usize> = markets
-            .iter()
-            .enumerate()
-            .map(|(i, m)| (m.clone(), i))
-            .collect();
-
-        // Convert relations to solver constraints
-        let constraints: Vec<Constraint> = relations
-            .iter()
-            .flat_map(|r| r.kind.to_solver_constraints(&market_indices))
-            .collect();
-
-        Self {
-            id: ClusterId::new(),
-            markets,
-            relations,
-            constraints,
-            updated_at: Utc::now(),
-        }
-    }
-
-    /// Check if this cluster contains a specific market.
-    pub fn contains_market(&self, market_id: &MarketId) -> bool {
-        self.markets.iter().any(|m| m == market_id)
-    }
-
-    /// Get the number of markets in this cluster.
-    pub fn market_count(&self) -> usize {
-        self.markets.len()
-    }
-
-    /// Get the number of constraints in this cluster.
-    pub fn constraint_count(&self) -> usize {
-        self.constraints.len()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use rust_decimal_macros::dec;
 
-    // Helper to create test market IDs
     fn market(s: &str) -> MarketId {
         MarketId::new(s)
     }
-
-    // === Relation tests ===
 
     #[test]
     fn relation_new_sets_timestamps() {
@@ -325,8 +250,6 @@ mod tests {
         let ids: Vec<&str> = rel.market_ids().iter().map(|m| m.as_str()).collect();
         assert_eq!(ids, vec!["a", "b", "c"]);
     }
-
-    // === RelationKind tests ===
 
     #[test]
     fn relation_kind_implies_market_ids() {
@@ -430,93 +353,5 @@ mod tests {
         assert_eq!(constraints[0].coefficients, vec![dec!(2), dec!(3)]);
         assert_eq!(constraints[0].sense, ConstraintSense::GreaterEqual);
         assert_eq!(constraints[0].rhs, dec!(5));
-    }
-
-    // === Cluster tests ===
-
-    #[test]
-    fn cluster_from_relations_extracts_markets() {
-        let relations = vec![
-            Relation::new(
-                RelationKind::Implies {
-                    if_yes: market("a"),
-                    then_yes: market("b"),
-                },
-                0.9,
-                "test",
-            ),
-            Relation::new(
-                RelationKind::MutuallyExclusive {
-                    markets: vec![market("b"), market("c")],
-                },
-                0.85,
-                "test",
-            ),
-        ];
-
-        let cluster = Cluster::from_relations(relations);
-
-        // Should have 3 unique markets: a, b, c
-        assert_eq!(cluster.market_count(), 3);
-        assert!(cluster.contains_market(&market("a")));
-        assert!(cluster.contains_market(&market("b")));
-        assert!(cluster.contains_market(&market("c")));
-    }
-
-    #[test]
-    fn cluster_from_relations_builds_constraints() {
-        let relations = vec![
-            Relation::new(
-                RelationKind::Implies {
-                    if_yes: market("a"),
-                    then_yes: market("b"),
-                },
-                0.9,
-                "test",
-            ),
-            Relation::new(
-                RelationKind::MutuallyExclusive {
-                    markets: vec![market("b"), market("c")],
-                },
-                0.85,
-                "test",
-            ),
-        ];
-
-        let cluster = Cluster::from_relations(relations);
-
-        // Should have 2 constraints (1 from implies, 1 from mutually_exclusive)
-        assert_eq!(cluster.constraint_count(), 2);
-    }
-
-    #[test]
-    fn cluster_markets_are_sorted() {
-        let relations = vec![Relation::new(
-            RelationKind::MutuallyExclusive {
-                markets: vec![market("z"), market("a"), market("m")],
-            },
-            0.9,
-            "test",
-        )];
-
-        let cluster = Cluster::from_relations(relations);
-
-        let market_strs: Vec<&str> = cluster.markets.iter().map(|m| m.as_str()).collect();
-        assert_eq!(market_strs, vec!["a", "m", "z"]);
-    }
-
-    #[test]
-    fn cluster_contains_market_returns_false_for_missing() {
-        let relations = vec![Relation::new(
-            RelationKind::MutuallyExclusive {
-                markets: vec![market("a"), market("b")],
-            },
-            0.9,
-            "test",
-        )];
-
-        let cluster = Cluster::from_relations(relations);
-
-        assert!(!cluster.contains_market(&market("c")));
     }
 }

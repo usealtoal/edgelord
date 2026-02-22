@@ -278,7 +278,7 @@ mod tests {
     use super::*;
     use crate::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
     use crate::ports::Constraint;
-    use crate::runtime::cache::OrderBookCache;
+    use crate::runtime::cache::BookCache;
     use chrono::{Duration, Utc};
     use rust_decimal_macros::dec;
 
@@ -351,7 +351,7 @@ mod tests {
         let strategy = CombinatorialStrategy::new(config);
 
         let market = make_binary_market("m1", "yes", "no");
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         // Without cluster cache, should return empty
@@ -379,7 +379,7 @@ mod tests {
         strategy.set_cache(cluster_cache);
 
         let market = make_binary_market("m1", "yes", "no");
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         // Without registry, should return empty
@@ -399,7 +399,7 @@ mod tests {
         strategy.set_registry(registry);
 
         let market = make_binary_market("m1", "yes", "no");
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&market, &cache);
 
         // No cluster exists for this market
@@ -435,13 +435,13 @@ mod tests {
         strategy.set_registry(registry);
 
         // Set prices that are fair (no arbitrage)
-        let cache = OrderBookCache::new();
-        cache.update(crate::domain::OrderBook::with_levels(
+        let cache = BookCache::new();
+        cache.update(crate::domain::Book::with_levels(
             TokenId::from("yes1"),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
-        cache.update(crate::domain::OrderBook::with_levels(
+        cache.update(crate::domain::Book::with_levels(
             TokenId::from("yes2"),
             vec![],
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -479,7 +479,7 @@ mod tests {
         strategy.set_registry(registry);
 
         // Empty cache (no price data)
-        let cache = OrderBookCache::new();
+        let cache = BookCache::new();
         let ctx = DetectionContext::new(&m1, &cache);
 
         // Should fail closed and return empty

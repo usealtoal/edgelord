@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use crate::domain::ResourceBudget;
+use crate::runtime::ResourceBudget;
 
 /// Application profile for resource allocation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]

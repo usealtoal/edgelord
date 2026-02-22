@@ -6,7 +6,7 @@
 //! - `state` - Shared application state
 //! - `governor` - Adaptive performance governor
 //! - `subscription` - Subscription management
-//! - `cache` - Order book and cluster caching
+//! - `cache` - Book and cluster caching
 //! - `exchange` - Exchange abstraction layer
 
 // Allow many arguments for handler functions that coordinate multiple services
@@ -19,8 +19,12 @@ pub mod exchange;
 mod execution;
 pub mod governor;
 mod handler;
+mod monitoring;
 mod orchestrator;
 mod orchestrator_builder;
+mod resource;
+mod scaling;
+mod score;
 mod state;
 pub mod subscription;
 
@@ -44,7 +48,7 @@ pub use orchestrator::{
 pub use state::{AppState, RiskLimitKind, RiskLimitUpdateError, RiskLimits};
 
 // Re-export cache types
-pub use cache::{ClusterCache, OrderBookCache, OrderBookUpdate, PositionTracker};
+pub use cache::{BookCache, BookUpdate, ClusterCache, PositionTracker};
 
 // Re-export exchange types
 pub use exchange::{
@@ -56,3 +60,9 @@ pub use exchange::{
 
 // Re-export subscription types
 pub use subscription::{ConnectionEvent, PrioritySubscriptionManager, SubscriptionManager};
+
+// Re-export infrastructure types (monitoring, resource management, scaling)
+pub use monitoring::PoolStats;
+pub use resource::ResourceBudget;
+pub use scaling::ScalingRecommendation;
+pub use score::{MarketScore, ScoreFactors, ScoreWeights};

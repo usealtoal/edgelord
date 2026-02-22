@@ -80,7 +80,7 @@ async fn reconnect_retries_on_subscribe_failure() {
         .unwrap();
 
     let event = stream.next_event().await;
-    assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+    assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
     assert!(
         connect_count.load(Ordering::SeqCst) >= 3,
         "Expected reconnect to retry after subscribe failure"
