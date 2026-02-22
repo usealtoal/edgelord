@@ -10,7 +10,7 @@
 //!                    ┌─────────────────────────┐
 //!                    │      Application        │
 //!                    │                         │
-//!     ┌──────────────┤  Domain + Ports         ├──────────────┐
+//!     ┌──────────────┤  Domain + Port          ├──────────────┐
 //!     │              │                         │              │
 //!     │              └─────────────────────────┘              │
 //!     │                         │                             │
@@ -23,13 +23,15 @@
 //!
 //! # Available Ports
 //!
-//! - [`Strategy`] - Detection algorithms for finding arbitrage
 //! - [`MarketDataStream`], [`MarketFetcher`], [`OrderExecutor`], [`ArbitrageExecutor`] - Exchange integration
 //! - [`Notifier`] - Event notifications (Telegram, logging, etc.)
 //! - [`Store`] - Persistence for relations and clusters
 //! - [`Solver`] - LP/ILP optimization backend
 //! - [`RelationInferrer`] - Market relation discovery
 //! - [`RiskGate`] - Trade validation and risk management
+//!
+//! Note: The `Strategy` trait is in `adapter::strategy` as it's an internal
+//! extension point rather than an external dependency port.
 
 mod exchange;
 mod inference;
@@ -70,7 +72,6 @@ pub use solver::{
 // Store port
 pub use store::Store;
 
-// Strategy port types (trait is in adapters::strategies)
-pub use strategy::{DetectionContext, DetectionResult, MarketContext};
-// Re-export Strategy trait from adapters for backward compat
-pub use crate::adapter::strategy::Strategy;
+// Strategy context types (Strategy trait is in adapter::strategy)
+pub use strategy::{DetectionResult, MarketContext};
+pub use strategy::DetectionContext;

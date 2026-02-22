@@ -4,7 +4,7 @@
 //! allowing different backends (`HiGHS`, Gurobi, etc.) to be swapped.
 //!
 //! The core types (`Solver`, `LpProblem`, `Constraint`, etc.) are defined
-//! in `crate::ports::solver` and re-exported here for convenience.
+//! in `crate::port::solver` and re-exported here for convenience.
 
 // Allow large error types in Result - Error includes WebSocket variant for unified error handling
 #![allow(clippy::result_large_err)]
@@ -18,8 +18,8 @@ pub use highs::HiGHSSolver;
 pub use bregman::{bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices};
 pub use frank_wolfe::{FrankWolfe, FrankWolfeConfig, FrankWolfeResult};
 
-// Re-export solver types from ports (canonical definitions)
-pub use crate::ports::{
+// Re-export solver types from port (canonical definitions)
+pub use crate::port::{
     Constraint, ConstraintSense, IlpProblem, LpProblem, LpSolution, SolutionStatus, Solver,
     VariableBounds,
 };

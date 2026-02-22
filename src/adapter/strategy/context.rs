@@ -6,11 +6,11 @@
 use rust_decimal::Decimal;
 
 use crate::domain::{Market, MarketId, TokenId};
-use crate::ports::DetectionContext as DetectionContextTrait;
+use crate::port::DetectionContext as DetectionContextTrait;
 use crate::runtime::cache::BookCache;
 
-// Re-export types from ports for consistency
-pub use crate::ports::MarketContext;
+// Re-export types from port for consistency
+pub use crate::port::MarketContext;
 
 /// Full context for detection including market data.
 ///
@@ -108,7 +108,7 @@ impl<'a> DetectionContextTrait for DetectionContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ports::DetectionResult;
+    use crate::port::DetectionResult;
 
     #[test]
     fn test_market_context_binary() {

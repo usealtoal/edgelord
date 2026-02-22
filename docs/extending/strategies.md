@@ -1,6 +1,6 @@
 # Custom Strategies
 
-Implement `ports::Strategy` to add your own detection algorithm.
+Implement `adapter::strategy::Strategy` to add your own detection algorithm.
 
 ## Trait Definition
 
@@ -15,7 +15,7 @@ pub trait Strategy: Send + Sync {
 ## Example
 
 ```rust
-use edgelord::ports::{Strategy, MarketContext, DetectionContext};
+use edgelord::adapter::strategy::{Strategy, MarketContext, DetectionContext};
 use edgelord::domain::Opportunity;
 
 pub struct MomentumStrategy {

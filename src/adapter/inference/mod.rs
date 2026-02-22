@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 use crate::domain::Relation;
-use crate::ports::{MarketSummary, RelationInferrer};
+use crate::port::{MarketSummary, RelationInferrer};
 use crate::runtime::cache::ClusterCache;
 use crate::runtime::InferenceConfig;
 
@@ -195,7 +195,7 @@ impl InferenceService {
 mod tests {
     use super::*;
     use crate::domain::{MarketId, Relation, RelationKind};
-    use crate::ports::tests::MockInferrer;
+    use crate::port::tests::MockInferrer;
     use chrono::Duration as ChronoDuration;
 
     fn sample_markets(count: usize) -> Vec<MarketSummary> {

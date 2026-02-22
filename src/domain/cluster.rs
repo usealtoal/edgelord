@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 
 use super::id::{ClusterId, MarketId};
 use super::relation::Relation;
-use crate::ports::Constraint;
+use crate::port::Constraint;
 
 /// A cluster of related markets with pre-computed solver constraints.
 ///

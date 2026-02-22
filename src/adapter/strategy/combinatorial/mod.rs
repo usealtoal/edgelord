@@ -277,7 +277,7 @@ impl Strategy for CombinatorialStrategy {
 mod tests {
     use super::*;
     use crate::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
-    use crate::ports::Constraint;
+    use crate::port::Constraint;
     use crate::runtime::cache::BookCache;
     use chrono::{Duration, Utc};
     use rust_decimal_macros::dec;

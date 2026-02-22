@@ -20,7 +20,7 @@ use crate::adapter::store::db;
 use crate::adapter::strategy::StrategyRegistry;
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
-use crate::ports::{MarketSummary, RelationInferrer};
+use crate::port::{MarketSummary, RelationInferrer};
 use crate::runtime::cache::BookCache;
 use crate::runtime::exchange::{
     ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,

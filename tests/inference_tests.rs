@@ -8,7 +8,7 @@ use edgelord::adapter::inference::LlmInferrer;
 use edgelord::adapter::llm::Llm;
 use edgelord::domain::{MarketId, Relation, RelationKind};
 use edgelord::error::Result;
-use edgelord::ports::{MarketSummary, RelationInferrer};
+use edgelord::port::{MarketSummary, RelationInferrer};
 use edgelord::runtime::cache::ClusterCache;
 
 /// Mock LLM that returns predefined responses.

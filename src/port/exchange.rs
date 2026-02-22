@@ -254,6 +254,30 @@ pub trait MarketDataStream: Send {
     }
 }
 
+/// Implement MarketDataStream for boxed trait objects to allow use with generic wrappers.
+#[async_trait]
+impl MarketDataStream for Box<dyn MarketDataStream> {
+    async fn connect(&mut self) -> Result<(), Error> {
+        (**self).connect().await
+    }
+
+    async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<(), Error> {
+        (**self).subscribe(token_ids).await
+    }
+
+    async fn next_event(&mut self) -> Option<MarketEvent> {
+        (**self).next_event().await
+    }
+
+    fn exchange_name(&self) -> &'static str {
+        (**self).exchange_name()
+    }
+
+    fn pool_stats(&self) -> Option<PoolStats> {
+        (**self).pool_stats()
+    }
+}
+
 /// Executor for arbitrage opportunities across multiple legs.
 #[async_trait]
 pub trait ArbitrageExecutor: Send + Sync {

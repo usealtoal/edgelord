@@ -1,11 +1,9 @@
 //! Strategy port for arbitrage detection algorithms.
 //!
-//! This module defines the trait that detection strategies must implement.
-//! Strategies are responsible for finding arbitrage opportunities in markets.
+//! This module defines context types and traits for strategy detection.
+//! The `Strategy` trait itself is in `adapter::strategy` for concrete type access.
 
-use std::sync::Arc;
-
-use crate::domain::{MarketId, MarketRegistry, Opportunity, TokenId};
+use crate::domain::{MarketId, TokenId};
 use rust_decimal::Decimal;
 
 /// Context describing the market being analyzed.
@@ -124,44 +122,6 @@ pub trait DetectionContext: Send + Sync {
     fn ask_volume(&self, token_id: &TokenId) -> Option<Decimal>;
 }
 
-/// A detection strategy that finds arbitrage opportunities.
-///
-/// Strategies encapsulate specific detection algorithms. Each strategy
-/// can be configured independently and may apply to different market types.
-///
-/// # Implementation Notes
-///
-/// - Strategies must be thread-safe (`Send + Sync`)
-/// - The `detect` method should be pure and idempotent
-/// - Use `warm_start` for iterative optimization algorithms
-#[allow(dead_code)] // Extension point for custom strategies
-pub trait Strategy: Send + Sync {
-    /// Unique identifier for this strategy.
-    ///
-    /// Used in configuration and logging.
-    fn name(&self) -> &'static str;
-
-    /// Check if this strategy should run for a given market context.
-    ///
-    /// For example, single-condition only applies to binary markets,
-    /// while market rebalancing applies to multi-outcome markets.
-    fn applies_to(&self, ctx: &MarketContext) -> bool;
-
-    /// Detect opportunities given current market state.
-    ///
-    /// Returns all found opportunities (may be empty).
-    /// The concrete DetectionContext provides access to market data.
-    fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity>;
-
-    /// Optional: provide warm-start hint from previous detection.
-    ///
-    /// Strategies can use this to speed up iterative algorithms
-    /// (e.g., Frank-Wolfe can reuse previous solution).
-    fn warm_start(&mut self, _previous: &DetectionResult) {}
-
-    /// Optional: inject the market registry for strategies that need it.
-    ///
-    /// Called by the orchestrator after the registry is built. Strategies
-    /// that don't need it can ignore this (default no-op).
-    fn set_market_registry(&mut self, _registry: Arc<MarketRegistry>) {}
-}
+// Note: The `Strategy` trait is defined in `adapter::strategy` because it requires
+// access to the concrete `DetectionContext` type with its `market` and `cache` fields.
+// The `DetectionContext` trait above provides a minimal interface for generic access.

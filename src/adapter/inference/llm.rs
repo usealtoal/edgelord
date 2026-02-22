@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 use crate::adapter::llm::Llm;
 use crate::domain::{MarketId, Relation, RelationKind};
 use crate::error::Result;
-use crate::ports::{MarketSummary, RelationInferrer};
+use crate::port::{MarketSummary, RelationInferrer};
 
 /// LLM-powered relation inferrer.
 pub struct LlmInferrer {

@@ -13,7 +13,8 @@ mod context;
 pub mod rebalancing;
 mod registry;
 
-pub use crate::ports::{DetectionResult, MarketContext};
+// Re-export types from port
+pub use crate::port::{DetectionResult, MarketContext};
 pub use combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 pub use condition::{SingleConditionConfig, SingleConditionStrategy};
 pub use context::DetectionContext;
