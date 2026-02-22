@@ -43,13 +43,13 @@ async fn main() {
             Ok(())
         }
         Commands::Statistics(cmd) => match cmd {
-            StatsCommand::Today(args) => cli::stats::execute_today(&args.db),
-            StatsCommand::Week(args) => cli::stats::execute_week(&args.db),
-            StatsCommand::History(args) => cli::stats::execute_history(&args.db, args.days),
+            StatsCommand::Today(args) => cli::stat::handler::execute_today(&args.db),
+            StatsCommand::Week(args) => cli::stat::handler::execute_week(&args.db),
+            StatsCommand::History(args) => cli::stat::handler::execute_history(&args.db, args.days),
             StatsCommand::Export(args) => {
-                cli::stats::execute_export(&args.db, args.days, args.output.as_deref())
+                cli::stat::handler::execute_export(&args.db, args.days, args.output.as_deref())
             }
-            StatsCommand::Prune(args) => cli::stats::execute_prune(&args.db, args.days),
+            StatsCommand::Prune(args) => cli::stat::handler::execute_prune(&args.db, args.days),
         },
         Commands::Config(cmd) => match cmd {
             ConfigCommand::Init(args) => cli::config::execute_init(&args.path, args.force),

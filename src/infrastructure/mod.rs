@@ -10,6 +10,7 @@
 pub mod bootstrap;
 pub mod config;
 pub mod exchange;
+pub mod factory;
 pub mod governor;
 pub mod operator;
 pub mod orchestration;

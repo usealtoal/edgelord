@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::domain::id::TokenId;
 use crate::error::Error;
-use crate::infrastructure::config::service::ReconnectionConfig;
+use crate::infrastructure::config::pool::ReconnectionConfig;
 use crate::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 
 /// Circuit breaker state.

@@ -3,7 +3,7 @@
 //! Single source of truth for config structs used across tests.
 //! Avoids each test module defining its own slightly-different defaults.
 
-use crate::infrastructure::config::service::{ConnectionPoolConfig, ReconnectionConfig};
+use crate::infrastructure::config::pool::{ConnectionPoolConfig, ReconnectionConfig};
 
 /// Fast reconnection config with zero delays — no waiting in tests.
 pub fn reconnection() -> ReconnectionConfig {

@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::domain::id::TokenId;
-use crate::infrastructure::config::service::ReconnectionConfig;
+use crate::infrastructure::config::pool::ReconnectionConfig;
 use crate::infrastructure::exchange::reconnecting::ReconnectingDataStream;
 use crate::port::outbound::exchange::{MarketDataStream, MarketEvent};
 

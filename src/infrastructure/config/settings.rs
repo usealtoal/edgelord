@@ -9,14 +9,15 @@ use std::fs;
 use std::path::Path;
 
 use super::cluster::ClusterDetectionConfig;
+use super::governor::GovernorAppConfig;
 use super::llm::LlmConfig;
 use super::logging::LoggingConfig;
+use super::pool::{ConnectionPoolConfig, ReconnectionConfig};
 use super::profile::{Profile, ResourceConfig};
-use super::service::{
-    ConnectionPoolConfig, GovernorAppConfig, ReconnectionConfig, RiskConfig, TelegramAppConfig,
-    WalletConfig,
-};
+use super::risk::RiskConfig;
 use super::strategy::StrategiesConfig;
+use super::telegram::TelegramAppConfig;
+use super::wallet::WalletConfig;
 use crate::adapter::outbound::polymarket::settings::{Environment, PolymarketConfig};
 use crate::application::inference::config::InferenceConfig;
 use crate::error::{ConfigError, Result};

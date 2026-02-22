@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use crate::infrastructure::config::service::{ConnectionPoolConfig, ReconnectionConfig};
+use crate::infrastructure::config::pool::{ConnectionPoolConfig, ReconnectionConfig};
 use crate::port::outbound::exchange::MarketEvent;
 
 use super::spawn::new_connection;

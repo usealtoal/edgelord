@@ -170,7 +170,7 @@ impl ExchangeFactory {
     pub fn create_connection_pool(config: &Config) -> Result<Option<ConnectionPool>> {
         let pool_config = match &config.exchange_config {
             crate::infrastructure::config::settings::ExchangeSpecificConfig::Polymarket(pm) => {
-                crate::infrastructure::config::service::ConnectionPoolConfig {
+                crate::infrastructure::config::pool::ConnectionPoolConfig {
                     max_connections: pm.connections.max_connections,
                     subscriptions_per_connection: pm.connections.subscriptions_per_connection,
                     connection_ttl_secs: pm.connections.connection_ttl_secs,

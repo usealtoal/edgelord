@@ -29,7 +29,7 @@ use tracing::{debug, info};
 
 use crate::domain::id::TokenId;
 use crate::error::{ConfigError, Result};
-use crate::infrastructure::config::service::{ConnectionPoolConfig, ReconnectionConfig};
+use crate::infrastructure::config::pool::{ConnectionPoolConfig, ReconnectionConfig};
 use crate::port::outbound::exchange::PoolStats;
 use crate::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 
