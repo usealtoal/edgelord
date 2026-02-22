@@ -3,7 +3,7 @@ mod support;
 
 use std::sync::Arc;
 
-use edgelord::adapter::outbound::sqlite::stats_recorder::create_recorder;
+use edgelord::adapter::outbound::sqlite::recorder::create_recorder;
 use edgelord::application::cache::book::BookCache;
 use edgelord::application::position::manager::PositionManager;
 use edgelord::application::risk::manager::RiskManager;

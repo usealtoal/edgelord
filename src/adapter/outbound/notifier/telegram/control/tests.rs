@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use rust_decimal_macros::dec;
 
 use crate::adapter::outbound::sqlite::database;
-use crate::adapter::outbound::sqlite::stats_recorder;
+use crate::adapter::outbound::sqlite::recorder;
 use crate::port::inbound::runtime::{
     RuntimePosition, RuntimePositionStatus, RuntimeRiskLimitKind, RuntimeRiskLimitUpdateError,
     RuntimeRiskLimits, RuntimeState,
@@ -277,7 +277,7 @@ fn execute_stats_with_recorder() {
     // Create in-memory database for test.
     let pool = database::connection::create_pool("sqlite://:memory:").expect("create pool");
     database::connection::run_migrations(&pool).expect("run migrations");
-    let recorder = stats_recorder::create_recorder(pool);
+    let recorder = recorder::create_recorder(pool);
 
     let state = Arc::new(MockRuntimeState::default());
     let runtime = Arc::new(RuntimeStats::new());
@@ -294,7 +294,7 @@ fn execute_pool_with_stats() {
     let state = Arc::new(MockRuntimeState::default());
     let pool = database::connection::create_pool("sqlite://:memory:").expect("create pool");
     database::connection::run_migrations(&pool).expect("run migrations");
-    let recorder = stats_recorder::create_recorder(pool);
+    let recorder = recorder::create_recorder(pool);
     let runtime = Arc::new(RuntimeStats::new());
 
     // Update pool stats.
@@ -319,7 +319,7 @@ fn execute_markets_with_stats() {
     let state = Arc::new(MockRuntimeState::default());
     let pool = database::connection::create_pool("sqlite://:memory:").expect("create pool");
     database::connection::run_migrations(&pool).expect("run migrations");
-    let recorder = stats_recorder::create_recorder(pool);
+    let recorder = recorder::create_recorder(pool);
     let runtime = Arc::new(RuntimeStats::new());
 
     // Update market counts.
@@ -347,7 +347,7 @@ fn execute_markets_with_zero_counts() {
     let state = Arc::new(MockRuntimeState::default());
     let pool = database::connection::create_pool("sqlite://:memory:").expect("create pool");
     database::connection::run_migrations(&pool).expect("run migrations");
-    let recorder = stats_recorder::create_recorder(pool);
+    let recorder = recorder::create_recorder(pool);
     let runtime = Arc::new(RuntimeStats::new());
     // Don't update counts - they default to 0.
 
@@ -362,7 +362,7 @@ fn execute_pool_not_initialized() {
     let state = Arc::new(MockRuntimeState::default());
     let pool = database::connection::create_pool("sqlite://:memory:").expect("create pool");
     database::connection::run_migrations(&pool).expect("run migrations");
-    let recorder = stats_recorder::create_recorder(pool);
+    let recorder = recorder::create_recorder(pool);
     let runtime = Arc::new(RuntimeStats::new());
     // Don't update pool stats.
 

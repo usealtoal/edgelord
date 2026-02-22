@@ -34,7 +34,7 @@ pub fn f32_to_decimal(f: f32) -> Decimal {
 }
 
 /// SQLite-backed statistics recorder.
-pub struct SqliteStatsRecorder {
+pub struct SqliteRecorder {
     pool: Pool<ConnectionManager<SqliteConnection>>,
 }
 
@@ -45,7 +45,7 @@ struct LastInsertRowId {
     id: i32,
 }
 
-impl SqliteStatsRecorder {
+impl SqliteRecorder {
     /// Create a new stats recorder.
     #[must_use]
     pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Self {
@@ -348,33 +348,33 @@ impl SqliteStatsRecorder {
     }
 }
 
-impl crate::port::outbound::stats::StatsRecorder for SqliteStatsRecorder {
+impl crate::port::outbound::stats::StatsRecorder for SqliteRecorder {
     fn record_opportunity(&self, event: &RecordedOpportunity) -> Option<i32> {
-        SqliteStatsRecorder::record_opportunity(self, event)
+        SqliteRecorder::record_opportunity(self, event)
     }
 
     fn record_trade_open(&self, event: &TradeOpenEvent) -> Option<i32> {
-        SqliteStatsRecorder::record_trade_open(self, event)
+        SqliteRecorder::record_trade_open(self, event)
     }
 
     fn record_trade_close(&self, event: &TradeCloseEvent) {
-        SqliteStatsRecorder::record_trade_close(self, event)
+        SqliteRecorder::record_trade_close(self, event)
     }
 
     fn record_latency(&self, latency_ms: u32) {
-        SqliteStatsRecorder::record_latency(self, latency_ms)
+        SqliteRecorder::record_latency(self, latency_ms)
     }
 
     fn update_peak_exposure(&self, exposure: Decimal) {
-        SqliteStatsRecorder::update_peak_exposure(self, exposure)
+        SqliteRecorder::update_peak_exposure(self, exposure)
     }
 
     fn get_summary(&self, from: NaiveDate, to: NaiveDate) -> StatsSummary {
-        SqliteStatsRecorder::get_summary(self, from, to)
+        SqliteRecorder::get_summary(self, from, to)
     }
 
     fn get_today(&self) -> StatsSummary {
-        SqliteStatsRecorder::get_today(self)
+        SqliteRecorder::get_today(self)
     }
 }
 
@@ -383,7 +383,7 @@ impl crate::port::outbound::stats::StatsRecorder for SqliteStatsRecorder {
 pub fn create_recorder(
     pool: Pool<ConnectionManager<SqliteConnection>>,
 ) -> Arc<dyn crate::port::outbound::stats::StatsRecorder> {
-    Arc::new(SqliteStatsRecorder::new(pool))
+    Arc::new(SqliteRecorder::new(pool))
 }
 
 /// Export daily stats to CSV format.

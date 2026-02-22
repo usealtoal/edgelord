@@ -10,8 +10,8 @@ use crate::adapter::outbound::sqlite::database::model::{
 use crate::adapter::outbound::sqlite::database::schema::{
     daily_stats, opportunities, strategy_daily_stats, trades,
 };
-use crate::adapter::outbound::sqlite::stats_recorder::{
-    export_daily_csv as export_csv_impl, f32_to_decimal, SqliteStatsRecorder,
+use crate::adapter::outbound::sqlite::recorder::{
+    export_daily_csv as export_csv_impl, f32_to_decimal, SqliteRecorder,
 };
 use crate::domain::stats::StatsSummary;
 use crate::error::{ConfigError, Error, Result};
@@ -229,7 +229,7 @@ impl StatisticsReportReader for SqliteReportReader {
 
     fn prune_old_records(&self, retention_days: u32) -> Result<()> {
         let pool = self.connect()?;
-        let recorder = SqliteStatsRecorder::new(pool);
+        let recorder = SqliteRecorder::new(pool);
         recorder.prune_old_records(retention_days);
         Ok(())
     }

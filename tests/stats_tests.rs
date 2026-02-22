@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use edgelord::adapter::outbound::sqlite::database::connection::run_migrations;
-use edgelord::adapter::outbound::sqlite::stats_recorder::SqliteStatsRecorder;
+use edgelord::adapter::outbound::sqlite::recorder::SqliteRecorder;
 use edgelord::domain::stats::RecordedOpportunity;
 use rust_decimal_macros::dec;
 
@@ -48,7 +48,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     }
 
     run_migrations(&db_pool).unwrap();
-    let recorder = SqliteStatsRecorder::new(db_pool.clone());
+    let recorder = SqliteRecorder::new(db_pool.clone());
 
     // Clean up temp file after test
     let _guard = TempFileGuard(temp_file);
