@@ -6,13 +6,13 @@ use std::sync::Arc;
 use edgelord::adapter::notifier::NotifierRegistry;
 use edgelord::adapter::position::PositionManager;
 use edgelord::adapter::risk::RiskManager;
-use edgelord::adapter::statistics::create_recorder;
+use edgelord::adapter::statistic::create_recorder;
 use edgelord::adapter::strategy::{
     SingleConditionConfig, SingleConditionStrategy, StrategyRegistry,
 };
 use edgelord::domain::TokenId;
 use edgelord::runtime::cache::BookCache;
-use edgelord::runtime::exchange::MarketEvent;
+use edgelord::port::MarketEvent;
 use edgelord::runtime::{process_market_event, AppState, EventProcessingContext, RiskLimits};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;

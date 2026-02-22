@@ -6,9 +6,8 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::adapter::strategy::{DetectionContext, MarketContext, Strategy};
-use crate::domain::{Market, Opportunity, OpportunityLeg};
-use crate::runtime::cache::BookCache;
+use crate::domain::Opportunity;
+use crate::port::{DetectionContext, MarketContext, Strategy};
 
 /// Configuration for single-condition detection.
 #[derive(Debug, Clone, Deserialize)]
@@ -71,8 +70,8 @@ impl Strategy for SingleConditionStrategy {
         ctx.is_binary()
     }
 
-    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
-        detect_single_condition(ctx.market, ctx.cache, &self.config)
+    fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
+        detect_single_condition(ctx, &self.config)
             .into_iter()
             .collect()
     }
@@ -81,37 +80,30 @@ impl Strategy for SingleConditionStrategy {
 /// Core detection logic for single-condition arbitrage.
 ///
 /// Checks if YES ask + NO ask < payout, indicating risk-free profit.
-///
-/// # Arguments
-/// * `market` - A binary market with exactly 2 outcomes
-/// * `cache` - Order book cache with current prices
-/// * `config` - Detection thresholds
-///
-/// # Returns
-/// `Some(Opportunity)` if arbitrage exists, `None` otherwise.
 pub fn detect_single_condition(
-    market: &Market,
-    cache: &BookCache,
+    ctx: &dyn DetectionContext,
     config: &SingleConditionConfig,
 ) -> Option<Opportunity> {
-    // Get outcomes by index (binary markets have exactly 2 outcomes)
-    // Index 0 = positive outcome, Index 1 = negative outcome
+    let market = ctx.market();
     let outcomes = market.outcomes();
+
+    // Binary markets have exactly 2 outcomes
     if outcomes.len() != 2 {
         return None;
     }
+
     let positive_outcome = &outcomes[0];
     let negative_outcome = &outcomes[1];
 
-    // Fail closed if any required order book is missing.
-    let positive_book = cache.get(positive_outcome.token_id())?;
-    let negative_book = cache.get(negative_outcome.token_id())?;
+    // Get order books and best asks
+    let positive_book = ctx.order_book(positive_outcome.token_id())?;
+    let negative_book = ctx.order_book(negative_outcome.token_id())?;
 
     let positive_ask = positive_book.best_ask()?;
     let negative_ask = negative_book.best_ask()?;
 
     let total_cost = positive_ask.price() + negative_ask.price();
-    let payout = market.payout();
+    let payout = ctx.payout();
 
     // No arbitrage if cost >= payout
     if total_cost >= payout {
@@ -135,14 +127,15 @@ pub fn detect_single_condition(
     }
 
     // Build opportunity
+    use crate::domain::OpportunityLeg;
     let legs = vec![
         OpportunityLeg::new(positive_outcome.token_id().clone(), positive_ask.price()),
         OpportunityLeg::new(negative_outcome.token_id().clone(), negative_ask.price()),
     ];
 
     Some(Opportunity::with_strategy(
-        market.market_id().clone(),
-        market.question(),
+        ctx.market_id().clone(),
+        ctx.question(),
         legs,
         volume,
         payout,
@@ -153,7 +146,9 @@ pub fn detect_single_condition(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{MarketId, Book, Outcome, PriceLevel, TokenId};
+    use crate::adapter::strategy::ConcreteDetectionContext;
+    use crate::domain::{Book, Market, MarketId, Outcome, PriceLevel, TokenId};
+    use crate::runtime::cache::BookCache;
     use rust_decimal_macros::dec;
 
     fn make_market() -> Market {
@@ -213,7 +208,8 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&market, &cache, &config);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
+        let opp = detect_single_condition(&ctx, &config);
         assert!(opp.is_some());
 
         let opp = opp.unwrap();
@@ -243,7 +239,8 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&market, &cache, &config).is_none());
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
+        assert!(detect_single_condition(&ctx, &config).is_none());
     }
 
     #[test]
@@ -268,7 +265,8 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        assert!(detect_single_condition(&market, &cache, &config).is_none());
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
+        assert!(detect_single_condition(&ctx, &config).is_none());
     }
 
     #[test]
@@ -293,7 +291,8 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(1))],
         ));
 
-        assert!(detect_single_condition(&market, &cache, &config).is_none());
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
+        assert!(detect_single_condition(&ctx, &config).is_none());
     }
 
     #[test]
@@ -318,7 +317,8 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let opp = detect_single_condition(&market, &cache, &config).unwrap();
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
+        let opp = detect_single_condition(&ctx, &config).unwrap();
         assert_eq!(opp.volume(), dec!(50));
         assert_eq!(opp.expected_profit(), dec!(5.00)); // 50 * 0.10
     }
@@ -344,7 +344,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
         let opportunities = strategy.detect(&ctx);
 
         assert_eq!(opportunities.len(), 1);
@@ -353,13 +353,11 @@ mod tests {
     #[test]
     fn test_custom_payout_affects_edge_calculation() {
         // With payout of $100, cost of $90 gives $10 edge (10%)
-        // This should be profitable with custom payout
         let strategy = SingleConditionStrategy::new(SingleConditionConfig {
             min_edge: dec!(5.00), // $5 minimum edge
             min_profit: dec!(0.50),
         });
 
-        // Create market with $1 payout first
         let market_outcomes = vec![
             Outcome::new(TokenId::from("yes-token"), "Yes"),
             Outcome::new(TokenId::from("no-token"), "No"),
@@ -378,8 +376,6 @@ mod tests {
         let negative_token = outcomes[1].token_id();
 
         // Positive: $40, Negative: $50 = $90 total cost
-        // With $1 payout: edge = -$89 (no arbitrage)
-        // With $100 payout: edge = $10 (arbitrage exists!)
         cache.update(Book::with_levels(
             positive_token.clone(),
             vec![],
@@ -392,7 +388,7 @@ mod tests {
         ));
 
         // With default $1 payout, no opportunity (cost $90 > payout $1)
-        let ctx_default = DetectionContext::new(&market_1, &cache);
+        let ctx_default = ConcreteDetectionContext::new(&market_1, &cache);
         let opps_default = strategy.detect(&ctx_default);
         assert!(
             opps_default.is_empty(),
@@ -408,7 +404,7 @@ mod tests {
         );
 
         // With $100 payout, opportunity exists (cost $90 < payout $100)
-        let ctx_custom = DetectionContext::new(&market_100, &cache);
+        let ctx_custom = ConcreteDetectionContext::new(&market_100, &cache);
         let opps_custom = strategy.detect(&ctx_custom);
         assert_eq!(
             opps_custom.len(),
@@ -417,9 +413,7 @@ mod tests {
         );
 
         let opp = &opps_custom[0];
-        // Edge = payout - total_cost = 100 - 90 = 10
         assert_eq!(opp.edge(), dec!(10));
-        // Payout should be $100
         assert_eq!(opp.payout(), dec!(100));
     }
 }

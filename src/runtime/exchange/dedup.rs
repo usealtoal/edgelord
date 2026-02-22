@@ -1,6 +1,6 @@
 //! Message deduplication for filtering duplicate messages from redundant connections.
 
-use super::MarketEvent;
+use crate::port::MarketEvent;
 
 /// Strategy for detecting duplicate messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -10,35 +10,16 @@ use tracing::{info, warn};
 
 use crate::domain::{Opportunity, Position};
 use crate::error::RiskError;
+use crate::port::RiskCheckResult;
 use crate::runtime::AppState;
 
-/// Result of a risk check.
-#[derive(Debug, Clone)]
-pub enum RiskCheckResult {
-    /// Trade is allowed to proceed.
-    Approved,
-    /// Trade is rejected with reason.
-    Rejected(RiskError),
-}
-
-impl RiskCheckResult {
-    /// Check if approved.
-    #[must_use]
-    pub const fn is_approved(&self) -> bool {
-        matches!(self, RiskCheckResult::Approved)
-    }
-
-    /// Get rejection error if rejected.
-    #[must_use]
-    pub const fn rejection_error(&self) -> Option<&RiskError> {
-        match self {
-            RiskCheckResult::Rejected(e) => Some(e),
-            RiskCheckResult::Approved => None,
-        }
-    }
-}
-
 /// Risk manager that validates trades before execution.
+///
+/// Performs various checks including:
+/// - Circuit breaker status
+/// - Profit threshold validation
+/// - Position limits per market
+/// - Total exposure limits
 pub struct RiskManager {
     state: Arc<AppState>,
 }
@@ -50,8 +31,9 @@ impl RiskManager {
     }
 
     /// Check if an opportunity passes all risk checks.
-    /// On approval, atomically reserves exposure to prevent concurrent opportunities
-    /// from exceeding the limit.
+    ///
+    /// On approval, atomically reserves exposure to prevent concurrent
+    /// opportunities from exceeding the limit.
     #[must_use]
     pub fn check(&self, opportunity: &Opportunity) -> RiskCheckResult {
         // Check circuit breaker first
@@ -90,6 +72,41 @@ impl RiskManager {
         }
 
         RiskCheckResult::Approved
+    }
+
+    /// Release reserved exposure after execution completes or fails.
+    pub fn release_exposure(&self, opportunity: &Opportunity) {
+        let amount = opportunity.total_cost() * opportunity.volume();
+        self.state.release_exposure(amount);
+    }
+
+    /// Trigger circuit breaker.
+    pub fn trigger_circuit_breaker(&self, reason: impl Into<String>) {
+        let reason = reason.into();
+        warn!(reason = %reason, "Triggering circuit breaker");
+        self.state.activate_circuit_breaker(reason);
+    }
+
+    /// Reset circuit breaker.
+    pub fn reset_circuit_breaker(&self) {
+        info!("Resetting circuit breaker");
+        self.state.reset_circuit_breaker();
+    }
+
+    /// Check if the circuit breaker is currently active.
+    #[must_use]
+    pub fn is_circuit_breaker_active(&self) -> bool {
+        self.state.is_circuit_breaker_active()
+    }
+
+    /// Record a successful execution (updates state).
+    pub fn record_execution(&self, opportunity: &Opportunity) {
+        info!(
+            market_id = %opportunity.market_id(),
+            volume = %opportunity.volume(),
+            profit = %opportunity.expected_profit(),
+            "Execution recorded"
+        );
     }
 
     /// Check if circuit breaker is active.
@@ -150,30 +167,6 @@ impl RiskManager {
             });
         }
         Ok(())
-    }
-
-    /// Record a successful execution (updates state).
-    pub fn record_execution(&self, opportunity: &Opportunity) {
-        info!(
-            market_id = %opportunity.market_id(),
-            volume = %opportunity.volume(),
-            profit = %opportunity.expected_profit(),
-            "Execution recorded"
-        );
-        // Position is added by executor, we just log here
-    }
-
-    /// Trigger circuit breaker.
-    pub fn trigger_circuit_breaker(&self, reason: impl Into<String>) {
-        let reason = reason.into();
-        warn!(reason = %reason, "Triggering circuit breaker");
-        self.state.activate_circuit_breaker(reason);
-    }
-
-    /// Reset circuit breaker.
-    pub fn reset_circuit_breaker(&self) {
-        info!("Resetting circuit breaker");
-        self.state.reset_circuit_breaker();
     }
 }
 
@@ -270,15 +263,35 @@ mod tests {
     #[test]
     fn test_trigger_and_reset_circuit_breaker() {
         let state = Arc::new(AppState::default());
-        let risk = RiskManager::new(state.clone());
+        let risk = RiskManager::new(state);
 
-        assert!(!state.is_circuit_breaker_active());
+        assert!(!risk.is_circuit_breaker_active());
 
         risk.trigger_circuit_breaker("test reason");
-        assert!(state.is_circuit_breaker_active());
+        assert!(risk.is_circuit_breaker_active());
 
         risk.reset_circuit_breaker();
-        assert!(!state.is_circuit_breaker_active());
+        assert!(!risk.is_circuit_breaker_active());
+    }
+
+    #[test]
+    fn test_release_exposure() {
+        let limits = RiskLimits {
+            max_total_exposure: dec!(100),
+            min_profit_threshold: dec!(0),
+            ..Default::default()
+        };
+        let state = Arc::new(AppState::new(limits));
+        let risk = RiskManager::new(state.clone());
+
+        // Reserve some exposure
+        let opp = make_opportunity(dec!(50), dec!(0.45), dec!(0.45)); // $45 cost
+        assert!(risk.check(&opp).is_approved());
+        assert!(state.pending_exposure() > Decimal::ZERO);
+
+        // Release it
+        risk.release_exposure(&opp);
+        assert_eq!(state.pending_exposure(), Decimal::ZERO);
     }
 
     #[test]

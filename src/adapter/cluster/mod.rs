@@ -248,8 +248,9 @@ impl ClusterDetectionService {
                 crate::error::Error::Parse(format!("Cluster not found: {cluster_id}"))
             })?;
 
+        let book_lookup = |token_id: &TokenId| self.order_book_cache.get(token_id);
         self.detector
-            .detect(&cluster, &self.order_book_cache, &self.registry)
+            .detect(&cluster, &book_lookup, &self.registry)
     }
 
     /// Get the number of currently dirty clusters (for testing/monitoring).

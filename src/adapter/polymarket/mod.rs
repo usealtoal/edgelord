@@ -6,10 +6,10 @@ mod config;
 mod dedup;
 mod executor;
 mod filter;
-mod message;
-mod response;
 mod scorer;
-mod websocket;
+mod stream;
+#[path = "type/mod.rs"]
+mod r#type;
 
 pub use approval::{PolymarketApproval, SweepResult};
 pub use client::PolymarketClient;
@@ -17,9 +17,9 @@ pub use config::{PolymarketExchangeConfig, POLYMARKET_PAYOUT};
 pub use dedup::PolymarketDeduplicator;
 pub use executor::PolymarketExecutor;
 pub use filter::PolymarketFilter;
-pub use message::{
-    PolymarketBookMessage, PolymarketTaggedMessage, PolymarketWsMessage, PolymarketWsPriceLevel,
+pub use r#type::{
+    PolymarketBookMessage, PolymarketMarket, PolymarketTaggedMessage, PolymarketToken,
+    PolymarketWsMessage, PolymarketWsPriceLevel,
 };
-pub use response::{PolymarketMarket, PolymarketToken};
 pub use scorer::PolymarketScorer;
-pub use websocket::{PolymarketDataStream, PolymarketWebSocketHandler};
+pub use stream::{PolymarketDataStream, PolymarketWebSocketHandler};

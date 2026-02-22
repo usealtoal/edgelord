@@ -11,9 +11,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::domain::TokenId;
 use crate::error::Error;
+use crate::port::{MarketDataStream, MarketEvent};
 use crate::runtime::ReconnectionConfig;
-
-use super::{MarketDataStream, MarketEvent};
 
 /// Circuit breaker state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

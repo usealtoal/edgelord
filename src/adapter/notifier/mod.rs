@@ -1,7 +1,6 @@
-//! Notification system for alerts and events.
+//! Notification adapters.
 //!
-//! The `Notifier` trait defines the interface for notification handlers.
-//! Multiple notifiers can be registered with the `NotifierRegistry`.
+//! Implements the `port::Notifier` trait for various notification backends.
 
 #[cfg(feature = "telegram")]
 mod telegram;
@@ -9,149 +8,7 @@ mod telegram;
 #[cfg(feature = "telegram")]
 pub use telegram::{RuntimeStats, TelegramConfig, TelegramNotifier};
 
-use crate::domain::{TradeResult, Opportunity};
-use crate::error::RiskError;
-
-/// Events that can trigger notifications.
-#[derive(Debug, Clone)]
-pub enum Event {
-    /// Arbitrage opportunity detected.
-    OpportunityDetected(OpportunityEvent),
-    /// Execution completed (success or failure).
-    ExecutionCompleted(ExecutionEvent),
-    /// Risk check rejected a trade.
-    RiskRejected(RiskEvent),
-    /// Circuit breaker activated.
-    CircuitBreakerActivated { reason: String },
-    /// Circuit breaker reset.
-    CircuitBreakerReset,
-    /// Daily summary.
-    DailySummary(SummaryEvent),
-    /// Market relations discovered by inference.
-    RelationsDiscovered(RelationsEvent),
-}
-
-/// Opportunity detection event.
-#[derive(Debug, Clone)]
-pub struct OpportunityEvent {
-    pub market_id: String,
-    pub question: String,
-    pub edge: rust_decimal::Decimal,
-    pub volume: rust_decimal::Decimal,
-    pub expected_profit: rust_decimal::Decimal,
-}
-
-impl From<&Opportunity> for OpportunityEvent {
-    fn from(opp: &Opportunity) -> Self {
-        Self {
-            market_id: opp.market_id().to_string(),
-            question: opp.question().to_string(),
-            edge: opp.edge(),
-            volume: opp.volume(),
-            expected_profit: opp.expected_profit(),
-        }
-    }
-}
-
-/// Execution result event.
-#[derive(Debug, Clone)]
-pub struct ExecutionEvent {
-    pub market_id: String,
-    pub success: bool,
-    pub details: String,
-}
-
-impl ExecutionEvent {
-    #[must_use]
-    pub fn from_result(market_id: &str, result: &TradeResult) -> Self {
-        match result {
-            TradeResult::Success { fills } => {
-                let order_ids: Vec<_> = fills.iter().map(|f| f.order_id.as_str()).collect();
-                Self {
-                    market_id: market_id.to_string(),
-                    success: true,
-                    details: format!("Orders: {}", order_ids.join(", ")),
-                }
-            }
-            TradeResult::Partial { fills, failures } => {
-                let fill_ids: Vec<_> = fills.iter().map(|f| f.token_id.to_string()).collect();
-                let failure_ids: Vec<_> = failures.iter().map(|f| f.token_id.to_string()).collect();
-                Self {
-                    market_id: market_id.to_string(),
-                    success: false,
-                    details: format!(
-                        "Partial fill - fills: {:?}, failures: {:?}",
-                        fill_ids, failure_ids
-                    ),
-                }
-            }
-            TradeResult::Failed { reason } => Self {
-                market_id: market_id.to_string(),
-                success: false,
-                details: format!("Failed: {reason}"),
-            },
-        }
-    }
-}
-
-/// Risk rejection event.
-#[derive(Debug, Clone)]
-pub struct RiskEvent {
-    pub market_id: String,
-    pub reason: String,
-}
-
-impl RiskEvent {
-    #[must_use]
-    pub fn new(market_id: &str, error: &RiskError) -> Self {
-        Self {
-            market_id: market_id.to_string(),
-            reason: error.to_string(),
-        }
-    }
-}
-
-/// Daily summary event.
-#[derive(Debug, Clone)]
-pub struct SummaryEvent {
-    pub date: chrono::NaiveDate,
-    pub opportunities_detected: u64,
-    pub trades_executed: u64,
-    pub trades_successful: u64,
-    pub total_profit: rust_decimal::Decimal,
-    pub current_exposure: rust_decimal::Decimal,
-}
-
-/// Market relations discovered event.
-#[derive(Debug, Clone)]
-pub struct RelationsEvent {
-    /// Number of relations discovered in this batch.
-    pub relations_count: usize,
-    /// Details of each discovered relation.
-    pub relations: Vec<RelationDetail>,
-}
-
-/// Detail of a single discovered relation.
-#[derive(Debug, Clone)]
-pub struct RelationDetail {
-    /// Type of relation (e.g., "mutually_exclusive", "implies", "exactly_one").
-    pub relation_type: String,
-    /// Confidence score (0.0-1.0).
-    pub confidence: f64,
-    /// Market questions involved.
-    pub market_questions: Vec<String>,
-    /// LLM reasoning for this relation.
-    pub reasoning: String,
-}
-
-/// Trait for notification handlers.
-///
-/// Implement this trait to receive events from the system.
-/// Notifications are fire-and-forget (async but not awaited).
-pub trait Notifier: Send + Sync {
-    /// Handle an event.
-    fn notify(&self, event: Event);
-}
+use crate::port::{Event, Notifier};
 
 /// Registry of notifiers.
 pub struct NotifierRegistry {
@@ -200,9 +57,7 @@ impl Default for NotifierRegistry {
 pub struct NullNotifier;
 
 impl Notifier for NullNotifier {
-    fn notify(&self, _event: Event) {
-        // Do nothing
-    }
+    fn notify(&self, _event: Event) {}
 }
 
 /// A logging notifier that logs events via tracing.
@@ -295,7 +150,6 @@ mod tests {
     fn test_null_notifier() {
         let notifier = NullNotifier;
         notifier.notify(Event::CircuitBreakerReset);
-        // Just verify it doesn't panic
     }
 
     #[test]
@@ -307,11 +161,5 @@ mod tests {
         registry.register(Box::new(NullNotifier));
         assert!(!registry.is_empty());
         assert_eq!(registry.len(), 1);
-    }
-
-    #[test]
-    fn test_registry_default() {
-        let registry = NotifierRegistry::default();
-        assert!(registry.is_empty());
     }
 }

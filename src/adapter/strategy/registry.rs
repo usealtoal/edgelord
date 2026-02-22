@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use crate::domain::{MarketRegistry, Opportunity};
+use crate::port::{DetectionContext, Strategy};
 use crate::runtime::cache::ClusterCache;
-
-use super::Strategy;
 
 use super::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use super::condition::{SingleConditionConfig, SingleConditionStrategy};
-use super::context::DetectionContext;
+use super::ConcreteDetectionContext;
 use super::rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
 
 /// Registry of enabled strategies.
@@ -73,7 +72,7 @@ impl StrategyRegistry {
     ///
     /// Only strategies where `applies_to()` returns true are run.
     #[must_use]
-    pub fn detect_all(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
+    pub fn detect_all(&self, ctx: &ConcreteDetectionContext) -> Vec<Opportunity> {
         let market_ctx = ctx.market_context();
         self.strategies
             .iter()
@@ -166,7 +165,7 @@ impl StrategyRegistryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::strategy::{DetectionContext, MarketContext};
+    use crate::port::MarketContext;
 
     struct MockStrategy {
         name: &'static str,
@@ -182,7 +181,7 @@ mod tests {
             self.applies
         }
 
-        fn detect(&self, _ctx: &DetectionContext) -> Vec<Opportunity> {
+        fn detect(&self, _ctx: &dyn DetectionContext) -> Vec<Opportunity> {
             vec![]
         }
     }

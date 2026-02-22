@@ -28,10 +28,10 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, trace, warn};
 
-use super::message::{PolymarketSubscribeMessage, PolymarketTaggedMessage, PolymarketWsMessage};
+use super::r#type::{PolymarketSubscribeMessage, PolymarketTaggedMessage, PolymarketWsMessage};
 use crate::domain::TokenId;
 use crate::error::Result;
-use crate::runtime::exchange::{MarketDataStream, MarketEvent};
+use crate::port::{MarketDataStream, MarketEvent};
 
 /// WebSocket handler for Polymarket real-time data feed.
 ///
@@ -229,7 +229,7 @@ pub struct PolymarketDataStream {
     url: String,
     ws: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     /// Buffer for pending book messages when multiple arrive in one frame.
-    pending_books: Vec<super::message::PolymarketBookMessage>,
+    pending_books: Vec<super::r#type::PolymarketBookMessage>,
 }
 
 impl PolymarketDataStream {

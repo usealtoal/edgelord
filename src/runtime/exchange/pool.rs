@@ -28,11 +28,11 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::domain::TokenId;
-use crate::runtime::PoolStats;
 use crate::error::{ConfigError, Result};
-use crate::runtime::{ConnectionPoolConfig, ReconnectionConfig};
+use crate::port::{MarketDataStream, MarketEvent};
+use crate::runtime::{ConnectionPoolConfig, PoolStats, ReconnectionConfig};
 
-use super::{MarketDataStream, MarketEvent, ReconnectingDataStream};
+use super::ReconnectingDataStream;
 
 /// Factory function for creating new data stream instances.
 ///

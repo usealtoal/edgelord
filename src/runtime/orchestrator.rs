@@ -14,22 +14,20 @@ use crate::adapter::cluster::ClusterDetectionService;
 use crate::adapter::inference::{run_full_inference, InferenceService};
 use crate::adapter::position::PositionManager;
 use crate::adapter::risk::RiskManager;
-use crate::adapter::statistics;
-use crate::adapter::statistics::StatsRecorder;
+use crate::adapter::statistic;
+use crate::adapter::statistic::StatsRecorder;
 use crate::adapter::store::db;
 use crate::adapter::strategy::StrategyRegistry;
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
-use crate::port::{MarketSummary, RelationInferrer};
+use crate::port::{
+    ArbitrageExecutor, Event, MarketDataStream, MarketEvent, MarketSummary, OpportunityEvent,
+    RelationDetail, RelationInferrer, RelationsEvent,
+};
 use crate::runtime::cache::BookCache;
-use crate::runtime::exchange::{
-    ArbitrageExecutor, ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
-};
+use crate::runtime::exchange::{ExchangeFactory, ReconnectingDataStream};
 
-// Use adapter Event type (which NotifierRegistry expects)
-use crate::adapter::notifier::{
-    Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent,
-};
+use crate::adapter::notifier::NotifierRegistry;
 
 use super::handler::handle_market_event;
 use super::orchestrator_builder::{
@@ -187,7 +185,7 @@ impl Orchestrator {
         let db_url = format!("sqlite://{}", config.database);
         let db_pool = db::create_pool(&db_url)?;
         db::run_migrations(&db_pool)?;
-        let stats_recorder = statistics::create_recorder(db_pool);
+        let stats_recorder = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(PositionManager::new(Arc::clone(&stats_recorder)));
         info!(database = %config.database, "Database initialized");
 
@@ -746,7 +744,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = crate::adapter::statistics::create_recorder(db_pool);
+        let stats = crate::adapter::statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));

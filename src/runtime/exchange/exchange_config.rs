@@ -6,7 +6,7 @@
 
 use rust_decimal::Decimal;
 
-use super::MarketInfo;
+use crate::port::MarketInfo;
 use crate::domain::{Market, MarketId, Outcome, TokenId};
 
 /// Configuration trait for exchange-specific settings.
@@ -283,7 +283,7 @@ mod tests {
     // --- parse_markets tests ---
 
     fn make_market_info(id: &str, question: &str, outcomes: Vec<(&str, &str)>) -> MarketInfo {
-        use crate::runtime::exchange::OutcomeInfo;
+        use crate::port::OutcomeInfo;
         MarketInfo {
             id: id.to_string(),
             question: question.to_string(),

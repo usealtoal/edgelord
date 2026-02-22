@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use async_trait::async_trait;
 use edgelord::domain::TokenId;
 use edgelord::error::Error;
-use edgelord::runtime::exchange::{MarketDataStream, MarketEvent};
+use edgelord::port::{MarketDataStream, MarketEvent};
 
 /// Deterministic test double for market data streaming.
 #[derive(Debug, Default)]

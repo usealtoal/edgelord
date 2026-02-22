@@ -9,9 +9,8 @@ use std::time::Duration;
 use edgelord::adapter::polymarket::PolymarketClient;
 use edgelord::domain::TokenId;
 use edgelord::error::{ConfigError, Error};
-use edgelord::runtime::exchange::{
-    ExchangeFactory, MarketDataStream, MarketEvent, ReconnectingDataStream,
-};
+use edgelord::port::{MarketDataStream, MarketEvent};
+use edgelord::runtime::exchange::{ExchangeFactory, ReconnectingDataStream};
 use edgelord::runtime::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
 use edgelord::testkit;
 use edgelord::testkit::stream::ScriptedStream;

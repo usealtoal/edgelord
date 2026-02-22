@@ -8,6 +8,6 @@ pub mod polymarket;
 pub mod position;
 pub mod risk;
 pub mod solver;
-pub mod statistics;
+pub mod statistic;
 pub mod store;
 pub mod strategy;

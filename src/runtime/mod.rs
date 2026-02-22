@@ -50,12 +50,11 @@ pub use state::{AppState, RiskLimitKind, RiskLimitUpdateError, RiskLimits};
 // Re-export cache types
 pub use cache::{BookCache, BookUpdate, ClusterCache, PositionTracker};
 
-// Re-export exchange types
+// Re-export exchange types (runtime-specific, not port types)
 pub use exchange::{
-    ApprovalResult, ApprovalStatus, ArbitrageExecutor, ConnectionPool, DedupConfig, DedupStrategy,
-    ExchangeConfig, ExchangeFactory, ExecutionResult, MarketDataStream, MarketEvent, MarketFetcher,
-    MarketFilter, MarketFilterConfig, MarketInfo, MarketScorer, MessageDeduplicator, OrderExecutor,
-    OrderRequest, OrderSide, OutcomeInfo, ReconnectingDataStream, StreamFactory, TokenApproval,
+    ApprovalResult, ApprovalStatus, ConnectionPool, DedupConfig, DedupStrategy, ExchangeConfig,
+    ExchangeFactory, MarketFilter, MarketFilterConfig, MarketScorer, MessageDeduplicator,
+    ReconnectingDataStream, StreamFactory, TokenApproval,
 };
 
 // Re-export subscription types

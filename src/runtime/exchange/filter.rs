@@ -3,7 +3,7 @@
 //! Exchanges implement [`MarketFilter`] to determine which markets are eligible
 //! for subscription based on configurable criteria like volume, liquidity, and spread.
 
-use super::MarketInfo;
+use crate::port::MarketInfo;
 
 /// Configuration for market filtering.
 ///
@@ -127,7 +127,7 @@ pub trait MarketFilter: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::exchange::OutcomeInfo;
+    use crate::port::OutcomeInfo;
 
     // --- MarketFilterConfig tests ---
 

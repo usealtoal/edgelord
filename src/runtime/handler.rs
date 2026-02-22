@@ -9,16 +9,15 @@ use tracing::{debug, info, warn};
 use super::execution::spawn_execution;
 use super::state::AppState;
 use crate::adapter::notifier::NotifierRegistry;
-use crate::adapter::notifier::{Event, OpportunityEvent, RiskEvent};
 use crate::adapter::position::{CloseReason, PositionManager};
-use crate::adapter::risk::{RiskCheckResult, RiskManager};
-use crate::adapter::statistics::{RecordedOpportunity, StatsRecorder};
-use crate::adapter::strategy::DetectionContext;
-use crate::adapter::strategy::StrategyRegistry;
+use crate::adapter::risk::RiskManager;
+use crate::port::RiskCheckResult;
+use crate::adapter::statistic::{RecordedOpportunity, StatsRecorder};
+use crate::adapter::strategy::{ConcreteDetectionContext, StrategyRegistry};
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::error::RiskError;
+use crate::port::{ArbitrageExecutor, Event, MarketEvent, OpportunityEvent, RiskEvent};
 use crate::runtime::cache::BookCache;
-use crate::runtime::exchange::{ArbitrageExecutor, MarketEvent};
 
 /// Handle incoming market events from the data stream.
 #[allow(clippy::too_many_arguments)]
@@ -42,7 +41,7 @@ pub(crate) fn handle_market_event(
             cache.update(book);
 
             if let Some(market) = registry.get_by_token(&token_id) {
-                let ctx = DetectionContext::new(market, cache);
+                let ctx = ConcreteDetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
                 debug!(
@@ -74,7 +73,7 @@ pub(crate) fn handle_market_event(
             cache.update(book);
 
             if let Some(market) = registry.get_by_token(&token_id) {
-                let ctx = DetectionContext::new(market, cache);
+                let ctx = ConcreteDetectionContext::new(market, cache);
                 let opportunities = strategies.detect_all(&ctx);
 
                 debug!(
@@ -290,7 +289,7 @@ mod tests {
     use super::*;
     use crate::adapter::notifier::NotifierRegistry;
     use crate::adapter::risk::RiskManager;
-    use crate::adapter::statistics;
+    use crate::adapter::statistic;
     use crate::adapter::strategy::StrategyRegistry;
     use crate::domain::{
         Market, MarketId, Opportunity, OpportunityLeg, Book, Outcome, PriceLevel, TokenId,
@@ -446,7 +445,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let cache = BookCache::new();
 
         // Lock the market first
@@ -477,7 +476,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let cache = BookCache::new();
 
         // Set up cache with 5% slippage
@@ -513,7 +512,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
@@ -545,7 +544,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
@@ -584,7 +583,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let cache = BookCache::new();
 
         cache.update(make_order_book("yes-token", dec!(0.39), dec!(0.40)));
@@ -627,7 +626,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
@@ -676,7 +675,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
@@ -714,7 +713,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
@@ -781,7 +780,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
@@ -811,7 +810,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
@@ -843,7 +842,7 @@ mod tests {
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
         let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));

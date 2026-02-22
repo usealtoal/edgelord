@@ -7,7 +7,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use rust_decimal::Decimal;
 
-use crate::adapter::statistics::{
+use crate::adapter::statistic::{
     export_daily_csv as export_csv_impl, f32_to_decimal, StatsRecorder, StatsSummary,
 };
 use crate::adapter::store::db::model::{DailyStatsRow, StrategyDailyStatsRow};

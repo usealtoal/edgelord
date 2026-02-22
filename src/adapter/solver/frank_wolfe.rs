@@ -14,8 +14,8 @@
 use rust_decimal::Decimal;
 
 use super::bregman::{bregman_divergence, bregman_gradient};
-use super::{IlpProblem, LpProblem, SolutionStatus, Solver};
 use crate::error::Result;
+use crate::port::{IlpProblem, LpProblem, SolutionStatus, Solver};
 
 /// Configuration for Frank-Wolfe algorithm.
 #[derive(Debug, Clone)]
@@ -204,7 +204,8 @@ impl FrankWolfeResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::solver::{Constraint, ConstraintSense, HiGHSSolver, VariableBounds};
+    use crate::adapter::solver::HiGHSSolver;
+    use crate::port::{Constraint, ConstraintSense, VariableBounds};
     use rust_decimal_macros::dec;
 
     #[test]

@@ -5,10 +5,9 @@
 
 use async_trait::async_trait;
 
-use crate::runtime::{MarketScore, ScoreWeights};
 use crate::error::Result;
-
-use super::MarketInfo;
+use crate::port::MarketInfo;
+use crate::runtime::{MarketScore, ScoreWeights};
 
 /// Scores markets for subscription prioritization.
 ///

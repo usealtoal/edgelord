@@ -1,3 +1,8 @@
+//! Statistics recording and querying service.
+//!
+//! Provides persistence for trading statistics including opportunities
+//! detected, trades executed, and P&L tracking.
+
 mod convert;
 mod export;
 mod query;

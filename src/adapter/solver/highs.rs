@@ -11,8 +11,8 @@ use good_lp::{constraint, variable, variables, Expression, Solution, SolverModel
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 
-use super::{ConstraintSense, IlpProblem, LpProblem, LpSolution, SolutionStatus, Solver};
 use crate::error::Result;
+use crate::port::{ConstraintSense, IlpProblem, LpProblem, LpSolution, SolutionStatus, Solver};
 
 /// HiGHS-based LP/ILP solver.
 #[derive(Debug, Default, Clone)]

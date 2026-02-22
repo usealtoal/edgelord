@@ -10,10 +10,8 @@ use crate::runtime::{Config, Exchange, PolymarketConfig};
 
 use super::pool::StreamFactory;
 
-use super::{
-    ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter, MarketScorer,
-    MessageDeduplicator, OrderExecutor,
-};
+use super::{ExchangeConfig, MarketFilter, MarketScorer, MessageDeduplicator};
+use crate::port::{ArbitrageExecutor, MarketDataStream, MarketFetcher, OrderExecutor};
 use crate::adapter::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
 
 /// Factory for creating exchange components.

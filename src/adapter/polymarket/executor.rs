@@ -16,9 +16,7 @@ use tracing::{info, warn};
 
 use crate::domain::{Failure, Fill, Opportunity, OrderId, TradeResult};
 use crate::error::{ConfigError, ExecutionError, Result};
-use crate::runtime::exchange::{
-    ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide,
-};
+use crate::port::{ArbitrageExecutor, ExecutionResult, OrderExecutor, OrderRequest, OrderSide};
 use crate::runtime::Config;
 
 /// Type alias for the authenticated CLOB client.

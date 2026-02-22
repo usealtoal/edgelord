@@ -35,9 +35,9 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use super::{DetectionContext, MarketContext, Strategy};
 use crate::adapter::cluster::{ClusterDetectionConfig, ClusterDetector};
 use crate::domain::{MarketRegistry, Opportunity};
+use crate::port::{DetectionContext, MarketContext, Strategy};
 use crate::runtime::cache::ClusterCache;
 
 /// Configuration for combinatorial strategy.
@@ -204,7 +204,7 @@ impl Strategy for CombinatorialStrategy {
             .unwrap_or(false)
     }
 
-    fn detect(&self, ctx: &DetectionContext) -> Vec<Opportunity> {
+    fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
         // Ensure we have all required components
         let cluster_cache = match &self.cluster_cache {
             Some(c) => c,
@@ -228,23 +228,26 @@ impl Strategy for CombinatorialStrategy {
         };
 
         // Get cluster for this market
-        let cluster = match cluster_cache.get_for_market(ctx.market.market_id()) {
+        let cluster = match cluster_cache.get_for_market(ctx.market_id()) {
             Some(c) => c,
             None => return vec![], // No known relations
         };
 
         tracing::debug!(
-            market_id = %ctx.market.market_id(),
+            market_id = %ctx.market_id(),
             cluster_size = cluster.markets.len(),
             constraint_count = cluster.constraints.len(),
             "Running combinatorial detection on cluster"
         );
 
+        // Create book lookup closure that uses the context
+        let book_lookup = |token_id: &crate::domain::TokenId| ctx.order_book(token_id);
+
         // Run cluster detection
-        match detector.detect(&cluster, ctx.cache, registry) {
+        match detector.detect(&cluster, &book_lookup, registry) {
             Ok(Some(cluster_opp)) => {
                 tracing::info!(
-                    market_id = %ctx.market.market_id(),
+                    market_id = %ctx.market_id(),
                     gap = %cluster_opp.gap,
                     "Found combinatorial opportunity"
                 );
@@ -252,14 +255,14 @@ impl Strategy for CombinatorialStrategy {
             }
             Ok(None) => {
                 tracing::trace!(
-                    market_id = %ctx.market.market_id(),
+                    market_id = %ctx.market_id(),
                     "No combinatorial opportunity (gap below threshold)"
                 );
                 vec![]
             }
             Err(e) => {
                 tracing::debug!(
-                    market_id = %ctx.market.market_id(),
+                    market_id = %ctx.market_id(),
                     error = %e,
                     "Combinatorial detection failed"
                 );
@@ -276,6 +279,7 @@ impl Strategy for CombinatorialStrategy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::strategy::ConcreteDetectionContext;
     use crate::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
     use crate::port::Constraint;
     use crate::runtime::cache::BookCache;
@@ -352,7 +356,7 @@ mod tests {
 
         let market = make_binary_market("m1", "yes", "no");
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         // Without cluster cache, should return empty
         let opps = strategy.detect(&ctx);
@@ -380,7 +384,7 @@ mod tests {
 
         let market = make_binary_market("m1", "yes", "no");
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         // Without registry, should return empty
         let opps = strategy.detect(&ctx);
@@ -400,7 +404,7 @@ mod tests {
 
         let market = make_binary_market("m1", "yes", "no");
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         // No cluster exists for this market
         let opps = strategy.detect(&ctx);
@@ -447,7 +451,7 @@ mod tests {
             vec![PriceLevel::new(dec!(0.50), dec!(100))],
         ));
 
-        let ctx = DetectionContext::new(&m1, &cache);
+        let ctx = ConcreteDetectionContext::new(&m1, &cache);
 
         // Should return empty due to low/no arbitrage gap
         let opps = strategy.detect(&ctx);
@@ -480,7 +484,7 @@ mod tests {
 
         // Empty cache (no price data)
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&m1, &cache);
+        let ctx = ConcreteDetectionContext::new(&m1, &cache);
 
         // Should fail closed and return empty
         let opps = strategy.detect(&ctx);

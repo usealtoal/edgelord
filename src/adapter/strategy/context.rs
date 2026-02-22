@@ -1,24 +1,21 @@
 //! Context types for strategy detection.
 //!
-//! These types provide the necessary information for strategies to
-//! analyze markets and detect opportunities.
+//! Provides the concrete implementation of DetectionContext that
+//! wraps a Market and BookCache.
 
 use rust_decimal::Decimal;
 
-use crate::domain::{Market, MarketId, TokenId};
-use crate::port::DetectionContext as DetectionContextTrait;
+use crate::domain::{Book, Market, MarketId, TokenId};
+use crate::port::{DetectionContext as DetectionContextTrait, MarketContext};
 use crate::runtime::cache::BookCache;
 
-// Re-export types from port for consistency
-pub use crate::port::MarketContext;
-
-/// Full context for detection including market data.
+/// Concrete detection context wrapping market and cache.
 ///
 /// This is passed to strategies' `detect()` method.
 ///
 /// Strategies should fail closed when required order books are missing
 /// (return no opportunities).
-pub struct DetectionContext<'a> {
+pub struct ConcreteDetectionContext<'a> {
     /// The market being analyzed.
     pub market: &'a Market,
     /// Order book cache with current prices.
@@ -27,7 +24,7 @@ pub struct DetectionContext<'a> {
     market_ctx: MarketContext,
 }
 
-impl<'a> DetectionContext<'a> {
+impl<'a> ConcreteDetectionContext<'a> {
     /// Create a new detection context for a market.
     ///
     /// Uses the market's payout and determines the market context
@@ -51,27 +48,9 @@ impl<'a> DetectionContext<'a> {
         self.market_ctx = ctx;
         self
     }
-
-    /// Get the market context.
-    #[must_use]
-    pub fn market_context(&self) -> MarketContext {
-        self.market_ctx.clone()
-    }
-
-    /// Get the token IDs from the market's outcomes.
-    #[must_use]
-    pub fn token_ids(&self) -> Vec<&TokenId> {
-        self.market.token_ids()
-    }
-
-    /// Get the payout amount from the market.
-    #[must_use]
-    pub fn payout(&self) -> Decimal {
-        self.market.payout()
-    }
 }
 
-impl<'a> DetectionContextTrait for DetectionContext<'a> {
+impl<'a> DetectionContextTrait for ConcreteDetectionContext<'a> {
     fn market_id(&self) -> &MarketId {
         self.market.market_id()
     }
@@ -103,12 +82,22 @@ impl<'a> DetectionContextTrait for DetectionContext<'a> {
     fn ask_volume(&self, token_id: &TokenId) -> Option<Decimal> {
         self.cache.get(token_id)?.best_ask().map(|l| l.size())
     }
+
+    fn order_book(&self, token_id: &TokenId) -> Option<Book> {
+        self.cache.get(token_id)
+    }
+
+    fn market(&self) -> &Market {
+        self.market
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::Outcome;
     use crate::port::DetectionResult;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_market_context_binary() {
@@ -146,9 +135,6 @@ mod tests {
 
     #[test]
     fn test_detection_context_binary_market() {
-        use crate::domain::{Market, Outcome};
-        use rust_decimal_macros::dec;
-
         let outcomes = vec![
             Outcome::new(TokenId::from("yes_token"), "Yes"),
             Outcome::new(TokenId::from("no_token"), "No"),
@@ -160,7 +146,7 @@ mod tests {
             dec!(1),
         );
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), Decimal::ONE);
         assert!(ctx.market_context().is_binary());
@@ -169,9 +155,6 @@ mod tests {
 
     #[test]
     fn test_detection_context_custom_payout() {
-        use crate::domain::{Market, Outcome};
-        use rust_decimal_macros::dec;
-
         let outcomes = vec![
             Outcome::new(TokenId::from("yes_token"), "Yes"),
             Outcome::new(TokenId::from("no_token"), "No"),
@@ -183,16 +166,13 @@ mod tests {
             dec!(100),
         );
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), dec!(100));
     }
 
     #[test]
     fn test_detection_context_multi_outcome() {
-        use crate::domain::{Market, Outcome};
-        use rust_decimal_macros::dec;
-
         let outcomes = vec![
             Outcome::new(TokenId::from("token_1"), "Option A"),
             Outcome::new(TokenId::from("token_2"), "Option B"),
@@ -205,7 +185,7 @@ mod tests {
             dec!(1),
         );
         let cache = BookCache::new();
-        let ctx = DetectionContext::new(&market, &cache);
+        let ctx = ConcreteDetectionContext::new(&market, &cache);
 
         assert_eq!(ctx.payout(), Decimal::ONE);
         assert!(ctx.market_context().is_multi_outcome());

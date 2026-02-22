@@ -8,13 +8,12 @@ use tracing::{error, info, warn};
 
 use super::state::AppState;
 use crate::adapter::notifier::NotifierRegistry;
-use crate::adapter::notifier::{Event, ExecutionEvent};
-use crate::adapter::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
+use crate::adapter::statistic::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::domain::{
     Failure, Fill, Opportunity, OrderId, Position, PositionLeg, PositionStatus, TokenId,
     TradeResult,
 };
-use crate::runtime::exchange::ArbitrageExecutor;
+use crate::port::{ArbitrageExecutor, Event, ExecutionEvent};
 
 struct ExecutionLockGuard {
     state: Arc<AppState>,
@@ -264,13 +263,13 @@ mod tests {
     use tokio::time::{sleep, Duration, Instant};
 
     use crate::adapter::notifier::NotifierRegistry;
-    use crate::adapter::statistics;
+    use crate::adapter::statistic;
     use crate::domain::{
         Failure, Fill, MarketId, Opportunity, OpportunityLeg,
         OrderId, PositionStatus, TokenId, TradeResult,
     };
     use crate::error::{Error, ExecutionError};
-    use crate::runtime::exchange::ArbitrageExecutor;
+    use crate::port::ArbitrageExecutor;
     use crate::runtime::AppState;
 
     /// Mock executor that returns PartialFill and fails cancel on one leg.
@@ -356,7 +355,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
 
         spawn_execution(
             executor,
@@ -440,7 +439,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = statistics::create_recorder(db_pool);
+        let stats = statistic::create_recorder(db_pool);
 
         assert!(state.try_lock_execution("timeout-market"));
 

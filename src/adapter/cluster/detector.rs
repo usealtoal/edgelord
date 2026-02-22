@@ -3,12 +3,10 @@
 use rust_decimal::Decimal;
 use tracing::{info, trace};
 
-use crate::adapter::solver::{
-    FrankWolfe, FrankWolfeConfig, HiGHSSolver, IlpProblem, LpProblem, VariableBounds,
-};
-use crate::domain::{Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
+use crate::adapter::solver::{FrankWolfe, FrankWolfeConfig, HiGHSSolver};
+use crate::port::{IlpProblem, LpProblem, VariableBounds};
+use crate::domain::{Book, Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};
 use crate::error::{Error, Result};
-use crate::runtime::cache::BookCache;
 
 use super::{ClusterDetectionConfig, ClusterOpportunity};
 
@@ -47,6 +45,9 @@ impl std::fmt::Display for DetectionError {
 
 impl std::error::Error for DetectionError {}
 
+/// Function type for looking up order books.
+pub type BookLookup<'a> = &'a dyn Fn(&TokenId) -> Option<Book>;
+
 /// Cluster detector using Frank-Wolfe projection.
 ///
 /// Encapsulates the detection logic separate from the service lifecycle.
@@ -76,16 +77,21 @@ impl ClusterDetector {
     /// Returns `Ok(Some(opportunity))` if arbitrage found,
     /// `Ok(None)` if gap below threshold,
     /// `Err` if detection failed.
+    ///
+    /// # Arguments
+    /// * `cluster` - The cluster to analyze
+    /// * `book_lookup` - Function to look up order books by token ID
+    /// * `registry` - Market registry for resolving market metadata
     pub fn detect(
         &self,
         cluster: &Cluster,
-        order_book_cache: &BookCache,
+        book_lookup: BookLookup<'_>,
         registry: &MarketRegistry,
     ) -> Result<Option<ClusterOpportunity>> {
         let cluster_id = cluster.id.to_string();
 
         // Gather prices
-        let (prices, token_ids) = self.gather_prices(cluster, order_book_cache, registry)?;
+        let (prices, token_ids) = self.gather_prices(cluster, book_lookup, registry)?;
 
         if prices.len() < 2 {
             return Err(Error::Parse(
@@ -145,7 +151,7 @@ impl ClusterDetector {
     fn gather_prices(
         &self,
         cluster: &Cluster,
-        order_book_cache: &BookCache,
+        book_lookup: BookLookup<'_>,
         registry: &MarketRegistry,
     ) -> Result<(Vec<Decimal>, Vec<TokenId>)> {
         let mut prices = Vec::with_capacity(cluster.markets.len());
@@ -170,7 +176,7 @@ impl ClusterDetector {
                 )
             })?;
 
-            let book = order_book_cache.get(yes_token.token_id()).ok_or_else(|| {
+            let book = book_lookup(yes_token.token_id()).ok_or_else(|| {
                 Error::Parse(
                     DetectionError::MissingPriceData {
                         market_id: market_id.to_string(),

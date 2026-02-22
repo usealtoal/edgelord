@@ -11,17 +11,17 @@ use crate::adapter::inference::LlmInferrer;
 use crate::adapter::llm::{AnthropicLlm, Llm, OpenAiLlm};
 use crate::adapter::notifier::{LogNotifier, NotifierRegistry};
 use crate::adapter::strategy::StrategyRegistry;
-use crate::port::RelationInferrer;
+use crate::port::{ArbitrageExecutor, RelationInferrer};
 use crate::runtime::cache::ClusterCache;
-use crate::runtime::exchange::{ArbitrageExecutor, ExchangeFactory};
+use crate::runtime::exchange::ExchangeFactory;
 
 #[cfg(feature = "telegram")]
 use crate::adapter::notifier::{RuntimeStats, TelegramConfig, TelegramNotifier};
 #[cfg(feature = "telegram")]
-use crate::adapter::statistics::StatsRecorder;
+use crate::adapter::statistic::StatsRecorder;
 
 #[cfg(not(feature = "telegram"))]
-use crate::adapter::statistics::StatsRecorder;
+use crate::adapter::statistic::StatsRecorder;
 
 /// Build notifier registry from configuration.
 ///

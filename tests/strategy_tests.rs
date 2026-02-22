@@ -3,9 +3,10 @@
 mod support;
 
 use edgelord::adapter::strategy::{
-    DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
-    SingleConditionStrategy, Strategy, StrategyRegistry,
+    ConcreteDetectionContext, MarketRebalancingStrategy, SingleConditionConfig,
+    SingleConditionStrategy, StrategyRegistry,
 };
+use edgelord::port::{DetectionContext, MarketContext, Strategy};
 use edgelord::domain::{Market, Book, PriceLevel};
 use edgelord::runtime::cache::BookCache;
 use rust_decimal_macros::dec;
@@ -61,7 +62,7 @@ fn test_strategy_registry_detects_with_single_condition() {
     let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert_eq!(opportunities.len(), 1);
@@ -85,7 +86,7 @@ fn test_strategy_registry_empty_when_no_arbitrage() {
     let cache = BookCache::new();
     setup_no_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());
@@ -113,7 +114,7 @@ fn test_multiple_strategies_in_registry() {
     let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     // Only single_condition should fire (binary market)
@@ -151,7 +152,7 @@ fn test_empty_registry_returns_no_opportunities() {
     let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());
@@ -175,7 +176,7 @@ fn strategy_skips_when_order_books_missing() {
     let cache = BookCache::new();
     // Don't add any order books - cache is empty
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(
@@ -200,7 +201,7 @@ fn strategy_skips_when_order_books_missing() {
     let cache_rebal = BookCache::new();
     // Don't add any order books - cache is empty
 
-    let ctx_rebal = DetectionContext::new(&multi_market, &cache_rebal);
+    let ctx_rebal = ConcreteDetectionContext::new(&multi_market, &cache_rebal);
     let opportunities_rebal = registry_rebal.detect_all(&ctx_rebal);
 
     assert!(

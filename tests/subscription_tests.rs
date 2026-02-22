@@ -6,7 +6,8 @@
 use edgelord::adapter::polymarket::{PolymarketFilter, PolymarketScorer};
 use edgelord::domain::{MarketId, TokenId};
 use edgelord::runtime::{MarketScore, ScoreFactors};
-use edgelord::runtime::exchange::{MarketFilter, MarketInfo, MarketScorer, OutcomeInfo};
+use edgelord::port::{MarketInfo, OutcomeInfo};
+use edgelord::runtime::exchange::{MarketFilter, MarketScorer};
 use edgelord::runtime::subscription::{PrioritySubscriptionManager, SubscriptionManager};
 use edgelord::runtime::{PolymarketFilterConfig, PolymarketScoringConfig};
 

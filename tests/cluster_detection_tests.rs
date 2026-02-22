@@ -68,7 +68,8 @@ fn test_detector_with_valid_cluster() {
     assert!(!clusters.is_empty(), "Should have at least one cluster");
 
     let cluster = &clusters[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     // Should succeed (either Some or None depending on gap)
     assert!(
@@ -108,7 +109,8 @@ fn test_detector_missing_price_data() {
     let detector = ClusterDetector::new(ClusterDetectionConfig::default());
     let cluster = &cluster_cache.all_clusters()[0];
 
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
     assert!(result.is_err(), "Should fail with missing price data");
 }
 
@@ -124,7 +126,8 @@ fn test_detector_gap_below_threshold() {
     let detector = ClusterDetector::new(config);
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
     assert!(
@@ -220,7 +223,8 @@ fn test_cluster_with_three_markets() {
     let detector = ClusterDetector::new(config);
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
     // With sum = 0.42 + 0.37 + 0.22 = 1.01, there might be a small gap
@@ -271,7 +275,8 @@ fn test_implies_relation() {
     let detector = ClusterDetector::new(config);
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
 }

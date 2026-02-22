@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use crate::domain::MarketId;
 use crate::runtime::{MarketScore, ScoreFactors, ScoreWeights};
 use crate::error::Result;
-use crate::runtime::exchange::{MarketInfo, MarketScorer};
+use crate::port::MarketInfo;
+use crate::runtime::exchange::MarketScorer;
 use crate::runtime::{OutcomeBonusConfig, PolymarketScoringConfig, ScoringWeightsConfig};
 
 /// Scorer for Polymarket markets.
@@ -135,7 +136,7 @@ impl MarketScorer for PolymarketScorer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::exchange::OutcomeInfo;
+    use crate::port::OutcomeInfo;
 
     fn default_config() -> PolymarketScoringConfig {
         PolymarketScoringConfig::default()

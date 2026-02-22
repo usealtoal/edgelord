@@ -1,15 +1,19 @@
-//! Strategy port for arbitrage detection algorithms.
+//! Strategy port for arbitrage detection.
 //!
-//! This module defines context types and traits for strategy detection.
-//! The `Strategy` trait itself is in `adapter::strategy` for concrete type access.
+//! This module defines the Strategy trait and supporting types for
+//! detection algorithms. Strategies analyze market data and find
+//! arbitrage opportunities.
 
-use crate::domain::{MarketId, TokenId};
+use std::sync::Arc;
+
 use rust_decimal::Decimal;
+
+use crate::domain::{Book, Market, MarketId, MarketRegistry, Opportunity, TokenId};
 
 /// Context describing the market being analyzed.
 ///
-/// This provides metadata about the market structure that strategies
-/// use to determine applicability.
+/// Provides metadata about market structure that strategies use
+/// to determine applicability.
 #[derive(Debug, Clone, Default)]
 pub struct MarketContext {
     /// Number of outcomes in the market (2 for binary, 3+ for multi-outcome).
@@ -92,10 +96,10 @@ impl DetectionResult {
     }
 }
 
-/// Full context for detection including market data.
+/// Context for strategy detection.
 ///
-/// This is passed to strategies' `detect()` method.
-/// Contains all information a strategy needs to analyze a market.
+/// Provides read-only access to market data needed for detection.
+/// Implementations typically wrap a Market and BookCache.
 pub trait DetectionContext: Send + Sync {
     /// Get the market ID being analyzed.
     fn market_id(&self) -> &MarketId;
@@ -120,8 +124,53 @@ pub trait DetectionContext: Send + Sync {
 
     /// Get available volume at the best ask for a token.
     fn ask_volume(&self, token_id: &TokenId) -> Option<Decimal>;
+
+    /// Get the full order book for a token, if available.
+    fn order_book(&self, token_id: &TokenId) -> Option<Book>;
+
+    /// Get the underlying market reference.
+    fn market(&self) -> &Market;
 }
 
-// Note: The `Strategy` trait is defined in `adapter::strategy` because it requires
-// access to the concrete `DetectionContext` type with its `market` and `cache` fields.
-// The `DetectionContext` trait above provides a minimal interface for generic access.
+/// A detection strategy that finds arbitrage opportunities.
+///
+/// Strategies encapsulate specific detection algorithms. Each strategy
+/// can be configured independently and may apply to different market types.
+///
+/// # Implementing a Strategy
+///
+/// ```ignore
+/// use edgelord::port::{Strategy, MarketContext, DetectionContext};
+/// use edgelord::domain::Opportunity;
+///
+/// pub struct MyStrategy;
+///
+/// impl Strategy for MyStrategy {
+///     fn name(&self) -> &'static str { "my_strategy" }
+///
+///     fn applies_to(&self, ctx: &MarketContext) -> bool {
+///         ctx.is_binary()
+///     }
+///
+///     fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
+///         // Your detection logic
+///         vec![]
+///     }
+/// }
+/// ```
+pub trait Strategy: Send + Sync {
+    /// Unique identifier for this strategy.
+    fn name(&self) -> &'static str;
+
+    /// Check if this strategy should run for a given market context.
+    fn applies_to(&self, ctx: &MarketContext) -> bool;
+
+    /// Detect opportunities given current market state.
+    fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity>;
+
+    /// Optional: provide warm-start hint from previous detection.
+    fn warm_start(&mut self, _previous: &DetectionResult) {}
+
+    /// Optional: inject the market registry for strategies that need it.
+    fn set_market_registry(&mut self, _registry: Arc<MarketRegistry>) {}
+}

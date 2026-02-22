@@ -16,7 +16,7 @@
 //!     │                         │                             │
 //!     ▼                         ▼                             ▼
 //! ┌─────────┐            ┌─────────────┐              ┌───────────┐
-//! │Exchange │            │   Store     │              │ Notifier  │
+//! │Exchange │            │  Notifier   │              │  Solver   │
 //! │ Adapter │            │   Adapter   │              │  Adapter  │
 //! └─────────┘            └─────────────┘              └───────────┘
 //! ```
@@ -25,20 +25,19 @@
 //!
 //! - [`MarketDataStream`], [`MarketFetcher`], [`OrderExecutor`], [`ArbitrageExecutor`] - Exchange integration
 //! - [`Notifier`] - Event notifications (Telegram, logging, etc.)
-//! - [`Store`] - Persistence for relations and clusters
 //! - [`Solver`] - LP/ILP optimization backend
 //! - [`RelationInferrer`] - Market relation discovery
-//! - [`RiskGate`] - Trade validation and risk management
+//! - [`Strategy`] - Arbitrage detection strategies
 //!
-//! Note: The `Strategy` trait is in `adapter::strategy` as it's an internal
-//! extension point rather than an external dependency port.
+//! Note: Risk management (`adapter::risk`) and storage (`adapter::store`) use
+//! concrete implementations rather than ports, as they are tightly coupled to
+//! the application's internal state and data model.
 
 mod exchange;
 mod inference;
 mod notifier;
 mod risk;
 mod solver;
-mod store;
 mod strategy;
 
 // Exchange ports
@@ -60,8 +59,8 @@ pub use notifier::{
     SummaryEvent,
 };
 
-// Risk port
-pub use risk::{RiskCheckResult, RiskGate};
+// Risk types
+pub use risk::RiskCheckResult;
 
 // Solver port
 pub use solver::{
@@ -69,9 +68,5 @@ pub use solver::{
     VariableBounds,
 };
 
-// Store port
-pub use store::Store;
-
-// Strategy context types (Strategy trait is in adapter::strategy)
-pub use strategy::{DetectionResult, MarketContext};
-pub use strategy::DetectionContext;
+// Strategy port
+pub use strategy::{DetectionContext, DetectionResult, MarketContext, Strategy};
