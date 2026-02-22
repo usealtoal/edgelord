@@ -3,11 +3,11 @@ mod support;
 
 use std::sync::Arc;
 
-use edgelord::adapters::notifiers::NotifierRegistry;
-use edgelord::adapters::position::PositionManager;
-use edgelord::adapters::risk::RiskManager;
-use edgelord::adapters::statistics::create_recorder;
-use edgelord::adapters::strategies::{
+use edgelord::adapter::notifier::NotifierRegistry;
+use edgelord::adapter::position::PositionManager;
+use edgelord::adapter::risk::RiskManager;
+use edgelord::adapter::statistics::create_recorder;
+use edgelord::adapter::strategy::{
     SingleConditionConfig, SingleConditionStrategy, StrategyRegistry,
 };
 use edgelord::domain::TokenId;

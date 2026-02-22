@@ -2,7 +2,7 @@
 
 mod support;
 
-use edgelord::adapters::strategies::{
+use edgelord::adapter::strategy::{
     DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
     SingleConditionStrategy, Strategy, StrategyRegistry,
 };

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::adapters::polymarket::PolymarketClient;
+use edgelord::adapter::polymarket::PolymarketClient;
 use edgelord::domain::TokenId;
 use edgelord::error::{ConfigError, Error};
 use edgelord::runtime::exchange::{

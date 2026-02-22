@@ -3,11 +3,11 @@
 pub mod cluster;
 pub mod inference;
 pub mod llm;
-pub mod notifiers;
+pub mod notifier;
 pub mod polymarket;
 pub mod position;
 pub mod risk;
-pub mod solvers;
+pub mod solver;
 pub mod statistics;
-pub mod stores;
-pub mod strategies;
+pub mod store;
+pub mod strategy;

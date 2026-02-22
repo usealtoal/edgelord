@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::adapters::strategies::{DetectionContext, MarketContext, Strategy};
+use crate::adapter::strategy::{DetectionContext, MarketContext, Strategy};
 use crate::domain::{Market, Opportunity, OpportunityLeg};
 use crate::runtime::cache::BookCache;
 

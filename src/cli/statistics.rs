@@ -7,11 +7,11 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use rust_decimal::Decimal;
 
-use crate::adapters::statistics::{
+use crate::adapter::statistics::{
     export_daily_csv as export_csv_impl, f32_to_decimal, StatsRecorder, StatsSummary,
 };
-use crate::adapters::stores::db::model::{DailyStatsRow, StrategyDailyStatsRow};
-use crate::adapters::stores::db::schema::{daily_stats, strategy_daily_stats, trades};
+use crate::adapter::store::db::model::{DailyStatsRow, StrategyDailyStatsRow};
+use crate::adapter::store::db::schema::{daily_stats, strategy_daily_stats, trades};
 use crate::cli::output;
 use crate::error::{ConfigError, Error, Result};
 

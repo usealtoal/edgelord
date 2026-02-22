@@ -8,13 +8,13 @@ use tracing::{debug, info, warn};
 
 use super::execution::spawn_execution;
 use super::state::AppState;
-use crate::adapters::notifiers::NotifierRegistry;
-use crate::adapters::notifiers::{Event, OpportunityEvent, RiskEvent};
-use crate::adapters::position::{CloseReason, PositionManager};
-use crate::adapters::risk::{RiskCheckResult, RiskManager};
-use crate::adapters::statistics::{RecordedOpportunity, StatsRecorder};
-use crate::adapters::strategies::DetectionContext;
-use crate::adapters::strategies::StrategyRegistry;
+use crate::adapter::notifier::NotifierRegistry;
+use crate::adapter::notifier::{Event, OpportunityEvent, RiskEvent};
+use crate::adapter::position::{CloseReason, PositionManager};
+use crate::adapter::risk::{RiskCheckResult, RiskManager};
+use crate::adapter::statistics::{RecordedOpportunity, StatsRecorder};
+use crate::adapter::strategy::DetectionContext;
+use crate::adapter::strategy::StrategyRegistry;
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::error::RiskError;
 use crate::runtime::cache::BookCache;
@@ -288,10 +288,10 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use super::*;
-    use crate::adapters::notifiers::NotifierRegistry;
-    use crate::adapters::risk::RiskManager;
-    use crate::adapters::statistics;
-    use crate::adapters::strategies::StrategyRegistry;
+    use crate::adapter::notifier::NotifierRegistry;
+    use crate::adapter::risk::RiskManager;
+    use crate::adapter::statistics;
+    use crate::adapter::strategy::StrategyRegistry;
     use crate::domain::{
         Market, MarketId, Opportunity, OpportunityLeg, Book, Outcome, PriceLevel, TokenId,
     };
@@ -445,7 +445,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
         let cache = BookCache::new();
 
@@ -476,7 +476,7 @@ mod tests {
         }));
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
         let cache = BookCache::new();
 
@@ -512,7 +512,7 @@ mod tests {
         }));
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
         let cache = BookCache::new();
 
@@ -544,7 +544,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
         let cache = BookCache::new();
 
@@ -583,7 +583,7 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
         let cache = BookCache::new();
 
@@ -626,9 +626,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 
@@ -675,9 +675,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 
@@ -713,9 +713,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 
@@ -780,9 +780,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 
@@ -810,9 +810,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 
@@ -842,9 +842,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = Arc::new(RiskManager::new(Arc::clone(&state)));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 

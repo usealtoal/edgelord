@@ -204,7 +204,7 @@ impl FrankWolfeResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::solvers::{Constraint, ConstraintSense, HiGHSSolver, VariableBounds};
+    use crate::adapter::solver::{Constraint, ConstraintSense, HiGHSSolver, VariableBounds};
     use rust_decimal_macros::dec;
 
     #[test]

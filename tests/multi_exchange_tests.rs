@@ -2,7 +2,7 @@
 
 mod support;
 
-use edgelord::adapters::polymarket::PolymarketExchangeConfig;
+use edgelord::adapter::polymarket::PolymarketExchangeConfig;
 use edgelord::domain::{MarketId, Opportunity, OpportunityLeg, TokenId};
 use edgelord::runtime::exchange::{ExchangeConfig, MarketInfo, OutcomeInfo};
 use rust_decimal_macros::dec;

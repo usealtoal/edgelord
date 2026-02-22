@@ -7,9 +7,9 @@ use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 
 use super::state::AppState;
-use crate::adapters::notifiers::NotifierRegistry;
-use crate::adapters::notifiers::{Event, ExecutionEvent};
-use crate::adapters::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
+use crate::adapter::notifier::NotifierRegistry;
+use crate::adapter::notifier::{Event, ExecutionEvent};
+use crate::adapter::statistics::{StatsRecorder, TradeLeg, TradeOpenEvent};
 use crate::domain::{
     Failure, Fill, Opportunity, OrderId, Position, PositionLeg, PositionStatus, TokenId,
     TradeResult,
@@ -263,8 +263,8 @@ mod tests {
     use rust_decimal_macros::dec;
     use tokio::time::{sleep, Duration, Instant};
 
-    use crate::adapters::notifiers::NotifierRegistry;
-    use crate::adapters::statistics;
+    use crate::adapter::notifier::NotifierRegistry;
+    use crate::adapter::statistics;
     use crate::domain::{
         Failure, Fill, MarketId, Opportunity, OpportunityLeg,
         OrderId, PositionStatus, TokenId, TradeResult,
@@ -355,7 +355,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
 
         spawn_execution(
@@ -439,7 +439,7 @@ mod tests {
 
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
         let stats = statistics::create_recorder(db_pool);
 
         assert!(state.try_lock_execution("timeout-market"));

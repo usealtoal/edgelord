@@ -1,7 +1,7 @@
 use std::env;
 use std::time::Duration;
 
-use edgelord::adapters::polymarket::PolymarketClient;
+use edgelord::adapter::polymarket::PolymarketClient;
 use tokio::time::timeout;
 
 fn smoke_enabled() -> bool {

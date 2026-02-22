@@ -23,12 +23,12 @@
 //! ```text
 //! domain/     Pure types, no I/O
 //! ports/      Trait definitions (extension points)
-//! adapters/   Implementations (Polymarket, strategies, etc.)
+//! adapter/    Implementations (Polymarket, strategies, etc.)
 //! runtime/    Orchestration and wiring
 //! cli/        Command-line interface
 //! ```
 
-pub mod adapters;
+pub mod adapter;
 pub mod cli;
 pub mod domain;
 pub mod error;

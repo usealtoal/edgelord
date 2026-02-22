@@ -3,7 +3,7 @@
 //! Tests the end-to-end flow of filtering, scoring, and subscription management
 //! for adaptive market subscription.
 
-use edgelord::adapters::polymarket::{PolymarketFilter, PolymarketScorer};
+use edgelord::adapter::polymarket::{PolymarketFilter, PolymarketScorer};
 use edgelord::domain::{MarketId, TokenId};
 use edgelord::runtime::{MarketScore, ScoreFactors};
 use edgelord::runtime::exchange::{MarketFilter, MarketInfo, MarketScorer, OutcomeInfo};

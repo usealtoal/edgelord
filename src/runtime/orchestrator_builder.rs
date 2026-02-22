@@ -7,21 +7,21 @@ use tracing::{info, warn};
 
 use super::config::{Config, LlmProvider};
 use super::state::AppState;
-use crate::adapters::inference::LlmInferrer;
-use crate::adapters::llm::{AnthropicLlm, Llm, OpenAiLlm};
-use crate::adapters::notifiers::{LogNotifier, NotifierRegistry};
-use crate::adapters::strategies::StrategyRegistry;
+use crate::adapter::inference::LlmInferrer;
+use crate::adapter::llm::{AnthropicLlm, Llm, OpenAiLlm};
+use crate::adapter::notifier::{LogNotifier, NotifierRegistry};
+use crate::adapter::strategy::StrategyRegistry;
 use crate::ports::RelationInferrer;
 use crate::runtime::cache::ClusterCache;
 use crate::runtime::exchange::{ArbitrageExecutor, ExchangeFactory};
 
 #[cfg(feature = "telegram")]
-use crate::adapters::notifiers::{RuntimeStats, TelegramConfig, TelegramNotifier};
+use crate::adapter::notifier::{RuntimeStats, TelegramConfig, TelegramNotifier};
 #[cfg(feature = "telegram")]
-use crate::adapters::statistics::StatsRecorder;
+use crate::adapter::statistics::StatsRecorder;
 
 #[cfg(not(feature = "telegram"))]
-use crate::adapters::statistics::StatsRecorder;
+use crate::adapter::statistics::StatsRecorder;
 
 /// Build notifier registry from configuration.
 ///

@@ -8,7 +8,7 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use crate::adapters::llm::Llm;
+use crate::adapter::llm::Llm;
 use crate::domain::{MarketId, Relation, RelationKind};
 use crate::error::Result;
 use crate::ports::{MarketSummary, RelationInferrer};
@@ -223,7 +223,7 @@ fn extract_json(text: &str) -> Result<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::llm::tests::MockLlm;
+    use crate::adapter::llm::tests::MockLlm;
 
     #[tokio::test]
     async fn parses_valid_response_with_short_ids() {

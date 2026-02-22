@@ -73,4 +73,4 @@ pub use store::Store;
 // Strategy port types (trait is in adapters::strategies)
 pub use strategy::{DetectionContext, DetectionResult, MarketContext};
 // Re-export Strategy trait from adapters for backward compat
-pub use crate::adapters::strategies::Strategy;
+pub use crate::adapter::strategy::Strategy;

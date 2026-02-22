@@ -3,7 +3,7 @@
 use rust_decimal::Decimal;
 use tracing::{info, trace};
 
-use crate::adapters::solvers::{
+use crate::adapter::solver::{
     FrankWolfe, FrankWolfeConfig, HiGHSSolver, IlpProblem, LpProblem, VariableBounds,
 };
 use crate::domain::{Cluster, MarketRegistry, Opportunity, OpportunityLeg, TokenId};

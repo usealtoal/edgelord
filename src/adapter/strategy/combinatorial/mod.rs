@@ -25,7 +25,7 @@
 //! While combinatorial arbitrage captured only 0.24% ($95K) of historical profits,
 //! the mathematical infrastructure enables more sophisticated strategies.
 
-pub use crate::adapters::solvers::{
+pub use crate::adapter::solver::{
     bregman_divergence, bregman_gradient, lmsr_cost, lmsr_prices, FrankWolfe, FrankWolfeConfig,
     FrankWolfeResult,
 };
@@ -36,7 +36,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use super::{DetectionContext, MarketContext, Strategy};
-use crate::adapters::cluster::{ClusterDetectionConfig, ClusterDetector};
+use crate::adapter::cluster::{ClusterDetectionConfig, ClusterDetector};
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::runtime::cache::ClusterCache;
 

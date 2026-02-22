@@ -166,7 +166,7 @@ impl StrategyRegistryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapters::strategies::{DetectionContext, MarketContext};
+    use crate::adapter::strategy::{DetectionContext, MarketContext};
 
     struct MockStrategy {
         name: &'static str,

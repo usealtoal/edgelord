@@ -10,14 +10,14 @@ use tracing::{debug, info, warn};
 
 use super::config::Config;
 use super::state::AppState;
-use crate::adapters::cluster::ClusterDetectionService;
-use crate::adapters::inference::{run_full_inference, InferenceService};
-use crate::adapters::position::PositionManager;
-use crate::adapters::risk::RiskManager;
-use crate::adapters::statistics;
-use crate::adapters::statistics::StatsRecorder;
-use crate::adapters::stores::db;
-use crate::adapters::strategies::StrategyRegistry;
+use crate::adapter::cluster::ClusterDetectionService;
+use crate::adapter::inference::{run_full_inference, InferenceService};
+use crate::adapter::position::PositionManager;
+use crate::adapter::risk::RiskManager;
+use crate::adapter::statistics;
+use crate::adapter::statistics::StatsRecorder;
+use crate::adapter::store::db;
+use crate::adapter::strategy::StrategyRegistry;
 use crate::domain::{MarketRegistry, TokenId};
 use crate::error::Result;
 use crate::ports::{MarketSummary, RelationInferrer};
@@ -27,7 +27,7 @@ use crate::runtime::exchange::{
 };
 
 // Use adapter Event type (which NotifierRegistry expects)
-use crate::adapters::notifiers::{
+use crate::adapter::notifier::{
     Event, NotifierRegistry, OpportunityEvent, RelationDetail, RelationsEvent,
 };
 
@@ -732,9 +732,9 @@ mod tests {
     #[test]
     fn event_processing_context_can_be_created() {
         use super::super::state::AppState;
-        use crate::adapters::notifiers::NotifierRegistry;
-        use crate::adapters::risk::RiskManager;
-        use crate::adapters::strategies::StrategyRegistry;
+        use crate::adapter::notifier::NotifierRegistry;
+        use crate::adapter::risk::RiskManager;
+        use crate::adapter::strategy::StrategyRegistry;
         use crate::domain::MarketRegistry;
         use crate::runtime::cache::BookCache;
         use std::sync::Arc;
@@ -745,9 +745,9 @@ mod tests {
         let state = Arc::new(AppState::default());
         let notifiers = Arc::new(NotifierRegistry::new());
         let risk_manager = RiskManager::new(Arc::clone(&state));
-        let db_pool = crate::adapters::stores::db::create_pool("sqlite://:memory:").unwrap();
-        let stats = crate::adapters::statistics::create_recorder(db_pool);
-        let position_manager = Arc::new(crate::adapters::position::PositionManager::new(
+        let db_pool = crate::adapter::store::db::create_pool("sqlite://:memory:").unwrap();
+        let stats = crate::adapter::statistics::create_recorder(db_pool);
+        let position_manager = Arc::new(crate::adapter::position::PositionManager::new(
             Arc::clone(&stats),
         ));
 

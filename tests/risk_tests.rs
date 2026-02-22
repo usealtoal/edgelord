@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use edgelord::adapters::risk::RiskManager;
+use edgelord::adapter::risk::RiskManager;
 use edgelord::domain::{MarketId, Opportunity, OpportunityLeg, TokenId};
 use edgelord::runtime::{AppState, RiskLimits};
 use rust_decimal_macros::dec;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use tracing::{debug, info};
 
-use crate::adapters::statistics::{StatsRecorder, TradeCloseEvent};
+use crate::adapter::statistics::{StatsRecorder, TradeCloseEvent};
 use crate::domain::{MarketId, Position, PositionId, Price};
 use crate::runtime::cache::PositionTracker;
 

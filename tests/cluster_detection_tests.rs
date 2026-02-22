@@ -7,7 +7,7 @@ use std::sync::Arc;
 use chrono::Duration;
 use rust_decimal_macros::dec;
 
-use edgelord::adapters::cluster::{
+use edgelord::adapter::cluster::{
     ClusterDetectionConfig, ClusterDetectionService, ClusterDetector,
 };
 use edgelord::domain::{MarketId, MarketRegistry, Relation, RelationKind};

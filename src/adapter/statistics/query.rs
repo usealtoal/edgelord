@@ -8,8 +8,8 @@ use tracing::warn;
 
 use super::export::summary_from_rows;
 use super::stat::StatsSummary;
-use crate::adapters::stores::db::model::DailyStatsRow;
-use crate::adapters::stores::db::schema::daily_stats;
+use crate::adapter::store::db::model::DailyStatsRow;
+use crate::adapter::store::db::schema::daily_stats;
 
 pub(crate) fn summary_for_range(
     pool: &Pool<ConnectionManager<SqliteConnection>>,

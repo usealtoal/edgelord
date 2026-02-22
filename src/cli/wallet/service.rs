@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::runtime::{Config, Exchange};
 
 #[cfg(feature = "polymarket")]
-use crate::adapters::polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult};
+use crate::adapter::polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult};
 #[cfg(feature = "polymarket")]
 use crate::runtime::exchange::{ApprovalResult, TokenApproval};
 

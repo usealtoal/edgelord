@@ -14,7 +14,7 @@ use super::{
     ArbitrageExecutor, ExchangeConfig, MarketDataStream, MarketFetcher, MarketFilter, MarketScorer,
     MessageDeduplicator, OrderExecutor,
 };
-use crate::adapters::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
+use crate::adapter::polymarket::{PolymarketDeduplicator, PolymarketFilter, PolymarketScorer};
 
 /// Factory for creating exchange components.
 pub struct ExchangeFactory;
@@ -43,9 +43,9 @@ impl ExchangeFactory {
             Exchange::Polymarket => {
                 let client = config
                     .polymarket_config()
-                    .map(crate::adapters::polymarket::PolymarketClient::from_config)
+                    .map(crate::adapter::polymarket::PolymarketClient::from_config)
                     .unwrap_or_else(|| {
-                        crate::adapters::polymarket::PolymarketClient::new(
+                        crate::adapter::polymarket::PolymarketClient::new(
                             config.network().api_url.clone(),
                         )
                     });
@@ -58,7 +58,7 @@ impl ExchangeFactory {
     pub fn create_data_stream(config: &Config) -> Box<dyn MarketDataStream> {
         match config.exchange {
             Exchange::Polymarket => {
-                Box::new(crate::adapters::polymarket::PolymarketDataStream::new(
+                Box::new(crate::adapter::polymarket::PolymarketDataStream::new(
                     config.network().ws_url.clone(),
                 ))
             }
@@ -75,7 +75,7 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = crate::adapters::polymarket::PolymarketExecutor::new(config).await?;
+                let executor = crate::adapter::polymarket::PolymarketExecutor::new(config).await?;
                 Ok(Some(Box::new(executor)))
             }
         }
@@ -93,7 +93,7 @@ impl ExchangeFactory {
 
         match config.exchange {
             Exchange::Polymarket => {
-                let executor = crate::adapters::polymarket::PolymarketExecutor::new(config).await?;
+                let executor = crate::adapter::polymarket::PolymarketExecutor::new(config).await?;
                 Ok(Some(Arc::new(executor)))
             }
         }
@@ -105,7 +105,7 @@ impl ExchangeFactory {
     /// like payout amounts and outcome naming conventions.
     pub fn create_exchange_config(config: &Config) -> Box<dyn ExchangeConfig> {
         match config.exchange {
-            Exchange::Polymarket => Box::new(crate::adapters::polymarket::PolymarketExchangeConfig),
+            Exchange::Polymarket => Box::new(crate::adapter::polymarket::PolymarketExchangeConfig),
         }
     }
 
@@ -173,7 +173,7 @@ impl ExchangeFactory {
         let ws_url = config.network().ws_url.clone();
         match config.exchange {
             Exchange::Polymarket => Arc::new(move || {
-                Box::new(crate::adapters::polymarket::PolymarketDataStream::new(
+                Box::new(crate::adapter::polymarket::PolymarketDataStream::new(
                     ws_url.clone(),
                 )) as Box<dyn MarketDataStream>
             }),

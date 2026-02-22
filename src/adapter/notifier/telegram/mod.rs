@@ -12,7 +12,7 @@ use teloxide::types::{BotCommand, ParseMode};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use crate::adapters::statistics::StatsRecorder;
+use crate::adapter::statistics::StatsRecorder;
 use crate::runtime::AppState;
 
 use self::command::{bot_commands, command_help, parse_command, CommandParseError};

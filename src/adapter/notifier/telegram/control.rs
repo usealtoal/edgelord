@@ -6,7 +6,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use parking_lot::RwLock;
 
-use crate::adapters::statistics::StatsRecorder;
+use crate::adapter::statistics::StatsRecorder;
 use crate::domain::{PositionStatus, RelationKind};
 use crate::runtime::PoolStats;
 use crate::runtime::cache::ClusterCache;
@@ -509,8 +509,8 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
 
-    use crate::adapters::statistics;
-    use crate::adapters::stores::db;
+    use crate::adapter::statistics;
+    use crate::adapter::store::db;
     use crate::runtime::{RiskLimitKind, RiskLimits};
 
     #[test]

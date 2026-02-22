@@ -15,11 +15,11 @@ use super::query::{summary_for_range, summary_for_today};
 use super::stat::{RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent};
 use tracing::{debug, warn};
 
-use crate::adapters::stores::db;
-use crate::adapters::stores::db::model::{
+use crate::adapter::store::db;
+use crate::adapter::store::db::model::{
     DailyStatsRow, NewOpportunityRow, NewTradeRow, StrategyDailyStatsRow, TradeRow,
 };
-use crate::adapters::stores::db::schema::{
+use crate::adapter::store::db::schema::{
     daily_stats, opportunities, strategy_daily_stats, trades,
 };
 
