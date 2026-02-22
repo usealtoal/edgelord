@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::domain::stats::StatsSummary;
-use crate::port::inbound::operator::statistics::{DailyStatsRecord, StrategyStatsRecord};
+use crate::port::inbound::operator::stats::{DailyStatsRecord, StrategyStatsRecord};
 
 use super::aggregate::compute_win_rate;
 

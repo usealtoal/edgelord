@@ -1,10 +1,10 @@
 //! Operator implementations for inbound adapters.
 
-pub mod configuration;
+pub mod config;
 pub mod diagnostic;
 pub mod entry;
 pub mod runtime;
-pub mod statistics;
+pub mod stats;
 pub mod status;
 pub mod wallet;
 

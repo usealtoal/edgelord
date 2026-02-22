@@ -2,7 +2,7 @@
 
 use crate::error::Result;
 use crate::infrastructure::config;
-use crate::port::inbound::operator::configuration::{
+use crate::port::inbound::operator::config::{
     ConfigClusterDetection, ConfigInference, ConfigRiskLimits, ConfigValidationReport, ConfigView,
     ConfigurationOperator,
 };

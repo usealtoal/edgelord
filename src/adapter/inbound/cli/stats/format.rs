@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 use crate::adapter::inbound::cli::output;
 use crate::domain::stats::StatsSummary;
 use crate::error::Result;
-use crate::port::inbound::operator::statistics::{DailyStatsRecord, StrategyStatsRecord};
+use crate::port::inbound::operator::stats::{DailyStatsRecord, StrategyStatsRecord};
 
 use super::aggregate::{aggregate_by_strategy, compute_percentage, compute_win_rate};
 

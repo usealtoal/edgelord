@@ -11,7 +11,7 @@ pub mod output;
 pub mod paths;
 pub mod provision;
 pub mod run;
-pub mod stat;
+pub mod stats;
 pub mod status;
 pub mod strategy;
 pub mod wallet;

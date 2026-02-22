@@ -1,9 +1,9 @@
 //! Unified operator capability surface for inbound adapters.
 
-use super::configuration::ConfigurationOperator;
+use super::config::ConfigurationOperator;
 use super::diagnostic::DiagnosticOperator;
 use super::runtime::RuntimeOperator;
-use super::statistics::StatisticsOperator;
+use super::stats::StatisticsOperator;
 use super::status::StatusOperator;
 use super::wallet::WalletOperator;
 

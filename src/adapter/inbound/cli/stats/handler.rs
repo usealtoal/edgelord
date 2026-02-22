@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::adapter::inbound::cli::{operator, output};
 use crate::domain::stats::StatsSummary;
 use crate::error::Result;
-use crate::port::inbound::operator::statistics::{DailyStatsRecord, StrategyStatsRecord};
+use crate::port::inbound::operator::stats::{DailyStatsRecord, StrategyStatsRecord};
 
 use super::format::{print_breakdown, print_daily, print_open_positions, print_summary};
 use super::json::{daily_rows_to_json, strategy_rows_to_json, summary_to_json};

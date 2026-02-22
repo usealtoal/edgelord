@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::adapter::outbound::sqlite::report::SqliteReportReader;
 use crate::domain::stats::StatsSummary;
 use crate::error::Result;
-use crate::port::inbound::operator::statistics::{
+use crate::port::inbound::operator::stats::{
     DailyStatsRecord, StatisticsOperator, StrategyStatsRecord,
 };
 use crate::port::outbound::report::StatisticsReportReader;

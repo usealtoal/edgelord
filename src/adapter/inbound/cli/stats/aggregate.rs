@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::port::inbound::operator::statistics::StrategyStatsRecord;
+use crate::port::inbound::operator::stats::StrategyStatsRecord;
 
 /// Aggregate strategy breakdown rows by strategy name.
 ///
