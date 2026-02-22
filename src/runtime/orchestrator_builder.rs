@@ -8,7 +8,7 @@ use tracing::{info, warn};
 use super::config::{Config, LlmProvider};
 use super::state::AppState;
 use crate::adapter::inference::LlmInferrer;
-use crate::adapter::llm::{AnthropicLlm, Llm, OpenAiLlm};
+use crate::adapter::llm::{Anthropic, Llm, OpenAi};
 use crate::adapter::notifier::{LogNotifier, NotifierRegistry};
 use crate::adapter::strategy::StrategyRegistry;
 use crate::port::{ArbitrageExecutor, RelationInferrer};
@@ -142,7 +142,7 @@ pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
                     return None;
                 }
             };
-            Arc::new(AnthropicLlm::new(
+            Arc::new(Anthropic::new(
                 api_key,
                 &config.llm.anthropic.model,
                 config.llm.anthropic.max_tokens,
@@ -157,7 +157,7 @@ pub(crate) fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
                     return None;
                 }
             };
-            Arc::new(OpenAiLlm::new(
+            Arc::new(OpenAi::new(
                 api_key,
                 &config.llm.openai.model,
                 config.llm.openai.max_tokens,

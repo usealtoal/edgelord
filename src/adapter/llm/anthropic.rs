@@ -11,7 +11,7 @@ const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
 
 /// Anthropic Claude client.
-pub struct AnthropicLlm {
+pub struct Anthropic {
     client: Client,
     api_key: String,
     model: String,
@@ -19,7 +19,7 @@ pub struct AnthropicLlm {
     temperature: f64,
 }
 
-impl AnthropicLlm {
+impl Anthropic {
     /// Create a new Anthropic client.
     pub fn new(
         api_key: impl Into<String>,
@@ -72,7 +72,7 @@ struct ContentBlock {
 }
 
 #[async_trait]
-impl Llm for AnthropicLlm {
+impl Llm for Anthropic {
     fn name(&self) -> &'static str {
         "anthropic"
     }

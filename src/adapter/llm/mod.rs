@@ -3,8 +3,8 @@
 mod anthropic;
 mod openai;
 
-pub use anthropic::AnthropicLlm;
-pub use openai::OpenAiLlm;
+pub use anthropic::Anthropic;
+pub use openai::OpenAi;
 
 use async_trait::async_trait;
 

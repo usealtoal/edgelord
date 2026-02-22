@@ -10,7 +10,7 @@ use crate::error::{Error, Result};
 const API_URL: &str = "https://api.openai.com/v1/chat/completions";
 
 /// OpenAI client.
-pub struct OpenAiLlm {
+pub struct OpenAi {
     client: Client,
     api_key: String,
     model: String,
@@ -18,7 +18,7 @@ pub struct OpenAiLlm {
     temperature: f64,
 }
 
-impl OpenAiLlm {
+impl OpenAi {
     /// Create a new OpenAI client.
     pub fn new(
         api_key: impl Into<String>,
@@ -76,7 +76,7 @@ struct ChoiceMessage {
 }
 
 #[async_trait]
-impl Llm for OpenAiLlm {
+impl Llm for OpenAi {
     fn name(&self) -> &'static str {
         "openai"
     }
