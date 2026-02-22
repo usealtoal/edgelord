@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::cli::output;
 use crate::cli::wallet::WalletService;
 use crate::error::Result;
-use crate::runtime::Config;
+use crate::infrastructure::Config;
 
 /// Display current wallet approval status.
 ///

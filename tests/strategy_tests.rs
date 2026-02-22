@@ -8,7 +8,7 @@ use edgelord::adapter::strategy::{
 };
 use edgelord::port::{DetectionContext, MarketContext, Strategy};
 use edgelord::domain::{Market, Book, PriceLevel};
-use edgelord::runtime::cache::BookCache;
+use edgelord::infrastructure::cache::BookCache;
 use rust_decimal_macros::dec;
 
 fn setup_arbitrage_books(cache: &BookCache, market: &Market) {

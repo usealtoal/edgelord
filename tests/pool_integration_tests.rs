@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use edgelord::port::{MarketDataStream, MarketEvent};
-use edgelord::runtime::exchange::{ConnectionPool, StreamFactory};
+use edgelord::infrastructure::exchange::{ConnectionPool, StreamFactory};
 use edgelord::testkit;
 use edgelord::testkit::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
 

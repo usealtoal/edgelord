@@ -5,11 +5,11 @@
 
 use edgelord::adapter::polymarket::{PolymarketFilter, PolymarketScorer};
 use edgelord::domain::{MarketId, TokenId};
-use edgelord::runtime::{MarketScore, ScoreFactors};
+use edgelord::infrastructure::{MarketScore, ScoreFactors};
 use edgelord::port::{MarketInfo, OutcomeInfo};
-use edgelord::runtime::exchange::{MarketFilter, MarketScorer};
-use edgelord::runtime::subscription::{PrioritySubscriptionManager, SubscriptionManager};
-use edgelord::runtime::{PolymarketFilterConfig, PolymarketScoringConfig};
+use edgelord::infrastructure::exchange::{MarketFilter, MarketScorer};
+use edgelord::infrastructure::subscription::{PrioritySubscriptionManager, SubscriptionManager};
+use edgelord::infrastructure::{PolymarketFilterConfig, PolymarketScoringConfig};
 
 fn make_market(id: &str, outcomes: usize) -> MarketInfo {
     let outcome_infos: Vec<_> = (0..outcomes)

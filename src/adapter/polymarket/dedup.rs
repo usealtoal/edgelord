@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use dashmap::DashMap;
 
 use crate::port::MarketEvent;
-use crate::runtime::exchange::MessageDeduplicator;
-use crate::runtime::PolymarketDedupConfig;
+use crate::infrastructure::exchange::MessageDeduplicator;
+use crate::infrastructure::PolymarketDedupConfig;
 
 /// Thread-safe message deduplicator for Polymarket.
 ///

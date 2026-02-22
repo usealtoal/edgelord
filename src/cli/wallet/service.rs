@@ -7,12 +7,12 @@ use rust_decimal::Decimal;
 
 use crate::error::ConfigError;
 use crate::error::Result;
-use crate::runtime::{Config, Exchange};
+use crate::infrastructure::{Config, Exchange};
 
 #[cfg(feature = "polymarket")]
 use crate::adapter::polymarket::{PolymarketApproval, SweepResult as PolymarketSweepResult};
 #[cfg(feature = "polymarket")]
-use crate::runtime::exchange::{ApprovalResult, TokenApproval};
+use crate::infrastructure::exchange::{ApprovalResult, TokenApproval};
 
 /// Current approval status for CLI display.
 ///

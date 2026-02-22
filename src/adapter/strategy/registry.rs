@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::port::{DetectionContext, Strategy};
-use crate::runtime::cache::ClusterCache;
+use crate::infrastructure::cache::ClusterCache;
 
 use super::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use super::condition::{SingleConditionConfig, SingleConditionStrategy};

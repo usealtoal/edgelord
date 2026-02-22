@@ -18,7 +18,7 @@ use tracing::{debug, info, warn};
 use super::dto::{GammaMarket, PolymarketMarket, PolymarketMarketsResponse};
 use crate::error::Result;
 use crate::port::{MarketFetcher, MarketInfo, OutcomeInfo};
-use crate::runtime::PolymarketConfig;
+use crate::infrastructure::PolymarketConfig;
 
 /// HTTP client for the Polymarket REST APIs.
 ///

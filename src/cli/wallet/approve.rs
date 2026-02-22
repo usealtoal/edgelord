@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use crate::cli::output;
 use crate::cli::wallet::{ApprovalOutcome, WalletService};
 use crate::error::{ExecutionError, Result};
-use crate::runtime::Config;
+use crate::infrastructure::Config;
 
 /// Approve token spending for trading.
 ///

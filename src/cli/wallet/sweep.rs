@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use crate::cli::output;
 use crate::cli::wallet::{SweepOutcome, WalletService};
 use crate::error::{ConfigError, Result};
-use crate::runtime::{Config, Exchange};
+use crate::infrastructure::{Config, Exchange};
 
 /// Sweep the full USDC balance to the provided address.
 pub async fn execute_sweep(

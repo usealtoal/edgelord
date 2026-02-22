@@ -3,8 +3,8 @@
 //! Implements [`MarketFilter`] to filter Polymarket markets for subscription eligibility.
 
 use crate::port::MarketInfo;
-use crate::runtime::exchange::{MarketFilter, MarketFilterConfig};
-use crate::runtime::PolymarketFilterConfig;
+use crate::infrastructure::exchange::{MarketFilter, MarketFilterConfig};
+use crate::infrastructure::PolymarketFilterConfig;
 
 /// Filter for Polymarket markets.
 ///

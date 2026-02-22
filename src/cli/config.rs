@@ -7,7 +7,7 @@ use rust_decimal::prelude::ToPrimitive;
 
 use crate::cli::output;
 use crate::error::{ConfigError, Result};
-use crate::runtime::{Config, Environment};
+use crate::infrastructure::{Config, Environment};
 
 /// Default config template with documentation.
 const CONFIG_TEMPLATE: &str = include_str!("../../config.toml.example");
@@ -170,10 +170,10 @@ pub fn execute_validate(path: &Path) -> Result<()> {
             if config.inference.enabled {
                 // Check if API key is available for the configured provider
                 let has_api_key = match config.llm.provider {
-                    crate::runtime::LlmProvider::Anthropic => {
+                    crate::infrastructure::LlmProvider::Anthropic => {
                         std::env::var("ANTHROPIC_API_KEY").is_ok()
                     }
-                    crate::runtime::LlmProvider::OpenAi => std::env::var("OPENAI_API_KEY").is_ok(),
+                    crate::infrastructure::LlmProvider::OpenAi => std::env::var("OPENAI_API_KEY").is_ok(),
                 };
                 if !has_api_key {
                     warnings.push("Inference enabled but LLM API key not set");

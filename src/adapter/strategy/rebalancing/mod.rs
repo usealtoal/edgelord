@@ -239,7 +239,7 @@ mod tests {
     use super::*;
     use crate::adapter::strategy::ConcreteDetectionContext;
     use crate::domain::{Book, Market, Outcome, PriceLevel};
-    use crate::runtime::cache::BookCache;
+    use crate::infrastructure::cache::BookCache;
     use rust_decimal_macros::dec;
 
     fn make_config() -> MarketRebalancingConfig {

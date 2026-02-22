@@ -5,11 +5,11 @@
 use async_trait::async_trait;
 
 use crate::domain::MarketId;
-use crate::runtime::{MarketScore, ScoreFactors, ScoreWeights};
+use crate::infrastructure::{MarketScore, ScoreFactors, ScoreWeights};
 use crate::error::Result;
 use crate::port::MarketInfo;
-use crate::runtime::exchange::MarketScorer;
-use crate::runtime::{OutcomeBonusConfig, PolymarketScoringConfig, ScoringWeightsConfig};
+use crate::infrastructure::exchange::MarketScorer;
+use crate::infrastructure::{OutcomeBonusConfig, PolymarketScoringConfig, ScoringWeightsConfig};
 
 /// Scorer for Polymarket markets.
 ///

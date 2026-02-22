@@ -4,8 +4,8 @@ use crate::cli::wallet::WalletService;
 use crate::cli::{banner, output, RunArgs};
 use crate::error::{Error, Result};
 #[cfg(feature = "polymarket")]
-use crate::runtime::Orchestrator;
-use crate::runtime::{Config, Environment, ExchangeSpecificConfig};
+use crate::infrastructure::Orchestrator;
+use crate::infrastructure::{Config, Environment, ExchangeSpecificConfig};
 use tokio::signal;
 use tokio::sync::watch;
 use tracing::{error, info};

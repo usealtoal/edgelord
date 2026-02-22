@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use rust_decimal::Decimal;
 
 use crate::domain::{TradeResult, Opportunity, Book, OrderId, TokenId};
-use crate::runtime::PoolStats;
+use crate::infrastructure::PoolStats;
 use crate::error::Error;
 
 /// Result of attempting to execute an order.

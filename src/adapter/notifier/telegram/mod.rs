@@ -12,8 +12,8 @@ use teloxide::types::{BotCommand, ParseMode};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use crate::adapter::statistic::StatsRecorder;
-use crate::runtime::AppState;
+use crate::application::statistic::StatsRecorder;
+use crate::infrastructure::AppState;
 
 use self::command::{bot_commands, command_help, parse_command, CommandParseError};
 use self::control::TelegramControl;
@@ -393,7 +393,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    use crate::runtime::AppState;
+    use crate::infrastructure::AppState;
 
     /// Mutex to serialize tests that modify environment variables.
     static ENV_LOCK: Mutex<()> = Mutex::new(());

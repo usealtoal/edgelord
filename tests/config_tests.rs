@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use edgelord::error::{ConfigError, Error};
-use edgelord::runtime::Config;
+use edgelord::infrastructure::Config;
 
 static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 

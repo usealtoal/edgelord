@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use edgelord::adapter::statistic::{RecordedOpportunity, StatsRecorder};
+use edgelord::application::statistic::{RecordedOpportunity, StatsRecorder};
 use edgelord::adapter::store::db::run_migrations;
 use rust_decimal_macros::dec;
 

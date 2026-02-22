@@ -6,7 +6,7 @@
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
-use crate::runtime::exchange::ExchangeConfig;
+use crate::infrastructure::exchange::ExchangeConfig;
 
 /// Default payout amount for Polymarket ($1.00 per share).
 pub const POLYMARKET_PAYOUT: Decimal = dec!(1);
@@ -21,7 +21,7 @@ pub const POLYMARKET_PAYOUT: Decimal = dec!(1);
 ///
 /// ```
 /// use edgelord::adapter::polymarket::PolymarketExchangeConfig;
-/// use edgelord::runtime::exchange::ExchangeConfig;
+/// use edgelord::infrastructure::exchange::ExchangeConfig;
 /// use rust_decimal_macros::dec;
 ///
 /// let config = PolymarketExchangeConfig;

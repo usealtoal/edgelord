@@ -7,11 +7,11 @@ use std::sync::Arc;
 use chrono::Duration;
 use rust_decimal_macros::dec;
 
-use edgelord::adapter::cluster::{
+use edgelord::application::cluster::{
     ClusterDetectionConfig, ClusterDetectionService, ClusterDetector,
 };
 use edgelord::domain::{MarketId, MarketRegistry, Relation, RelationKind};
-use edgelord::runtime::cache::{ClusterCache, BookCache};
+use edgelord::infrastructure::cache::{ClusterCache, BookCache};
 
 fn setup_test_environment() -> (Arc<BookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
     let markets = vec![

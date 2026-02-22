@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::cli::output;
 use crate::error::Result;
-use crate::runtime::Config;
+use crate::infrastructure::Config;
 
 /// Validate configuration file without starting the bot.
 pub fn execute_config<P: AsRef<Path>>(config_path: P) -> Result<()> {

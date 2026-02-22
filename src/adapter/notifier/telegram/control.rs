@@ -6,11 +6,11 @@ use std::sync::Arc;
 use chrono::Utc;
 use parking_lot::RwLock;
 
-use crate::adapter::statistic::StatsRecorder;
+use crate::application::statistic::StatsRecorder;
 use crate::domain::{PositionStatus, RelationKind};
-use crate::runtime::PoolStats;
-use crate::runtime::cache::ClusterCache;
-use crate::runtime::AppState;
+use crate::infrastructure::PoolStats;
+use crate::infrastructure::cache::ClusterCache;
+use crate::infrastructure::AppState;
 
 use super::command::{command_help, TelegramCommand};
 
@@ -509,9 +509,9 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
 
-    use crate::adapter::statistic;
+    use crate::application::statistic;
     use crate::adapter::store::db;
-    use crate::runtime::{RiskLimitKind, RiskLimits};
+    use crate::infrastructure::{RiskLimitKind, RiskLimits};
 
     #[test]
     fn execute_pause_and_resume() {

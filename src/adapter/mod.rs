@@ -1,13 +1,11 @@
-//! Implementations of ports (hexagonal adapters).
+//! Port implementations (hexagonal adapters).
+//!
+//! These modules provide concrete implementations of the traits
+//! defined in `port/`, integrating with external systems.
 
-pub mod cluster;
-pub mod inference;
 pub mod llm;
 pub mod notifier;
 pub mod polymarket;
-pub mod position;
-pub mod risk;
 pub mod solver;
-pub mod statistic;
 pub mod store;
 pub mod strategy;

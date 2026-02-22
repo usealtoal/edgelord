@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use edgelord::adapter::risk::RiskManager;
+use edgelord::application::risk::RiskManager;
 use edgelord::domain::{MarketId, Opportunity, OpportunityLeg, TokenId};
-use edgelord::runtime::{AppState, RiskLimits};
+use edgelord::infrastructure::{AppState, RiskLimits};
 use rust_decimal_macros::dec;
 use tokio::sync::Barrier;
 

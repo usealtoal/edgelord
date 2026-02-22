@@ -35,10 +35,10 @@ use std::sync::Arc;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
-use crate::adapter::cluster::{ClusterDetectionConfig, ClusterDetector};
+use crate::application::cluster::{ClusterDetectionConfig, ClusterDetector};
 use crate::domain::{MarketRegistry, Opportunity};
 use crate::port::{DetectionContext, MarketContext, Strategy};
-use crate::runtime::cache::ClusterCache;
+use crate::infrastructure::cache::ClusterCache;
 
 /// Configuration for combinatorial strategy.
 #[derive(Debug, Clone, Deserialize)]
@@ -282,7 +282,7 @@ mod tests {
     use crate::adapter::strategy::ConcreteDetectionContext;
     use crate::domain::{Cluster, ClusterId, Market, MarketId, Outcome, PriceLevel, TokenId};
     use crate::port::Constraint;
-    use crate::runtime::cache::BookCache;
+    use crate::infrastructure::cache::BookCache;
     use chrono::{Duration, Utc};
     use rust_decimal_macros::dec;
 

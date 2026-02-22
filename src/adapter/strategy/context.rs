@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 
 use crate::domain::{Book, Market, MarketId, TokenId};
 use crate::port::{DetectionContext as DetectionContextTrait, MarketContext};
-use crate::runtime::cache::BookCache;
+use crate::infrastructure::cache::BookCache;
 
 /// Concrete detection context wrapping market and cache.
 ///

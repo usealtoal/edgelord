@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::cli::output;
 use crate::error::{Error, Result};
-use crate::runtime::{Config, Environment, Exchange};
+use crate::infrastructure::{Config, Environment, Exchange};
 
 /// Validate readiness for live trading.
 pub fn execute_live<P: AsRef<Path>>(config_path: P) -> Result<()> {
