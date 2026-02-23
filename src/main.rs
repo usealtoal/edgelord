@@ -93,7 +93,44 @@ async fn main() {
     };
 
     if let Err(e) = result {
-        output::error(&e.to_string());
+        render_error(&e);
         std::process::exit(1);
+    }
+}
+
+/// Render an error with helpful context (Astral-style).
+fn render_error(error: &edgelord::error::Error) {
+    use edgelord::error::{ConfigError, Error, ExecutionError, RiskError};
+
+    // Primary error message
+    output::error(&error.to_string());
+
+    // Add contextual hints for common error types
+    match error {
+        Error::Config(ConfigError::ReadFile(_)) => {
+            output::hint("check that the config file exists and is readable");
+        }
+        Error::Config(ConfigError::Parse(_)) => {
+            output::hint("run `edgelord config validate` to check your configuration");
+        }
+        Error::Config(ConfigError::MissingField { field }) => {
+            output::hint(&format!("add the `{field}` field to your config file"));
+        }
+        Error::Connection(_) => {
+            output::hint("check your network connection and exchange status");
+        }
+        Error::Execution(ExecutionError::AuthFailed(_)) => {
+            output::hint("verify your API credentials in the config file");
+        }
+        Error::Risk(RiskError::CircuitBreakerActive { .. }) => {
+            output::hint("use `edgelord status` to check circuit breaker state");
+        }
+        Error::Risk(RiskError::ExposureLimitExceeded { .. }) => {
+            output::hint("adjust max_total_exposure in your risk config or close some positions");
+        }
+        Error::Database(_) => {
+            output::hint("check that the database path is writable");
+        }
+        _ => {}
     }
 }

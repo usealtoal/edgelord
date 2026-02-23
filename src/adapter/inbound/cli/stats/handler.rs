@@ -64,16 +64,13 @@ pub fn execute_today(db_path: &Path) -> Result<()> {
     let open_positions = load_open_positions(&database_url)?;
 
     if output::is_json() {
-        println!(
-            "{}",
-            json!({
-                "command": "statistics.today",
-                "label": range.label,
-                "summary": summary_to_json(&summary),
-                "strategy_breakdown": strategy_rows_to_json(&rows),
-                "open_positions": open_positions,
-            })
-        );
+        output::json_output(json!({
+            "command": "statistics.today",
+            "label": range.label,
+            "summary": summary_to_json(&summary),
+            "strategy_breakdown": strategy_rows_to_json(&rows),
+            "open_positions": open_positions,
+        }));
         return Ok(());
     }
 
@@ -96,15 +93,12 @@ pub fn execute_week(db_path: &Path) -> Result<()> {
     let rows = load_strategy_breakdown(&database_url, range.start, range.end)?;
 
     if output::is_json() {
-        println!(
-            "{}",
-            json!({
-                "command": "statistics.week",
-                "label": range.label,
-                "summary": summary_to_json(&summary),
-                "strategy_breakdown": strategy_rows_to_json(&rows),
-            })
-        );
+        output::json_output(json!({
+            "command": "statistics.week",
+            "label": range.label,
+            "summary": summary_to_json(&summary),
+            "strategy_breakdown": strategy_rows_to_json(&rows),
+        }));
         return Ok(());
     }
 
@@ -126,18 +120,15 @@ pub fn execute_history(db_path: &Path, days: u32) -> Result<()> {
     let rows = load_daily_rows(&database_url, range.start, range.end)?;
 
     if output::is_json() {
-        println!(
-            "{}",
-            json!({
-                "command": "statistics.history",
-                "label": range.label,
-                "days": days,
-                "from": range.start.to_string(),
-                "to": range.end.to_string(),
-                "summary": summary_to_json(&summary),
-                "daily_breakdown": daily_rows_to_json(&rows),
-            })
-        );
+        output::json_output(json!({
+            "command": "statistics.history",
+            "label": range.label,
+            "days": days,
+            "from": range.start.to_string(),
+            "to": range.end.to_string(),
+            "summary": summary_to_json(&summary),
+            "daily_breakdown": daily_rows_to_json(&rows),
+        }));
         return Ok(());
     }
 
@@ -156,30 +147,24 @@ pub fn execute_export(db_path: &Path, days: u32, output_path: Option<&Path>) -> 
     if output::is_json() {
         if let Some(path) = output_path {
             std::fs::write(path, &csv)?;
-            println!(
-                "{}",
-                json!({
-                    "command": "statistics.export",
-                    "status": "written",
-                    "days": days,
-                    "from": range.start.to_string(),
-                    "to": range.end.to_string(),
-                    "path": path.display().to_string(),
-                    "bytes": csv.len(),
-                })
-            );
+            output::json_output(json!({
+                "command": "statistics.export",
+                "status": "written",
+                "days": days,
+                "from": range.start.to_string(),
+                "to": range.end.to_string(),
+                "path": path.display().to_string(),
+                "bytes": csv.len(),
+            }));
         } else {
-            println!(
-                "{}",
-                json!({
-                    "command": "statistics.export",
-                    "status": "stdout",
-                    "days": days,
-                    "from": range.start.to_string(),
-                    "to": range.end.to_string(),
-                    "csv": csv,
-                })
-            );
+            output::json_output(json!({
+                "command": "statistics.export",
+                "status": "stdout",
+                "days": days,
+                "from": range.start.to_string(),
+                "to": range.end.to_string(),
+                "csv": csv,
+            }));
         }
         return Ok(());
     }
@@ -202,20 +187,17 @@ pub fn execute_prune(db_path: &Path, retention_days: u32) -> Result<()> {
     prune_old_records(&database_url, retention_days)?;
 
     if output::is_json() {
-        println!(
-            "{}",
-            json!({
-                "command": "statistics.prune",
-                "status": "ok",
-                "retention_days": retention_days,
-                "note": "Aggregated daily statistics are preserved.",
-            })
-        );
+        output::json_output(json!({
+            "command": "statistics.prune",
+            "status": "ok",
+            "retention_days": retention_days,
+            "note": "Aggregated daily statistics are preserved.",
+        }));
         return Ok(());
     }
 
     output::success("Pruned historical opportunities and trades");
     output::field("Retention", format!("{retention_days} days"));
-    println!("  Aggregated daily statistics are preserved.");
+    output::hint("aggregated daily statistics are preserved");
     Ok(())
 }

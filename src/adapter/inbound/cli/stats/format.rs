@@ -70,25 +70,31 @@ pub fn print_breakdown(rows: &[StrategyStatsRecord]) -> Result<()> {
     }
 
     let by_strategy = aggregate_by_strategy(rows);
+    let widths = [20, 8, 8, 10, 8];
 
     output::section("By Strategy");
-    println!(
-        "  {:20} {:>8} {:>8} {:>10} {:>8}",
-        "Strategy", "Opps", "Trades", "Profit", "Win %"
-    );
-    println!("  {:─<20} {:─>8} {:─>8} {:─>10} {:─>8}", "", "", "", "", "");
+    output::table_header(&[
+        ("Strategy", 20),
+        ("Opps", 8),
+        ("Trades", 8),
+        ("Profit", 10),
+        ("Win %", 8),
+    ]);
+    output::table_separator(&widths);
 
     for (name, stats_row) in &by_strategy {
         let win_rate = compute_win_rate(stats_row.win_count, stats_row.loss_count)
             .map(|r| format!("{r:.1}%"))
             .unwrap_or_else(|| "N/A".to_string());
-        println!(
-            "  {:20} {:>8} {:>8} ${:>9.2} {:>8}",
-            name,
-            stats_row.opportunities_detected,
-            stats_row.trades_closed,
-            stats_row.profit_realized,
-            win_rate
+        output::table_row(
+            &[
+                name.to_string(),
+                stats_row.opportunities_detected.to_string(),
+                stats_row.trades_closed.to_string(),
+                format!("${:.2}", stats_row.profit_realized),
+                win_rate,
+            ],
+            &widths,
         );
     }
 
@@ -98,25 +104,36 @@ pub fn print_breakdown(rows: &[StrategyStatsRecord]) -> Result<()> {
 /// Print daily breakdown table to stdout.
 pub fn print_daily(rows: &[DailyStatsRecord]) -> Result<()> {
     if rows.is_empty() {
-        println!("  No data for this period.");
+        output::note("No data for this period.");
         return Ok(());
     }
 
+    let widths = [12, 6, 6, 10, 8];
+
     output::section("Daily Breakdown");
-    println!(
-        "  {:12} {:>6} {:>6} {:>10} {:>8}",
-        "Date", "Opps", "Trades", "Net P/L", "Win %"
-    );
-    println!("  {:─<12} {:─>6} {:─>6} {:─>10} {:─>8}", "", "", "", "", "");
+    output::table_header(&[
+        ("Date", 12),
+        ("Opps", 6),
+        ("Trades", 6),
+        ("Net P/L", 10),
+        ("Win %", 8),
+    ]);
+    output::table_separator(&widths);
 
     for row in rows {
         let win_rate = compute_percentage(row.win_count, row.win_count + row.loss_count)
             .map(|r| format!("{r:.0}%"))
             .unwrap_or_else(|| "-".to_string());
         let net = row.profit_realized - row.loss_realized;
-        println!(
-            "  {:12} {:>6} {:>6} ${:>9.2} {:>8}",
-            row.date, row.opportunities_detected, row.trades_closed, net, win_rate
+        output::table_row(
+            &[
+                row.date.clone(),
+                row.opportunities_detected.to_string(),
+                row.trades_closed.to_string(),
+                format!("${:.2}", net),
+                win_rate,
+            ],
+            &widths,
         );
     }
 

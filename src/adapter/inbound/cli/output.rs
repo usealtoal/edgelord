@@ -281,7 +281,10 @@ pub fn opportunity(timestamp: &str, message: &str) {
     );
 }
 
-/// Start a progress spinner.
+/// Braille spinner pattern (Astral-style).
+const BRAILLE_SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// Start a progress spinner with Astral-style braille animation.
 pub fn spinner(message: &str) -> indicatif::ProgressBar {
     let config = read_config();
     if config.json || config.quiet {
@@ -293,6 +296,7 @@ pub fn spinner(message: &str) -> indicatif::ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_style(
         indicatif::ProgressStyle::default_spinner()
+            .tick_strings(BRAILLE_SPINNER)
             .template("  {spinner:.cyan} {msg}")
             .unwrap(),
     );
@@ -378,4 +382,143 @@ pub fn note(message: &str) {
     }
 
     println!("  {}", message.dimmed());
+}
+
+/// Print a hint with "hint:" prefix (Astral-style).
+pub fn hint(message: &str) {
+    let config = read_config();
+
+    if config.json {
+        emit_json_line("hint", json!({ "message": message }));
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    println!("  {}: {}", "hint".cyan().dimmed(), message.dimmed());
+}
+
+/// Print an action in progress (Astral-style "Building...", "Checking...").
+pub fn action(verb: &str, target: &str) {
+    let config = read_config();
+
+    if config.json {
+        emit_json_line(
+            "action",
+            json!({
+                "verb": verb,
+                "target": target,
+                "status": "in_progress",
+            }),
+        );
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    println!("  {} {}...", verb.bold().cyan(), target);
+}
+
+/// Print a completed action (Astral-style "✓ Built...", "✓ Checked...").
+pub fn action_done(verb: &str, target: &str) {
+    let config = read_config();
+
+    if config.json {
+        emit_json_line(
+            "action",
+            json!({
+                "verb": verb,
+                "target": target,
+                "status": "done",
+            }),
+        );
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    println!("  {} {} {}", "✓".green(), verb.bold().green(), target);
+}
+
+/// Print multiple lines of content, each indented.
+pub fn lines(content: &str) {
+    let config = read_config();
+
+    if config.json {
+        emit_json_line("lines", json!({ "content": content }));
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    for line in content.lines() {
+        println!("  {}", line);
+    }
+}
+
+/// Emit a JSON value directly (for commands that need custom JSON output).
+pub fn json_output(value: serde_json::Value) {
+    println!("{}", value);
+}
+
+/// Print a table header row.
+pub fn table_header(columns: &[(&str, usize)]) {
+    let config = read_config();
+
+    if config.json {
+        let cols: Vec<&str> = columns.iter().map(|(name, _)| *name).collect();
+        emit_json_line("table_header", json!({ "columns": cols }));
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    let mut line = String::from("  ");
+    for (name, width) in columns {
+        line.push_str(&format!("{:>width$} ", name, width = width));
+    }
+    println!("{}", line.dimmed());
+}
+
+/// Print a table separator line.
+pub fn table_separator(widths: &[usize]) {
+    let config = read_config();
+
+    if config.json {
+        return; // No separator in JSON mode
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    let mut line = String::from("  ");
+    for width in widths {
+        line.push_str(&"─".repeat(*width));
+        line.push(' ');
+    }
+    println!("{}", line.dimmed());
+}
+
+/// Print a table data row.
+pub fn table_row(cells: &[String], widths: &[usize]) {
+    let config = read_config();
+
+    if config.json {
+        emit_json_line("table_row", json!({ "cells": cells }));
+        return;
+    }
+    if regular_output_suppressed(config) {
+        return;
+    }
+
+    let mut line = String::from("  ");
+    for (cell, width) in cells.iter().zip(widths.iter()) {
+        line.push_str(&format!("{:>width$} ", cell, width = width));
+    }
+    println!("{}", line);
 }

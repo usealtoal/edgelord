@@ -29,14 +29,11 @@ pub fn execute_health<P: AsRef<Path>>(config_path: P) -> Result<()> {
             })
             .collect::<Vec<_>>();
 
-        println!(
-            "{}",
-            json!({
-                "command": "check.health",
-                "status": if report.is_healthy() { "healthy" } else { "unhealthy" },
-                "checks": checks,
-            })
-        );
+        output::json_output(json!({
+            "command": "check.health",
+            "status": if report.is_healthy() { "healthy" } else { "unhealthy" },
+            "checks": checks,
+        }));
     } else {
         output::section("Health Check");
         for check in &report.checks {

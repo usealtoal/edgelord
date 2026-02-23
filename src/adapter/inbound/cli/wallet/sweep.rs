@@ -45,24 +45,24 @@ pub async fn execute_sweep(
         }
     }
 
-    let pb = output::spinner("Submitting transaction");
+    let pb = output::spinner("Submitting transaction...");
 
     let outcome = match service.wallet_sweep(&config_toml, to, asset, network).await {
         Ok(outcome) => outcome,
         Err(e) => {
-            output::spinner_fail(&pb, "Submitting transaction");
+            output::spinner_fail(&pb, "Transaction failed");
             return Err(e);
         }
     };
 
     match outcome {
         SweepOutcome::NoBalance { .. } => {
-            output::spinner_success(&pb, "Submitting transaction");
+            output::spinner_success(&pb, "Transaction confirmed");
             output::warning("No balance available to sweep");
         }
         SweepOutcome::Transferred { tx_hash, amount } => {
-            output::spinner_success(&pb, "Submitting transaction");
-            output::success("Sweep transaction submitted");
+            output::spinner_success(&pb, "Transaction confirmed");
+            output::success("Sweep complete");
             output::field("Amount", format!("${amount}"));
             output::field("Transaction", tx_hash);
         }

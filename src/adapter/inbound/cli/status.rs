@@ -46,7 +46,7 @@ pub fn execute(db_path: &Path, config_path: Option<&Path>) {
                 "status": "missing_database",
             })
         };
-        println!("{payload}");
+        output::json_output(payload);
         return;
     }
 
@@ -58,13 +58,11 @@ pub fn execute(db_path: &Path, config_path: Option<&Path>) {
         if let Ok(snapshot) = service.load_status(&database_url) {
             display_db_stats(snapshot);
         } else {
-            println!();
             output::warning(&format!("Database error reading stats ({db_path:?})"));
         }
     } else {
-        println!();
         output::warning(&format!("Database not found ({db_path:?})"));
-        println!("  Run `edgelord run` to start trading and create the database.");
+        output::hint("run `edgelord run` to start trading and create the database");
     }
 }
 
@@ -117,8 +115,6 @@ fn display_db_stats(snapshot: StatusSnapshot) {
     let current_exposure = snapshot.current_exposure;
     let recent_activity = snapshot.recent_activity;
 
-    println!();
-
     if current_exposure > 0.0 {
         output::field("Exposure", format!("${:.2}", current_exposure));
     }
@@ -155,7 +151,7 @@ fn display_db_stats(snapshot: StatusSnapshot) {
         };
         output::field("P&L", pnl_display);
     } else {
-        println!("  {}", output::muted("No data for today"));
+        output::note("No data for today");
     }
 
     if !recent_activity.is_empty() {

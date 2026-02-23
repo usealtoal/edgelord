@@ -11,24 +11,21 @@ pub async fn execute_telegram<P: AsRef<Path>>(config_path: P) -> Result<()> {
     let receipt = service.send_telegram_test(&config_toml).await?;
 
     if output::is_json() {
-        println!(
-            "{}",
-            json!({
-                "command": "check.telegram",
-                "masked_token": receipt.masked_token,
-                "chat_id": receipt.chat_id,
-                "status": "sent",
-            })
-        );
+        output::json_output(json!({
+            "command": "check.telegram",
+            "masked_token": receipt.masked_token,
+            "chat_id": receipt.chat_id,
+            "status": "sent",
+        }));
         return Ok(());
     }
 
     output::section("Telegram Check");
-    println!("  Sending Telegram test message...");
+    output::action("Sending", "Telegram test message");
     output::field("Bot token", receipt.masked_token);
     output::field("Chat ID", &receipt.chat_id);
-    output::success("Telegram test message sent");
-    println!("  Check Telegram for the message.");
+    output::action_done("Sent", "Telegram test message");
+    output::hint("check Telegram for the message");
 
     Ok(())
 }

@@ -16,25 +16,25 @@ pub async fn execute_connection<P: AsRef<Path>>(config_path: P) -> Result<()> {
     output::field("Environment", target.environment);
 
     // Test REST API connectivity
-    let pb = output::spinner("REST API connectivity");
+    let pb = output::spinner("Checking REST API...");
     match service.verify_rest_connectivity(&target.api_url).await {
         Ok(()) => {
-            output::spinner_success(&pb, "REST API connectivity");
+            output::spinner_success(&pb, "REST API connected");
         }
         Err(e) => {
-            output::spinner_fail(&pb, "REST API connectivity");
+            output::spinner_fail(&pb, "REST API connection failed");
             return Err(e);
         }
     }
 
     // Test WebSocket connectivity
-    let pb = output::spinner("WebSocket connectivity");
+    let pb = output::spinner("Checking WebSocket...");
     match service.verify_websocket_connectivity(&target.ws_url).await {
         Ok(()) => {
-            output::spinner_success(&pb, "WebSocket connectivity");
+            output::spinner_success(&pb, "WebSocket connected");
         }
         Err(e) => {
-            output::spinner_fail(&pb, "WebSocket connectivity");
+            output::spinner_fail(&pb, "WebSocket connection failed");
             return Err(e);
         }
     }

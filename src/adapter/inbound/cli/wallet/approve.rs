@@ -24,14 +24,14 @@ pub async fn execute_approve(
 
     output::section("Wallet Approval");
 
-    let pb = output::spinner("Fetching current allowance");
+    let pb = output::spinner("Fetching allowance...");
     let status = match service.wallet_status(&config_toml).await {
         Ok(status) => {
-            output::spinner_success(&pb, "Fetching current allowance");
+            output::spinner_success(&pb, "Fetched allowance");
             status
         }
         Err(e) => {
-            output::spinner_fail(&pb, "Fetching current allowance");
+            output::spinner_fail(&pb, "Failed to fetch allowance");
             return Err(e);
         }
     };
@@ -63,30 +63,30 @@ pub async fn execute_approve(
         }
     }
 
-    let pb = output::spinner("Submitting transaction");
+    let pb = output::spinner("Submitting transaction...");
     let outcome = match service.wallet_approve(&config_toml, amount).await {
         Ok(outcome) => outcome,
         Err(e) => {
-            output::spinner_fail(&pb, "Submitting transaction");
+            output::spinner_fail(&pb, "Transaction failed");
             return Err(e);
         }
     };
 
     match outcome {
         ApprovalOutcome::Approved { tx_hash, amount } => {
-            output::spinner_success(&pb, "Submitting transaction");
+            output::spinner_success(&pb, "Transaction confirmed");
             output::success("Approval successful");
             output::field("Amount", format!("${amount}"));
             output::field("Transaction", tx_hash);
         }
         ApprovalOutcome::AlreadyApproved { current_allowance } => {
-            output::spinner_success(&pb, "Submitting transaction");
+            output::spinner_success(&pb, "Transaction confirmed");
             output::success(&format!(
                 "Allowance already sufficient (current ${current_allowance})"
             ));
         }
         ApprovalOutcome::Failed { reason } => {
-            output::spinner_fail(&pb, "Submitting transaction");
+            output::spinner_fail(&pb, "Transaction failed");
             output::error(&format!("Approval failed: {reason}"));
             return Err(ExecutionError::OrderRejected(reason).into());
         }
