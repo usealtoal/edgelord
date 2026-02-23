@@ -1,64 +1,126 @@
-# edgelord
+<p align="center">
+  <strong>edgelord</strong>
+</p>
 
-Arbitrage detection for prediction markets.
+<p align="center">
+  <em>Arbitrage detection and execution for prediction markets.</em>
+</p>
 
-## Install
+<p align="center">
+  <a href="https://crates.io/crates/edgelord"><img src="https://img.shields.io/crates/v/edgelord.svg" alt="Crates.io"></a>
+  <a href="https://github.com/usealtoal/edgelord/blob/main/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="License"></a>
+</p>
 
-    cargo install edgelord
+---
 
-## Quick start
+## Highlights
 
-    edgelord init
-    edgelord check config
-    edgelord check health
-    edgelord check live
-    edgelord run
+- **Real-time arbitrage detection** across binary and multi-outcome markets
+- **Three strategies** out of the box: single-condition, market rebalancing, combinatorial
+- **LLM-powered inference** for cross-market constraint discovery
+- **Risk management** with position limits, exposure caps, and circuit breakers
+- **Telegram notifications** for trades, opportunities, and alerts
+- **SQLite persistence** for statistics, trades, and historical analysis
 
-## What it does
+## Installation
 
-Detects and executes arbitrage opportunities on Polymarket.
-Three strategies ship by default:
+```console
+$ cargo install edgelord
+```
 
-| Strategy | Signal | Typical edge |
+## Quick Start
+
+```console
+$ edgelord init
+$ edgelord check config
+$ edgelord check live
+$ edgelord run
+```
+
+## Strategies
+
+| Strategy | Signal | Typical Edge |
 |----------|--------|--------------|
-| single_condition | YES + NO < $1 | 2-5% |
-| market_rebalancing | sum(outcomes) < $1 | 1-3% |
-| combinatorial | cross-market constraints | <1% |
+| `single_condition` | YES + NO < $1 | 2–5% |
+| `market_rebalancing` | sum(outcomes) < $1 | 1–3% |
+| `combinatorial` | cross-market constraints | <1% |
+
+```console
+$ edgelord strategies list
+$ edgelord strategies explain single_condition
+```
 
 ## Commands
 
-    edgelord init              Setup wizard
-    edgelord run               Start trading
-    edgelord status            Show current state
-    edgelord strategies list   Available strategies
-    edgelord check config      Validate config
-    edgelord check health      Local health checks
-    edgelord check live        Live readiness checks
-    edgelord wallet status     Show approvals
+```console
+$ edgelord init                  # Setup wizard
+$ edgelord run                   # Start trading
+$ edgelord status                # Current state and today's P&L
+$ edgelord statistics today      # Today's statistics
+$ edgelord statistics week       # 7-day summary
+$ edgelord check config          # Validate configuration
+$ edgelord check live            # Live readiness checks
+$ edgelord wallet status         # Token approvals
+$ edgelord wallet approve 1000   # Approve $1000 for trading
+```
 
-Run `edgelord --help` for all commands.
+See `edgelord --help` for all commands.
 
 ## Configuration
 
-See [docs/configuration.md](docs/configuration.md).
+Create a config file with `edgelord init` or manually:
 
-## Extending
+```toml
+[exchange]
+provider = "polymarket"
+network = "polygon"
 
-Fork this repo. Implement `port::inbound::strategy::Strategy`. See
-[docs/strategies/overview.md](docs/strategies/overview.md).
+[wallet]
+private_key_env = "PRIVATE_KEY"
+
+[risk]
+max_position_per_market = 100
+max_total_exposure = 1000
+min_profit_threshold = 0.50
+
+[strategies.single_condition]
+enabled = true
+min_edge = 0.05
+
+[telegram]
+enabled = true
+bot_token_env = "TELEGRAM_BOT_TOKEN"
+chat_id_env = "TELEGRAM_CHAT_ID"
+```
+
+See [docs/configuration.md](docs/configuration.md) for full reference.
 
 ## Architecture
 
 ```
-domain/         Pure types and runtime state, no external integrations
-port/           Contracts split by direction (inbound/, outbound/)
-adapter/        Adapters split by direction (inbound/cli, outbound/integrations)
-application/    Use-case orchestration and business flow
-infrastructure/ Wiring, config, bootstrap, and runtime facades
+domain/         Pure types, no external dependencies
+port/           Inbound and outbound contracts
+adapter/        CLI, exchange integrations, notifications
+application/    Use-case orchestration
+infrastructure/ Config, bootstrap, runtime wiring
 ```
 
-CLI commands call focused `port/inbound/operator/*` capabilities (configuration, diagnostics, runtime, status, statistics, wallet) through an injected operator capability surface.
+Hexagonal architecture with clean separation between domain logic and external integrations.
+
+## Extending
+
+Implement `port::inbound::strategy::Strategy` to add custom strategies:
+
+```rust
+impl Strategy for MyStrategy {
+    fn detect(&self, ctx: &StrategyContext) -> Vec<Opportunity> {
+        // Your detection logic
+    }
+}
+```
+
+See [docs/strategies/overview.md](docs/strategies/overview.md).
 
 ## License
 
-MIT OR Apache-2.0
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
