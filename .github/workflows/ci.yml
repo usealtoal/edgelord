@@ -73,12 +73,6 @@ jobs:
           ./target/release/edgelord run --help | grep -q "\-\-max-markets"
           ./target/release/edgelord run --help | grep -q "\-\-max-connections"
 
-      - name: Verify help output (service install)
-        run: |
-          ./target/release/edgelord service install --help
-          ./target/release/edgelord service install --help | grep -q "\-\-max-slippage"
-          ./target/release/edgelord service install --help | grep -q "\-\-max-markets"
-
       - name: Verify help output (all commands)
         run: |
           ./target/release/edgelord --help
@@ -87,13 +81,14 @@ jobs:
           ./target/release/edgelord config --help
           ./target/release/edgelord check --help
           ./target/release/edgelord wallet --help
-          ./target/release/edgelord logs --help
+          ./target/release/edgelord strategies --help
+          ./target/release/edgelord init --help
 
       - name: Validate example config
-        run: ./target/release/edgelord check config --config config.toml
+        run: ./target/release/edgelord check config --config config.toml.example
 
       - name: Show effective config
-        run: ./target/release/edgelord config show --config config.toml
+        run: ./target/release/edgelord config show --config config.toml.example
 
       - name: Validate prod config
         run: ./target/release/edgelord check config --config deploy/config.prod.toml
