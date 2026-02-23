@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>edgelord</strong>
+  <img src="assets/banner.png" alt="edgelord" width="1000">
 </p>
 
 <p align="center">
