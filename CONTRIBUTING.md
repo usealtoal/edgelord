@@ -1,8 +1,41 @@
-# Contributing
+# Contributing to edgelord
 
-## Git Conventions
+## Setup
 
-### Commits
+[Rust](https://rustup.rs/) is required to build edgelord.
+
+```console
+$ git clone https://github.com/usealtoal/edgelord
+$ cd edgelord
+$ cargo build
+```
+
+## Testing
+
+```console
+$ cargo test
+```
+
+## Code Style
+
+- `cargo fmt` before committing
+- `cargo clippy -- -D warnings` must pass
+- Doc comments on all public items
+- Follow existing patterns in the codebase
+
+## Architecture
+
+Edgelord uses hexagonal architecture. See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
+
+| Layer | Purpose |
+|-------|---------|
+| `domain/` | Pure types, no I/O |
+| `port/` | Inbound and outbound contracts |
+| `application/` | Use-case orchestration |
+| `adapter/` | CLI, exchange, storage implementations |
+| `infrastructure/` | Runtime wiring and bootstrap |
+
+## Commits
 
 Single-line, conventional commit format:
 
@@ -10,77 +43,26 @@ Single-line, conventional commit format:
 <type>(<scope>): <description>
 ```
 
-**Types:**
-- `feat` — New feature
-- `fix` — Bug fix
-- `refactor` — Code change that neither fixes a bug nor adds a feature
-- `docs` — Documentation only
-- `test` — Adding or updating tests
-- `chore` — Maintenance tasks
+**Types:** `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
 
 **Examples:**
 ```
-feat(detector): add single-condition arbitrage scanner
+feat(strategy): add market rebalancing detector
 fix(executor): handle partial fill edge case
-refactor(orderbook): simplify cache update logic
-docs(readme): update architecture diagram
-chore(deps): bump tokio to 1.35
+docs(readme): update installation instructions
 ```
 
-### Branches
+## Pull Requests
 
-```
-main              # Production-ready
-feat/<name>       # Feature branches
-fix/<name>        # Bug fix branches
-```
+- One concern per PR
+- Describe what changed and why
+- Add tests for new functionality
+- Ensure CI passes
 
----
+## Reporting Issues
 
-## Code Style
+Use [GitHub Issues](https://github.com/usealtoal/edgelord/issues). Include:
 
-### Principles
-
-1. **Clarity over cleverness** — Code reads like intent, not a puzzle
-2. **One module, one job** — Single responsibility, clear boundaries
-3. **Types enforce correctness** — Invalid states should be unrepresentable
-4. **No premature abstraction** — Three concrete cases before generalizing
-5. **Minimal indirection** — Fewer layers, easier to trace
-
-### Architecture Patterns
-
-- **Domain-driven design** — Exchange-agnostic types in `core/domain/`, no exchange imports allowed
-- **Core library** — All reusable components in `core/` (domain, exchange, strategy, solver, service)
-- **Trait-based abstractions** — `OrderExecutor`, `MarketFetcher`, `MarketDataStream`, `ArbitrageExecutor` for multi-exchange support
-- **Exchange prefix convention** — All exchange-specific types prefixed with exchange name (e.g., `PolymarketClient`, `PolymarketExecutor`, `PolymarketDataStream`)
-- **Builder patterns** — Use builders for complex types (e.g., `Opportunity::builder()`)
-- **Proper encapsulation** — Private fields with accessor methods, not public structs
-- **Newtypes** — `TokenId`, `MarketId` instead of raw strings
-- **Decimal for money** — Never use floats, always `rust_decimal::Decimal`
-
-### Rust Specifics
-
-- Prefer `Result` over `panic!` for recoverable errors
-- Use `thiserror` for error types with structured variants (not strings)
-- Avoid `.unwrap()` except in tests
-- Keep functions short — if it scrolls, split it
-- Name things for what they are, not what they do
-
-### File Organization
-
-- One public type per file when possible
-- `mod.rs` re-exports only, no logic
-- `core/domain/` contains pure types only (no state, no I/O, no exchange imports)
-- `core/cache/` contains stateful caches and repositories (`OrderBookCache`, `PositionTracker`)
-- `core/` contains all reusable library code (cache, domain, exchange, strategy, solver, service)
-- `app/` contains application orchestration (config, orchestrator, state)
-- Exchange implementations (e.g., `polymarket/`) live in `core/exchange/` and implement exchange traits (`ExchangeConfig`, `MarketFetcher`, `MarketDataStream`, `ArbitrageExecutor`)
-- Tests live in `tests/` for integration, inline `#[cfg(test)]` for unit
-
----
-
-## Documentation
-
-- Doc comments (`///`) on all public items
-- Explain *why*, not *what* — the code shows what
-- Examples in doc comments for non-obvious APIs
+- edgelord version (`edgelord --version`)
+- OS and architecture
+- Steps to reproduce
