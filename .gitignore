@@ -1,7 +1,9 @@
 /target
 .env
+.env.*
+.dugout.toml
+config.toml
 *.log
+*.db
 .worktrees/
 /data/
-.env.*
-!.env.example
