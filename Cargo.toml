@@ -2,8 +2,16 @@
 name = "edgelord"
 version = "0.1.0"
 edition = "2021"
-description = "Polymarket arbitrage detection and execution"
-license = "UNLICENSED"
+rust-version = "1.75"
+description = "Arbitrage detection and execution for prediction markets, written in Rust."
+authors = ["Alto <hello@usealto.al>"]
+repository = "https://github.com/usealtoal/edgelord"
+homepage = "https://github.com/usealtoal/edgelord"
+documentation = "https://docs.rs/edgelord"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["arbitrage", "prediction-markets", "trading", "polymarket"]
+categories = ["command-line-utilities", "finance"]
 
 [features]
 default = ["polymarket", "telegram"]

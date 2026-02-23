@@ -7,10 +7,10 @@ use std::path::PathBuf;
 use super::paths;
 use super::provision::command::ProvisionCommand;
 
-/// Edgelord - Multi-strategy arbitrage detection and execution.
 #[derive(Parser, Debug)]
 #[command(name = "edgelord")]
-#[command(version, about, long_about = None)]
+#[command(version)]
+#[command(about = "Arbitrage detection and execution for prediction markets")]
 pub struct Cli {
     /// Color output mode
     #[arg(long, global = true, default_value = "auto")]
