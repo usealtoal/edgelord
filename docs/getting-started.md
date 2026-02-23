@@ -9,6 +9,12 @@
 ## Installation
 
 ```console
+$ cargo install edgelord
+```
+
+Or build from source:
+
+```console
 $ git clone https://github.com/usealtoal/edgelord.git
 $ cd edgelord
 $ cargo build --release
@@ -17,7 +23,7 @@ $ cargo build --release
 ## Configuration
 
 ```console
-$ ./target/release/edgelord init config.toml
+$ edgelord init config.toml
 ```
 
 The wizard configures network, strategies, and risk limits. Use `--force` to overwrite.
@@ -38,15 +44,15 @@ $ dugout set ANTHROPIC_API_KEY       # Optional (combinatorial)
 ## Validation
 
 ```console
-$ dugout run -- ./target/release/edgelord check config --config config.toml
-$ dugout run -- ./target/release/edgelord check health --config config.toml
-$ dugout run -- ./target/release/edgelord check live --config config.toml
+$ dugout run -- edgelord check config --config config.toml
+$ dugout run -- edgelord check health --config config.toml
+$ dugout run -- edgelord check live --config config.toml
 ```
 
 ## Running
 
 ```console
-$ dugout run -- ./target/release/edgelord run --config config.toml
+$ dugout run -- edgelord run --config config.toml
 ```
 
 ### CLI Flags
@@ -63,7 +69,7 @@ $ dugout run -- ./target/release/edgelord run --config config.toml
 ### Production Example
 
 ```console
-$ dugout run -- ./target/release/edgelord run \
+$ dugout run -- edgelord run \
     --mainnet \
     --no-banner \
     --json-logs \
@@ -73,9 +79,9 @@ $ dugout run -- ./target/release/edgelord run \
 ## Monitoring
 
 ```console
-$ ./target/release/edgelord status --db edgelord.db
-$ ./target/release/edgelord statistics today --db edgelord.db
-$ ./target/release/edgelord statistics week --db edgelord.db
+$ edgelord status --db edgelord.db
+$ edgelord statistics today --db edgelord.db
+$ edgelord statistics week --db edgelord.db
 ```
 
 ## Mainnet Checklist
