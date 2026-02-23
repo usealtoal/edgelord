@@ -104,9 +104,7 @@ As of current docs: **0% maker and taker fees**
 
 ## Rate Limits
 
-Documented at: `/quickstart/introduction/rate-limits.md`
-
-(Need to fetch specific numbers)
+See [Polymarket Rate Limits](https://docs.polymarket.com/developers/quickstart/introduction/rate-limits) for current limits.
 
 ---
 

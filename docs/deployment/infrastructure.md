@@ -12,13 +12,9 @@ This guide covers VPS setup for edgelord deployment.
 
 ## Automated Deployment (Recommended)
 
-Use GitHub Actions for deployment. See [Deployment Guide](../../deploy/README.md).
+Use GitHub Actions for deployment. See [DigitalOcean Runbook](digitalocean-manual.md) for the full workflow.
 
-VPS only needs:
-1. Rust + dugout installed
-2. Dugout identity configured
-
-The workflow handles binary, config, and vault syncing automatically.
+VPS only needs Rust and dugout installed. The workflow handles binary, config, and vault syncing.
 
 ## VPS Bootstrap
 

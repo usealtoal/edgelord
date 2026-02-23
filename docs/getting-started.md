@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.75+
+- [Rust toolchain](https://rustup.rs/) (for `cargo install`)
 - [dugout](https://crates.io/crates/dugout) for secrets management
 - Polygon USDC + MATIC for live trading
 
