@@ -4,8 +4,8 @@
 //! [`MarketEvent`], and related types so tests focus on assertions
 //! rather than construction boilerplate.
 
-use crate::core::domain::{MarketId, OrderBook, TokenId};
-use crate::core::exchange::MarketEvent;
+use crate::domain::{book::Book, id::MarketId, id::TokenId};
+use crate::port::outbound::exchange::MarketEvent;
 
 /// Generate `n` token IDs named `t0`, `t1`, ..., `t{n-1}`.
 pub fn make_tokens(n: usize) -> Vec<TokenId> {
@@ -22,12 +22,12 @@ pub fn market_id(id: &str) -> MarketId {
     MarketId::from(id.to_string())
 }
 
-/// Create an [`OrderBookSnapshot`](MarketEvent::OrderBookSnapshot) event
+/// Create an [`BookSnapshot`](MarketEvent::BookSnapshot) event
 /// with an empty order book.
 pub fn snapshot_event(token: &str) -> MarketEvent {
-    MarketEvent::OrderBookSnapshot {
+    MarketEvent::BookSnapshot {
         token_id: TokenId::from(token.to_string()),
-        book: OrderBook::new(TokenId::from(token.to_string())),
+        book: Book::new(TokenId::from(token.to_string())),
     }
 }
 

@@ -7,13 +7,19 @@ use std::sync::Arc;
 use chrono::Duration;
 use rust_decimal_macros::dec;
 
-use edgelord::core::cache::{ClusterCache, OrderBookCache};
-use edgelord::core::domain::{MarketId, MarketRegistry, Relation, RelationKind};
-use edgelord::core::service::cluster::{
-    ClusterDetectionConfig, ClusterDetectionService, ClusterDetector,
+use edgelord::adapter::outbound::solver::highs::HiGHSSolver;
+use edgelord::application::cache::book::BookCache;
+use edgelord::application::cache::cluster::ClusterCache;
+use edgelord::application::cluster::detector::ClusterDetector;
+use edgelord::application::cluster::service::{ClusterDetectionConfig, ClusterDetectionService};
+use edgelord::application::solver::frank_wolfe::FrankWolfeConfig;
+use edgelord::application::solver::projection::FrankWolfeProjectionSolver;
+use edgelord::domain::{
+    id::MarketId, market::MarketRegistry, relation::Relation, relation::RelationKind,
 };
+use edgelord::port::outbound::solver::ProjectionSolver;
 
-fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
+fn setup_test_environment() -> (Arc<BookCache>, Arc<ClusterCache>, Arc<MarketRegistry>) {
     let markets = vec![
         support::market::make_binary_market(
             "market-a",
@@ -40,10 +46,10 @@ fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<Mark
 
     let registry = support::registry::make_registry(markets);
 
-    let cache = OrderBookCache::new();
-    support::order_book::set_order_book(&cache, "yes-a", dec!(0.40), dec!(0.42));
-    support::order_book::set_order_book(&cache, "yes-b", dec!(0.55), dec!(0.57));
-    support::order_book::set_order_book(&cache, "yes-c", dec!(0.30), dec!(0.32));
+    let cache = BookCache::new();
+    support::book::set_book(&cache, "yes-a", dec!(0.40), dec!(0.42));
+    support::book::set_book(&cache, "yes-b", dec!(0.55), dec!(0.57));
+    support::book::set_book(&cache, "yes-c", dec!(0.30), dec!(0.32));
 
     let cluster_cache = ClusterCache::new(Duration::hours(1));
 
@@ -54,6 +60,13 @@ fn setup_test_environment() -> (Arc<OrderBookCache>, Arc<ClusterCache>, Arc<Mark
     (Arc::new(cache), Arc::new(cluster_cache), Arc::new(registry))
 }
 
+fn projection_solver() -> Arc<dyn ProjectionSolver> {
+    Arc::new(FrankWolfeProjectionSolver::new(
+        FrankWolfeConfig::default(),
+        Arc::new(HiGHSSolver::new()),
+    ))
+}
+
 #[test]
 fn test_detector_with_valid_cluster() {
     let (cache, cluster_cache, registry) = setup_test_environment();
@@ -62,13 +75,14 @@ fn test_detector_with_valid_cluster() {
         min_gap: dec!(0.001), // Very low threshold to detect anything
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let clusters = cluster_cache.all_clusters();
     assert!(!clusters.is_empty(), "Should have at least one cluster");
 
     let cluster = &clusters[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     // Should succeed (either Some or None depending on gap)
     assert!(
@@ -99,16 +113,17 @@ fn test_detector_missing_price_data() {
     let registry = Arc::new(support::registry::make_registry(markets));
 
     // Empty cache - no price data
-    let cache = Arc::new(OrderBookCache::new());
+    let cache = Arc::new(BookCache::new());
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
     let relation = support::relation::mutually_exclusive(&["market-x", "market-y"], 0.95, "Test");
     cluster_cache.put_relations(vec![relation]);
 
-    let detector = ClusterDetector::new(ClusterDetectionConfig::default());
+    let detector = ClusterDetector::new(ClusterDetectionConfig::default(), projection_solver());
     let cluster = &cluster_cache.all_clusters()[0];
 
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
     assert!(result.is_err(), "Should fail with missing price data");
 }
 
@@ -121,10 +136,11 @@ fn test_detector_gap_below_threshold() {
         min_gap: dec!(0.99),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
     assert!(
@@ -138,13 +154,14 @@ fn test_service_creation() {
     let (cache, cluster_cache, registry) = setup_test_environment();
     let config = ClusterDetectionConfig::default();
 
-    let service = ClusterDetectionService::new(config, cache, cluster_cache, registry);
+    let service =
+        ClusterDetectionService::new(config, cache, cluster_cache, registry, projection_solver());
     assert_eq!(service.dirty_count(), 0);
 }
 
 #[tokio::test]
 async fn test_service_with_notifications() {
-    let (order_cache, update_rx) = OrderBookCache::with_notifications(16);
+    let (order_cache, update_rx) = BookCache::with_notifications(16);
     let order_cache = Arc::new(order_cache);
 
     let markets = vec![
@@ -158,13 +175,18 @@ async fn test_service_with_notifications() {
     cluster_cache.put_relations(vec![relation]);
 
     let config = ClusterDetectionConfig::default();
-    let service =
-        ClusterDetectionService::new(config, Arc::clone(&order_cache), cluster_cache, registry);
+    let service = ClusterDetectionService::new(
+        config,
+        Arc::clone(&order_cache),
+        cluster_cache,
+        registry,
+        projection_solver(),
+    );
 
     let (handle, _opp_rx) = service.start(update_rx);
 
     // Update order book - should trigger notification
-    support::order_book::set_order_book(&order_cache, "yes-1", dec!(0.45), dec!(0.47));
+    support::book::set_book(&order_cache, "yes-1", dec!(0.45), dec!(0.47));
 
     // Give the service time to process
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -200,10 +222,10 @@ fn test_cluster_with_three_markets() {
     ];
     let registry = Arc::new(support::registry::make_registry(markets));
 
-    let cache = OrderBookCache::new();
-    support::order_book::set_order_book(&cache, "yes-trump", dec!(0.40), dec!(0.42));
-    support::order_book::set_order_book(&cache, "yes-biden", dec!(0.35), dec!(0.37));
-    support::order_book::set_order_book(&cache, "yes-other", dec!(0.20), dec!(0.22));
+    let cache = BookCache::new();
+    support::book::set_book(&cache, "yes-trump", dec!(0.40), dec!(0.42));
+    support::book::set_book(&cache, "yes-biden", dec!(0.35), dec!(0.37));
+    support::book::set_book(&cache, "yes-other", dec!(0.20), dec!(0.22));
     let cache = Arc::new(cache);
 
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
@@ -217,10 +239,11 @@ fn test_cluster_with_three_markets() {
         min_gap: dec!(0.001),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
     // With sum = 0.42 + 0.37 + 0.22 = 1.01, there might be a small gap
@@ -246,10 +269,10 @@ fn test_implies_relation() {
     ];
     let registry = Arc::new(support::registry::make_registry(markets));
 
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     // PA win at 0.45, swing win at 0.40 - violation! (PA implies swing)
-    support::order_book::set_order_book(&cache, "yes-pa", dec!(0.43), dec!(0.45));
-    support::order_book::set_order_book(&cache, "yes-swing", dec!(0.38), dec!(0.40));
+    support::book::set_book(&cache, "yes-pa", dec!(0.43), dec!(0.45));
+    support::book::set_book(&cache, "yes-swing", dec!(0.38), dec!(0.40));
     let cache = Arc::new(cache);
 
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
@@ -268,10 +291,11 @@ fn test_implies_relation() {
         min_gap: dec!(0.001),
         ..Default::default()
     };
-    let detector = ClusterDetector::new(config);
+    let detector = ClusterDetector::new(config, projection_solver());
 
     let cluster = &cluster_cache.all_clusters()[0];
-    let result = detector.detect(cluster, &cache, &registry);
+    let book_lookup = |token_id: &_| cache.get(token_id);
+    let result = detector.detect(cluster, &book_lookup, &registry);
 
     assert!(result.is_ok());
 }
@@ -279,11 +303,12 @@ fn test_implies_relation() {
 #[test]
 fn test_empty_cluster_cache() {
     let registry = Arc::new(MarketRegistry::new());
-    let cache = Arc::new(OrderBookCache::new());
+    let cache = Arc::new(BookCache::new());
     let cluster_cache = Arc::new(ClusterCache::new(Duration::hours(1)));
 
     let config = ClusterDetectionConfig::default();
-    let service = ClusterDetectionService::new(config, cache, cluster_cache, registry);
+    let service =
+        ClusterDetectionService::new(config, cache, cluster_cache, registry, projection_solver());
 
     // Should handle empty state gracefully
     assert_eq!(service.dirty_count(), 0);

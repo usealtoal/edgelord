@@ -3,7 +3,8 @@
 #![allow(clippy::await_holding_lock)]
 
 use alloy_signer_local::PrivateKeySigner;
-use edgelord::cli::provision::{execute, ProvisionCommand, ProvisionPolymarketArgs, WalletMode};
+use edgelord::adapter::inbound::cli::provision::command::{execute, ProvisionCommand};
+use edgelord::adapter::inbound::cli::provision::polymarket::{ProvisionPolymarketArgs, WalletMode};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;

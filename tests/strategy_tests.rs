@@ -2,42 +2,45 @@
 
 mod support;
 
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::{Market, OrderBook, PriceLevel};
-use edgelord::core::strategy::{
-    DetectionContext, MarketContext, MarketRebalancingStrategy, SingleConditionConfig,
-    SingleConditionStrategy, Strategy, StrategyRegistry,
+use edgelord::application::cache::book::BookCache;
+use edgelord::application::strategy::context::ConcreteDetectionContext;
+use edgelord::application::strategy::market_rebalancing::MarketRebalancingStrategy;
+use edgelord::application::strategy::registry::StrategyRegistry;
+use edgelord::application::strategy::single_condition::{
+    SingleConditionConfig, SingleConditionStrategy,
 };
+use edgelord::domain::{book::Book, book::PriceLevel, market::Market};
+use edgelord::port::{inbound::strategy::MarketContext, inbound::strategy::Strategy};
 use rust_decimal_macros::dec;
 
-fn setup_arbitrage_books(cache: &OrderBookCache, market: &Market) {
+fn setup_arbitrage_books(cache: &BookCache, market: &Market) {
     let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
     let no_token = market.outcome_by_name("No").unwrap().token_id();
 
     // YES: 0.40, NO: 0.50 = 0.90 total (10% edge)
-    cache.update(OrderBook::with_levels(
+    cache.update(Book::with_levels(
         yes_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.40), dec!(100))],
     ));
-    cache.update(OrderBook::with_levels(
+    cache.update(Book::with_levels(
         no_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
     ));
 }
 
-fn setup_no_arbitrage_books(cache: &OrderBookCache, market: &Market) {
+fn setup_no_arbitrage_books(cache: &BookCache, market: &Market) {
     let yes_token = market.outcome_by_name("Yes").unwrap().token_id();
     let no_token = market.outcome_by_name("No").unwrap().token_id();
 
     // YES: 0.50, NO: 0.50 = 1.00 total (no edge)
-    cache.update(OrderBook::with_levels(
+    cache.update(Book::with_levels(
         yes_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
     ));
-    cache.update(OrderBook::with_levels(
+    cache.update(Book::with_levels(
         no_token.clone(),
         vec![],
         vec![PriceLevel::new(dec!(0.50), dec!(100))],
@@ -58,10 +61,10 @@ fn test_strategy_registry_detects_with_single_condition() {
         "no-token",
         dec!(1),
     );
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert_eq!(opportunities.len(), 1);
@@ -82,10 +85,10 @@ fn test_strategy_registry_empty_when_no_arbitrage() {
         "no-token",
         dec!(1),
     );
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     setup_no_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());
@@ -110,10 +113,10 @@ fn test_multiple_strategies_in_registry() {
         "no-token",
         dec!(1),
     );
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     // Only single_condition should fire (binary market)
@@ -148,10 +151,10 @@ fn test_empty_registry_returns_no_opportunities() {
         "no-token",
         dec!(1),
     );
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     setup_arbitrage_books(&cache, &market);
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(opportunities.is_empty());
@@ -172,10 +175,10 @@ fn strategy_skips_when_order_books_missing() {
         "no-token",
         dec!(1),
     );
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     // Don't add any order books - cache is empty
 
-    let ctx = DetectionContext::new(&market, &cache);
+    let ctx = ConcreteDetectionContext::new(&market, &cache);
     let opportunities = registry.detect_all(&ctx);
 
     assert!(
@@ -197,10 +200,10 @@ fn strategy_skips_when_order_books_missing() {
         ],
         dec!(1),
     );
-    let cache_rebal = OrderBookCache::new();
+    let cache_rebal = BookCache::new();
     // Don't add any order books - cache is empty
 
-    let ctx_rebal = DetectionContext::new(&multi_market, &cache_rebal);
+    let ctx_rebal = ConcreteDetectionContext::new(&multi_market, &cache_rebal);
     let opportunities_rebal = registry_rebal.detect_all(&ctx_rebal);
 
     assert!(

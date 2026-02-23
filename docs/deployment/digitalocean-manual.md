@@ -47,62 +47,42 @@ No repo clone needed - the workflow syncs everything.
 
 Before deploying, set up secrets locally with dugout:
 
-```bash
-# Install dugout if not already installed
-cargo install dugout
-
-# Initialize your identity (first time only)
-dugout setup
-
-# Initialize dugout in the project
-cd /path/to/edgelord
-dugout init
-
-# Add your secrets
-dugout set WALLET_PRIVATE_KEY      # Your trading wallet private key
-dugout set TELEGRAM_BOT_TOKEN      # Optional: Telegram bot token
-dugout set TELEGRAM_CHAT_ID        # Optional: Telegram chat ID
-dugout set ANTHROPIC_API_KEY       # Optional: For LLM inference
-dugout set OPENAI_API_KEY          # Optional: For LLM inference
-
-# Commit the encrypted vault
-git add .dugout.toml
-git commit -m "feat: add encrypted secrets vault"
-git push
+```console
+$ cargo install dugout
+$ dugout setup                     # First-time identity
+$ cd /path/to/edgelord
+$ dugout init
+$ dugout set WALLET_PRIVATE_KEY
+$ dugout set TELEGRAM_BOT_TOKEN    # Optional
+$ dugout set TELEGRAM_CHAT_ID      # Optional
+$ git add .dugout.toml && git commit -m "chore: add secrets vault" && git push
 ```
 
 ## Phase 2: One-Time Host Bootstrap
 
-SSH to your Droplet and run:
+SSH to your Droplet:
 
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential pkg-config libssl-dev curl
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Install dugout
-cargo install dugout
+```console
+$ sudo apt update && sudo apt upgrade -y
+$ sudo apt install -y build-essential pkg-config libssl-dev curl
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ source ~/.cargo/env
+$ cargo install dugout
 ```
 
-Set up dugout identity on VPS:
+Set up dugout identity on VPS. Copy your local identity:
 
-```bash
-# Option A: Copy your local identity (simpler)
-# Run this from your local machine:
-scp ~/.dugout/identity user@droplet:~/.dugout/identity
-
-# Option B: Generate new identity and add as recipient
-dugout setup
-dugout whoami  # Copy this public key
-
-# Then locally:
-dugout team add vps <vps-public-key>
-dugout sync
-git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
+```console
+$ scp ~/.dugout/identity user@droplet:~/.dugout/identity
 ```
 
-That's it for VPS setup. The workflow handles everything else.
+Or generate a new identity and add as recipient:
+
+```console
+$ dugout setup
+$ dugout whoami    # Copy this public key, then locally run:
+                   # dugout team add vps <key> && dugout sync && git push
+```
 
 ## Phase 3: GitHub Actions Setup
 
@@ -182,100 +162,75 @@ Same process. The workflow:
 
 Get your wallet address:
 
-```bash
-ssh your-droplet
-cd /opt/edgelord
-dugout run -- edgelord wallet address --config /opt/edgelord/config/config.toml
+```console
+$ ssh your-droplet
+$ cd /opt/edgelord
+$ dugout run -- edgelord wallet address --config config/config.toml
 ```
 
-Fund manually:
-- Send Polygon USDC to the wallet address for trading capital.
-- Send MATIC to the same wallet for gas.
+Send Polygon USDC and MATIC to the wallet address. Verify:
 
-Verify:
-
-```bash
-dugout run -- edgelord wallet status --config /opt/edgelord/config/config.toml
+```console
+$ dugout run -- edgelord wallet status --config config/config.toml
 ```
 
 ## Operational Commands
 
-SSH to VPS and cd to deploy directory:
-
-```bash
-ssh your-droplet
-cd /opt/edgelord
+```console
+$ ssh your-droplet
+$ cd /opt/edgelord
 ```
 
 Commands that need secrets:
 
-```bash
-# Start a shell with secrets loaded
-dugout env
-
-# Then run any command
-edgelord wallet status --config /opt/edgelord/config/config.toml
-edgelord check live --config /opt/edgelord/config/config.toml
+```console
+$ dugout run -- edgelord wallet status --config config/config.toml
+$ dugout run -- edgelord check health --config config/config.toml
+$ dugout run -- edgelord check live --config config/config.toml
 ```
 
 Commands that don't need secrets:
 
-```bash
-edgelord status --db /opt/edgelord/data/edgelord.db
-edgelord statistics today --db /opt/edgelord/data/edgelord.db
-edgelord logs --follow
-sudo systemctl status edgelord
+```console
+$ edgelord status --db data/edgelord.db
+$ edgelord statistics today --db data/edgelord.db
+$ sudo systemctl status edgelord
+$ journalctl -u edgelord -f
 ```
 
 ## Rollback Procedure
 
-Preferred (via GitHub Actions):
-
+Via GitHub Actions:
 1. Run `Manual Deploy` with `mode = rollback_previous`
 2. Set `confirm = deploy-production`
-3. Approve and complete workflow
 
 Emergency host-side rollback:
 
-```bash
-# List available releases
-ls -lt /opt/edgelord/releases/
-
-# Point to previous release
-sudo ln -sfn /opt/edgelord/releases/<previous-sha> /opt/edgelord/current
-sudo systemctl restart edgelord
+```console
+$ ls -lt /opt/edgelord/releases/
+$ sudo ln -sfn /opt/edgelord/releases/<previous-sha> /opt/edgelord/current
+$ sudo systemctl restart edgelord
 ```
 
 ## USDC Ingress/Egress
 
-Keep this manual unless you have additional controls:
-
-**Ingress:**
-- Send USDC + MATIC manually from your custody wallet.
+**Ingress:** Send USDC + MATIC manually from your custody wallet.
 
 **Egress:**
 
-```bash
-cd /opt/edgelord
-dugout run -- edgelord wallet sweep \
-  --to <destination_address> \
-  --asset usdc \
-  --network polygon \
-  --yes \
-  --config /opt/edgelord/config/config.toml
+```console
+$ cd /opt/edgelord
+$ dugout run -- edgelord wallet sweep --to <address> --yes --config config/config.toml
 ```
 
 ## Updating Secrets
 
-When you add or change secrets:
-
-```bash
-# Locally
-dugout set NEW_SECRET
-git add .dugout.toml && git commit -m "chore: update secrets" && git push
-
-# Then run any deploy - vault is synced automatically
+```console
+$ dugout set NEW_SECRET
+$ git add .dugout.toml && git commit -m "chore: update secrets" && git push
 ```
+
+Then run any deploy—vault syncs automatically.
 
 ## Operational Guardrails
 
@@ -289,7 +244,7 @@ git add .dugout.toml && git commit -m "chore: update secrets" && git push
 ### Recommended Rollout Pattern
 
 1. **Initial deploy**: `dry_run=true`, `max_markets=50`, observe for 24h
-2. **Validation**: Check logs, verify strategies detect opportunities
+2. **Validation**: Review `journalctl -u edgelord -f` and verify strategies detect opportunities
 3. **Low-risk live**: `dry_run=false`, `max_exposure=500`, `max_position=100`
 4. **Scale up**: Gradually increase limits as confidence grows
 5. **Production**: Full limits, `telegram_enabled=true` for alerts

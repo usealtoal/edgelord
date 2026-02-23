@@ -5,11 +5,12 @@
 //!
 //! # Modules
 //!
-//! - [`stream`] — Mock [`MarketDataStream`](crate::core::exchange::MarketDataStream)
+//! - [`stream`] — Mock [`MarketDataStream`](crate::port::outbound::exchange::MarketDataStream)
 //!   implementations: `ScriptedStream`, `CyclingStream`, `ChannelStream`.
 //! - [`domain`] — Builders for domain primitives: tokens, markets, events.
 //! - [`config`] — Canonical test configurations (reconnection, pool, etc.).
 
 pub mod config;
 pub mod domain;
+pub mod stats;
 pub mod stream;

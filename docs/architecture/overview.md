@@ -29,18 +29,20 @@ flowchart LR
 
 ## Module Boundaries
 
-- `src/core/domain`
-  - Exchange-independent entities (markets, opportunities, relations, positions).
-- `src/core/exchange`
-  - Traits and adapters for market data, fetching, and execution.
-- `src/core/strategy`
-  - Detection algorithms and strategy registry.
-- `src/core/service`
-  - Risk gating, notification dispatch, stats capture, subscription logic.
-- `src/app`
-  - Runtime orchestration and config loading.
-- `src/cli`
-  - End-user command surface.
+- `src/domain`
+  - Exchange-independent entities and value objects.
+- `src/port/inbound`
+  - Capability contracts exposed to driving adapters (including `operator/*` surfaces for CLI concerns).
+- `src/port/outbound`
+  - Dependency contracts for driven infrastructure.
+- `src/application`
+  - Use-case orchestration: event handling, execution flow, strategies, risk, inference, cluster detection.
+- `src/adapter/inbound/cli`
+  - CLI command parsing and command handlers.
+- `src/adapter/outbound`
+  - Concrete integrations (Polymarket, SQLite, notifier, solver, LLM).
+- `src/infrastructure`
+  - Runtime wiring, orchestration, config loading, and operational implementations.
 
 ## Runtime Flow
 
@@ -59,4 +61,4 @@ flowchart LR
 
 ## Extensibility
 
-To add another exchange, implement the exchange trait set and register it in the factory path. Core strategies and risk services remain unchanged.
+To add another exchange, implement the exchange trait set in `port/outbound/exchange` (`MarketFetcher`, `MarketDataStream`, `ArbitrageExecutor`, `MarketParser`) and register it in the factory path. Core strategies and risk services remain unchanged.

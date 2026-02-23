@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use edgelord::core::db::run_migrations;
-use edgelord::core::service::statistics::{RecordedOpportunity, StatsRecorder};
+use edgelord::adapter::outbound::sqlite::database::connection::run_migrations;
+use edgelord::adapter::outbound::sqlite::recorder::SqliteRecorder;
+use edgelord::domain::stats::RecordedOpportunity;
 use rust_decimal_macros::dec;
 
 /// Guard to clean up temporary database file after test
@@ -47,7 +48,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     }
 
     run_migrations(&db_pool).unwrap();
-    let recorder = StatsRecorder::new(db_pool.clone());
+    let recorder = SqliteRecorder::new(db_pool.clone());
 
     // Clean up temp file after test
     let _guard = TempFileGuard(temp_file);
@@ -82,7 +83,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
     // Collect all returned IDs
     let mut returned_ids: Vec<i32> = handles
         .into_iter()
-        .filter_map(|h| h.join().unwrap())
+        .filter_map(|h: std::thread::JoinHandle<Option<i32>>| h.join().unwrap())
         .collect();
 
     // Verify we got IDs for all inserts
@@ -110,7 +111,7 @@ fn record_opportunity_returns_correct_id_under_concurrency() {
 
     // Verify IDs match what's actually in the database
     use diesel::prelude::*;
-    use edgelord::core::db::schema::opportunities;
+    use edgelord::adapter::outbound::sqlite::database::schema::opportunities;
     let mut conn = db_pool.get().unwrap();
     let db_ids: Vec<i32> = opportunities::table
         .select(opportunities::id)

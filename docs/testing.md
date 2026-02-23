@@ -8,29 +8,26 @@ Edgelord uses layered testing:
 
 ## Standard Test Workflow
 
-```bash
-cargo fmt --all -- --check
-cargo test
+```console
+$ cargo fmt --all -- --check
+$ cargo test
 ```
 
 ## Targeted Suites
 
-Examples:
-
-```bash
-cargo test --test e2e_flow_tests
-cargo test --test cli_provision_tests
-cargo test --test cli_wallet_tests
-cargo test --test exchange_tests
+```console
+$ cargo test --test e2e_flow_tests
+$ cargo test --test cli_provision_tests
+$ cargo test --test cli_wallet_tests
+$ cargo test --test exchange_tests
 ```
 
 ## Live Smoke Tests
 
-Live smoke checks are ignored by default and should be run intentionally.
+Live smoke checks are ignored by default.
 
-```bash
-cargo test -- --ignored --nocapture
-EDGELORD_SMOKE=1 cargo test -- --ignored --nocapture
+```console
+$ cargo test -- --ignored --nocapture
 ```
 
 Guidance:

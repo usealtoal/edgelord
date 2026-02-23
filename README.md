@@ -1,133 +1,126 @@
-<div align="center">
-  <img src="asset/banner.png" alt="edgelord" width="100%">
+<p align="center">
+  <img src="assets/banner.png" alt="edgelord" width="1000">
+</p>
 
-  <p><strong>Multi-strategy arbitrage detection and execution for prediction markets, written in Rust</strong></p>
+<p align="center">
+  <em>A prediction market arbitrage detection and execution CLI, written in Rust.</em>
+</p>
 
-  <p>
-    <a href="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml"><img src="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-    <img src="https://img.shields.io/badge/license-proprietary-lightgrey.svg" alt="License">
-    <img src="https://img.shields.io/badge/rust-stable-orange.svg" alt="Rust">
-  </p>
+<p align="center">
+  <a href="https://crates.io/crates/edgelord"><img src="https://img.shields.io/crates/v/edgelord.svg" alt="Crates.io"></a>
+  <a href="https://github.com/usealtoal/edgelord/blob/main/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="License"></a>
+</p>
 
-</div>
+---
 
-## Overview
+## Highlights
 
-edgelord is a Rust CLI for running arbitrage detection and execution workflows against prediction-market exchanges.
+- **Real-time arbitrage detection** across binary and multi-outcome markets
+- **Three strategies** out of the box: single-condition, market rebalancing, combinatorial
+- **LLM-powered inference** for cross-market constraint discovery
+- **Risk management** with position limits, exposure caps, and circuit breakers
+- **Telegram notifications** for trades, opportunities, and alerts
+- **SQLite persistence** for statistics, trades, and historical analysis
 
-Current implementation focus:
+## Installation
 
-- Exchange: Polymarket
-- Detection model: multi-strategy (single-condition, market-rebalancing, combinatorial)
-- Runtime model: event-driven with risk-gated execution
-
-## Strategy Coverage
-
-| Strategy | Market Scope | Core Signal |
-|---|---|---|
-| Market Rebalancing | Multi-outcome markets | `sum(outcomes) < payout` |
-| Single-Condition | Binary markets | `YES + NO < payout` |
-| Combinatorial | Related market clusters | Cross-market constraint violations |
+```console
+$ cargo install edgelord
+```
 
 ## Quick Start
 
-```bash
-git clone https://github.com/usealtoal/edgelord.git
-cd edgelord
-cargo build --release
-cp config.toml.example config.toml
+```console
+$ edgelord init
+$ edgelord check config
+$ edgelord check live
+$ edgelord run
 ```
 
-Set up secrets with [dugout](https://crates.io/crates/dugout):
+## Strategies
 
-```bash
-cargo install dugout
-dugout init
-dugout set WALLET_PRIVATE_KEY
+| Strategy | Signal | Typical Edge |
+|----------|--------|--------------|
+| `single_condition` | YES + NO < $1 | 2–5% |
+| `market_rebalancing` | sum(outcomes) < $1 | 1–3% |
+| `combinatorial` | cross-market constraints | <1% |
+
+```console
+$ edgelord strategies list
+$ edgelord strategies explain single_condition
 ```
 
-Validate and run:
+## Commands
 
-```bash
-dugout run -- ./target/release/edgelord check config --config config.toml
-dugout run -- ./target/release/edgelord check connection --config config.toml
-dugout run -- ./target/release/edgelord run --config config.toml
+```console
+$ edgelord init                  # Setup wizard
+$ edgelord run                   # Start trading
+$ edgelord status                # Current state and today's P&L
+$ edgelord statistics today      # Today's statistics
+$ edgelord statistics week       # 7-day summary
+$ edgelord check config          # Validate configuration
+$ edgelord check live            # Live readiness checks
+$ edgelord wallet status         # Token approvals
+$ edgelord wallet approve 1000   # Approve $1000 for trading
 ```
 
-## Production Readiness Flow
+See `edgelord --help` for all commands.
 
-1. Run in `dry_run = true` first.
-2. Validate with `check live` before any live deployment.
-3. Start with conservative risk limits.
-4. Promote to mainnet only after stable observation windows.
+## Configuration
 
-## Documentation
+Create a config file with `edgelord init` or manually:
 
-- [Documentation Home](docs/README.md)
-- [Getting Started](docs/getting-started.md)
-- [CLI Reference](docs/cli-reference.md)
-- [Configuration Reference](docs/configuration.md)
-- [Strategy Guide](docs/strategies/overview.md)
-- [Architecture](docs/architecture/overview.md)
-- [Deployment Guide](docs/deployment/README.md)
-- [Testing Guide](docs/testing.md)
+```toml
+[exchange]
+provider = "polymarket"
+network = "polygon"
 
-## Example Commands
+[wallet]
+private_key_env = "PRIVATE_KEY"
 
-```bash
-# Run on testnet (default)
-dugout run -- edgelord run --testnet --dry-run
+[risk]
+max_position_per_market = 100
+max_total_exposure = 1000
+min_profit_threshold = 0.50
 
-# Run on mainnet with CLI overrides
-dugout run -- edgelord run --mainnet --max-exposure 5000 --max-slippage 0.02
+[strategies.single_condition]
+enabled = true
+min_edge = 0.05
 
-# Production mode with all the trimmings
-dugout run -- edgelord run \
-  --mainnet \
-  --no-banner \
-  --json-logs \
-  --max-markets 100 \
-  --min-volume 5000
-
-# Or spawn a shell with secrets loaded
-dugout env
-edgelord run --config config.toml
-
-# Diagnostics
-dugout run -- edgelord check live --config config.toml
-
-# Wallet operations (need secrets)
-dugout run -- edgelord wallet address --config config.toml
-dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
-
-# Statistics (no secrets needed)
-edgelord statistics today --db edgelord.db
-edgelord logs -f
+[telegram]
+enabled = true
+bot_token_env = "TELEGRAM_BOT_TOKEN"
+chat_id_env = "TELEGRAM_CHAT_ID"
 ```
 
-## CLI Highlights
+See [docs/configuration.md](docs/configuration.md) for full reference.
 
-The CLI is designed to be config-driven with comprehensive flag overrides:
+## Architecture
 
-| Category | Example Flags |
-|----------|---------------|
-| Environment | `--mainnet`, `--testnet`, `--chain-id` |
-| Risk | `--max-exposure`, `--max-position`, `--max-slippage` |
-| Filtering | `--max-markets`, `--min-volume`, `--min-liquidity` |
-| Connection | `--max-connections`, `--connection-ttl` |
-| Runtime | `--dry-run`, `--json-logs`, `--no-banner` |
-
-Run `edgelord run --help` for the complete list.
-
-## Project Structure
-
-```text
-src/
-├── app/      # Orchestration and config loading
-├── cli/      # Command handlers and CLI surface
-└── core/     # Domain, exchange adapters, strategies, services, solvers
 ```
+domain/         Pure types, no external dependencies
+port/           Inbound and outbound contracts
+adapter/        CLI, exchange integrations, notifications
+application/    Use-case orchestration
+infrastructure/ Config, bootstrap, runtime wiring
+```
+
+Hexagonal architecture with clean separation between domain logic and external integrations.
+
+## Extending
+
+Implement `port::inbound::strategy::Strategy` to add custom strategies:
+
+```rust
+impl Strategy for MyStrategy {
+    fn detect(&self, ctx: &StrategyContext) -> Vec<Opportunity> {
+        // Your detection logic
+    }
+}
+```
+
+See [docs/strategies/overview.md](docs/strategies/overview.md).
 
 ## License
 
-Proprietary. All rights reserved.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.

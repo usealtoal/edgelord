@@ -6,12 +6,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::app::{Config, ExchangeSpecificConfig, PolymarketConfig, PolymarketHttpConfig};
-use edgelord::core::domain::TokenId;
-use edgelord::core::exchange::polymarket::PolymarketClient;
-use edgelord::core::exchange::ExchangeFactory;
-use edgelord::core::exchange::{MarketDataStream, MarketEvent, ReconnectingDataStream};
+use edgelord::adapter::outbound::polymarket::client::PolymarketClient;
+use edgelord::adapter::outbound::polymarket::settings::{PolymarketConfig, PolymarketHttpConfig};
+use edgelord::domain::id::TokenId;
 use edgelord::error::{ConfigError, Error};
+use edgelord::infrastructure::config::settings::{Config, ExchangeSpecificConfig};
+use edgelord::infrastructure::exchange::factory::ExchangeFactory;
+use edgelord::infrastructure::exchange::reconnecting::ReconnectingDataStream;
+use edgelord::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 use edgelord::testkit;
 use edgelord::testkit::stream::ScriptedStream;
 use tokio::io::AsyncReadExt;
@@ -79,7 +81,7 @@ async fn reconnect_retries_on_subscribe_failure() {
         .unwrap();
 
     let event = stream.next_event().await;
-    assert!(matches!(event, Some(MarketEvent::OrderBookSnapshot { .. })));
+    assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
     assert!(
         connect_count.load(Ordering::SeqCst) >= 3,
         "Expected reconnect to retry after subscribe failure"

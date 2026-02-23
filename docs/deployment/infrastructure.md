@@ -12,36 +12,33 @@ This guide covers VPS setup for edgelord deployment.
 
 ## Automated Deployment (Recommended)
 
-Use GitHub Actions for deployment. See [Deployment Guide](../../deploy/README.md).
+Use GitHub Actions for deployment. See [DigitalOcean Runbook](digitalocean-manual.md) for the full workflow.
 
-VPS only needs:
-1. Rust + dugout installed
-2. Dugout identity configured
-
-The workflow handles binary, config, and vault syncing automatically.
+VPS only needs Rust and dugout installed. The workflow handles binary, config, and vault syncing.
 
 ## VPS Bootstrap
 
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential pkg-config libssl-dev curl
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Install dugout
-cargo install dugout
+```console
+$ sudo apt update && sudo apt upgrade -y
+$ sudo apt install -y build-essential pkg-config libssl-dev curl
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ source ~/.cargo/env
+$ cargo install dugout
 ```
 
 ## Dugout Identity Setup
 
-```bash
-# Option A: Copy your local identity (simpler)
-# From your local machine:
-scp ~/.dugout/identity user@vps:~/.dugout/identity
+Copy your local identity to the VPS:
 
-# Option B: Generate new identity on VPS
-dugout setup
-dugout whoami  # Add this key as recipient locally
+```console
+$ scp ~/.dugout/identity user@vps:~/.dugout/identity
+```
+
+Or generate a new identity on the VPS:
+
+```console
+$ dugout setup
+$ dugout whoami    # Add this key as recipient locally
 ```
 
 ## Runtime Layout
@@ -59,29 +56,22 @@ After deployment:
 
 ## Systemd Service
 
-The deploy workflow installs the service automatically. Manual install:
+The deploy workflow installs and updates the `edgelord` systemd unit.
 
-```bash
-sudo edgelord service install \
-  --config /opt/edgelord/config/config.toml \
-  --user root \
-  --working-dir /opt/edgelord \
-  --dugout
-```
-
-Uninstall:
-
-```bash
-sudo edgelord service uninstall
+```console
+$ sudo systemctl status edgelord
+$ sudo systemctl restart edgelord
+$ journalctl -u edgelord -f
 ```
 
 ## Validation
 
 Before going live:
 
-```bash
-cd /opt/edgelord
-edgelord check config --config config/config.toml
-dugout run -- edgelord check connection --config config/config.toml
-dugout run -- edgelord check live --config config/config.toml
+```console
+$ cd /opt/edgelord
+$ edgelord check config --config config/config.toml
+$ edgelord check health --config config/config.toml
+$ dugout run -- edgelord check connection --config config/config.toml
+$ dugout run -- edgelord check live --config config/config.toml
 ```

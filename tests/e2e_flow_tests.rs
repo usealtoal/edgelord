@@ -3,13 +3,21 @@ mod support;
 
 use std::sync::Arc;
 
-use edgelord::app::{process_market_event, AppState, EventProcessingContext, RiskLimits};
-use edgelord::core::cache::OrderBookCache;
-use edgelord::core::domain::TokenId;
-use edgelord::core::exchange::MarketEvent;
-use edgelord::core::service::statistics::create_recorder;
-use edgelord::core::service::{NotifierRegistry, PositionManager, RiskManager};
-use edgelord::core::strategy::{SingleConditionConfig, SingleConditionStrategy, StrategyRegistry};
+use edgelord::adapter::outbound::sqlite::recorder::create_recorder;
+use edgelord::application::cache::book::BookCache;
+use edgelord::application::position::manager::PositionManager;
+use edgelord::application::risk::manager::RiskManager;
+use edgelord::application::state::{AppState, RiskLimits};
+use edgelord::application::strategy::registry::StrategyRegistry;
+use edgelord::application::strategy::single_condition::{
+    SingleConditionConfig, SingleConditionStrategy,
+};
+use edgelord::domain::id::TokenId;
+use edgelord::infrastructure::orchestration::orchestrator::{
+    process_market_event, EventProcessingContext,
+};
+use edgelord::port::outbound::exchange::MarketEvent;
+use edgelord::port::outbound::notifier::NotifierRegistry;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 
@@ -39,7 +47,7 @@ fn e2e_ingest_detect_persist_notify() {
         SingleConditionConfig::default(),
     )));
 
-    let cache = OrderBookCache::new();
+    let cache = BookCache::new();
     let state = Arc::new(AppState::new(RiskLimits {
         min_profit_threshold: Decimal::ZERO,
         ..Default::default()
@@ -55,11 +63,11 @@ fn e2e_ingest_detect_persist_notify() {
     notifier_registry.register(Box::new(notifier.clone()));
     let notifiers = Arc::new(notifier_registry);
 
-    let yes_book = support::order_book::make_order_book("yes-token", dec!(0.39), dec!(0.40));
-    let no_book = support::order_book::make_order_book("no-token", dec!(0.49), dec!(0.50));
+    let yes_book = support::book::make_book("yes-token", dec!(0.39), dec!(0.40));
+    let no_book = support::book::make_book("no-token", dec!(0.49), dec!(0.50));
 
     process_market_event(
-        MarketEvent::OrderBookSnapshot {
+        MarketEvent::BookSnapshot {
             token_id: TokenId::new("yes-token"),
             book: yes_book,
         },
@@ -78,7 +86,7 @@ fn e2e_ingest_detect_persist_notify() {
     );
 
     process_market_event(
-        MarketEvent::OrderBookSnapshot {
+        MarketEvent::BookSnapshot {
             token_id: TokenId::new("no-token"),
             book: no_book,
         },

@@ -1,28 +1,41 @@
-//! Edgelord - Multi-strategy arbitrage detection and execution.
+//! Edgelord - Prediction market arbitrage framework.
+//!
+//! # For CLI users
+//!
+//! Install and run:
+//!
+//! ```text
+//! cargo install edgelord
+//! edgelord init
+//! edgelord run
+//! ```
+//!
+//! # For developers
+//!
+//! Fork this repo and extend:
+//!
+//! - Add strategies: implement `port::inbound::strategy::Strategy`
+//! - Add exchanges: implement `port::outbound::exchange::*`
+//! - Add notifiers: implement `port::outbound::notifier::Notifier`
 //!
 //! # Architecture
 //!
 //! ```text
-//! src/
-//! ├── core/             # Reusable library components
-//! │   ├── domain/       # Pure domain types
-//! │   ├── exchange/     # Exchange traits + implementations
-//! │   ├── strategy/     # Detection algorithms
-//! │   ├── solver/       # LP/ILP solver abstraction
-//! │   └── service/      # Cross-cutting services
-//! └── app/              # Application orchestration
+//! domain/          Pure types, no I/O
+//! port/            Trait definitions (extension points)
+//! adapter/
+//!   inbound/       Driving adapters (CLI)
+//!   outbound/      Driven adapters (exchange, storage, notifier, solver, llm)
+//! application/     Application services (use cases)
+//! infrastructure/  Runtime concerns (caching, config, orchestration)
 //! ```
-//!
-//! # Features
-//!
-//! - `polymarket` - Enable Polymarket exchange support (default)
-//! - `telegram` - Enable Telegram notifications
-//! - `testkit` - Reusable test helpers (mock streams, factories, domain builders)
 
-pub mod app;
-pub mod cli;
-pub mod core;
+pub mod adapter;
+pub mod application;
+pub mod domain;
 pub mod error;
+pub mod infrastructure;
+pub mod port;
 
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;

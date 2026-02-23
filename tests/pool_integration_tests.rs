@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use edgelord::core::exchange::{ConnectionPool, MarketDataStream, MarketEvent, StreamFactory};
+use edgelord::infrastructure::exchange::pool::{ConnectionPool, StreamFactory};
+use edgelord::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 use edgelord::testkit;
 use edgelord::testkit::stream::{channel_stream, ChannelStreamHandle, CyclingStream};
 
@@ -74,7 +75,7 @@ async fn single_connection_delivers_events() {
     let ids: Vec<_> = [e1, e2]
         .iter()
         .map(|e| match e {
-            MarketEvent::OrderBookSnapshot { token_id, .. } => token_id.to_string(),
+            MarketEvent::BookSnapshot { token_id, .. } => token_id.to_string(),
             _ => panic!("unexpected event type"),
         })
         .collect();
@@ -134,7 +135,7 @@ async fn multi_connection_merges_events() {
     let mut received = HashSet::new();
     for _ in 0..4 {
         match tokio::time::timeout(Duration::from_secs(2), pool.next_event()).await {
-            Ok(Some(MarketEvent::OrderBookSnapshot { token_id, .. })) => {
+            Ok(Some(MarketEvent::BookSnapshot { token_id, .. })) => {
                 received.insert(token_id.to_string());
             }
             other => panic!("Expected snapshot event, got {:?}", other),
@@ -375,7 +376,7 @@ async fn resubscribe_replaces_all_connections() {
         .expect("no event");
 
     match event {
-        MarketEvent::OrderBookSnapshot { token_id, .. } => {
+        MarketEvent::BookSnapshot { token_id, .. } => {
             assert_eq!(token_id.to_string(), "new-t0");
         }
         _ => panic!("unexpected event type"),

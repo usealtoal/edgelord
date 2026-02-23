@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use edgelord::app::{health_check, Config};
+use edgelord::infrastructure::config::settings::Config;
+use edgelord::infrastructure::orchestration::orchestrator::health_check;
 
 #[test]
 fn health_check_reports_critical_services() {

@@ -1,32 +1,16 @@
-# Edgelord Documentation
+# Documentation
 
-Edgelord is a Rust CLI for detecting and executing prediction-market arbitrage with configurable risk controls.
+## Quick Links
 
-## Documentation Map
-
-- [Getting Started](getting-started.md)
-  - Install the binary, bootstrap config, provision a wallet, and run safely.
-- [CLI Reference](cli-reference.md)
-  - Command-by-command usage for `run`, `check`, `provision`, `wallet`, `service`, and reporting commands.
-- [Configuration Reference](configuration.md)
-  - Production-focused configuration guidance with practical defaults.
-- [Testing Guide](testing.md)
-  - Local test strategy and smoke-test guidance.
-- [Architecture](architecture/overview.md)
-  - High-level system design and runtime flow.
-- [Strategy Guide](strategies/overview.md)
-  - Detection strategies, constraints, and selection guidance.
-- [Deployment](deployment/README.md)
-  - VPS setup, wallet setup, Telegram integration, and operations.
-
-## Intended Audience
-
-- Operators deploying and running edgelord in a managed environment.
-- Engineers extending strategy, exchange, or orchestration behavior.
+- [Getting Started](getting-started.md) — Install, configure, and run
+- [CLI Reference](cli-reference.md) — All commands and flags
+- [Configuration](configuration.md) — Config file reference
+- [Strategies](strategies/overview.md) — Detection strategies
+- [Deployment](deployment/README.md) — Production setup
+- [Architecture](architecture/overview.md) — System design
 
 ## Conventions
 
-- Paths are shown relative to repository root unless noted.
-- Secrets are managed with [dugout](https://crates.io/crates/dugout) and injected at runtime.
-- Environment variables are uppercase (for example, `WALLET_PRIVATE_KEY`).
-- Commands assume a Unix-like shell.
+- Secrets managed with [dugout](https://crates.io/crates/dugout)
+- Environment variables are uppercase (`WALLET_PRIVATE_KEY`)
+- Commands assume Unix-like shell

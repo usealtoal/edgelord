@@ -12,50 +12,35 @@ edgelord uses [dugout](https://crates.io/crates/dugout) for git-native secrets m
 
 ### Local Setup (One-Time)
 
-```bash
-# Install dugout
-cargo install dugout
-
-# Initialize your identity (if you haven't already)
-dugout setup
-
-# Initialize dugout in the project
-dugout init
-
-# Add your secrets
-dugout set WALLET_PRIVATE_KEY      # Your trading wallet private key
-dugout set TELEGRAM_BOT_TOKEN      # Telegram bot token (optional)
-dugout set TELEGRAM_CHAT_ID        # Telegram chat ID (optional)
-dugout set ANTHROPIC_API_KEY       # For LLM inference (optional)
-dugout set OPENAI_API_KEY          # For LLM inference (optional)
-
-# Commit the encrypted vault
-git add .dugout.toml
-git commit -m "feat: add encrypted secrets vault"
-git push
+```console
+$ cargo install dugout
+$ dugout setup
+$ dugout init
+$ dugout set WALLET_PRIVATE_KEY
+$ dugout set TELEGRAM_BOT_TOKEN    # Optional
+$ dugout set TELEGRAM_CHAT_ID      # Optional
+$ git add .dugout.toml && git commit -m "chore: add secrets vault" && git push
 ```
 
 ### VPS Setup (One-Time)
 
-```bash
-# Install Rust and dugout
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-cargo install dugout
+```console
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ source ~/.cargo/env
+$ cargo install dugout
+```
 
-# Option A: Copy your local identity to VPS (simpler)
-# Run from your local machine:
-scp ~/.dugout/identity user@vps:~/.dugout/identity
+Copy your local identity to VPS:
 
-# Option B: Generate new identity on VPS and add as recipient
-# (on VPS)
-dugout setup
-dugout whoami  # Copy this public key
+```console
+$ scp ~/.dugout/identity user@vps:~/.dugout/identity
+```
 
-# (locally)
-dugout team add vps <vps-public-key>
-dugout sync
-git add .dugout.toml && git commit -m "chore: add vps as recipient" && git push
+Or generate a new identity and add as recipient:
+
+```console
+$ dugout setup && dugout whoami    # Copy public key, then locally:
+                                   # dugout team add vps <key> && dugout sync && git push
 ```
 
 > **Note:** The deploy workflow automatically syncs the dugout vault and config to the VPS. No need to clone the repo on the VPS.
@@ -116,55 +101,33 @@ The workflow will:
 
 ## Management Commands
 
-After deployment, SSH to VPS. Change to the deploy directory first:
-
-```bash
-cd /opt/edgelord
+```console
+$ ssh your-vps
+$ cd /opt/edgelord
 ```
 
-Commands that need secrets (use dugout):
+Commands that need secrets:
 
-```bash
-# Start a shell with secrets loaded
-dugout env
-edgelord wallet status --config /opt/edgelord/config/config.toml
-edgelord check live --config /opt/edgelord/config/config.toml
-
-# Or run individual commands
-dugout run -- edgelord wallet status --config /opt/edgelord/config/config.toml
+```console
+$ dugout run -- edgelord wallet status --config config/config.toml
+$ dugout run -- edgelord check health --config config/config.toml
+$ dugout run -- edgelord check live --config config/config.toml
 ```
 
 Commands that don't need secrets:
 
-```bash
-edgelord logs -f
-edgelord statistics today --db /opt/edgelord/data/edgelord.db
-sudo systemctl status edgelord
-sudo systemctl restart edgelord
+```console
+$ edgelord status --db data/edgelord.db
+$ edgelord statistics today --db data/edgelord.db
+$ sudo systemctl status edgelord
+$ journalctl -u edgelord -f
 ```
 
 ## Updating Secrets
 
-When you update secrets locally:
-
-```bash
-dugout set NEW_SECRET_KEY
-git add .dugout.toml && git commit -m "chore: update secrets" && git push
+```console
+$ dugout set NEW_SECRET_KEY
+$ git add .dugout.toml && git commit -m "chore: update secrets" && git push
 ```
 
-Then run a deploy (any mode) - the workflow syncs the vault automatically.
-
-## Legacy: Manual .env Setup
-
-If not using dugout (not recommended), create a `.env` file on the VPS:
-
-```bash
-sudo tee /opt/edgelord/.env << 'EOF'
-WALLET_PRIVATE_KEY=0x...
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
-EOF
-sudo chmod 600 /opt/edgelord/.env
-```
-
-Then deploy with `dugout: false` in the workflow inputs.
+Then run any deploy—the workflow syncs the vault automatically.

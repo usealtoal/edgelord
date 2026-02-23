@@ -1,4 +1,4 @@
-use edgelord::core::domain::{MarketId, Relation, RelationKind};
+use edgelord::domain::{id::MarketId, relation::Relation, relation::RelationKind};
 
 pub fn mutually_exclusive(markets: &[&str], confidence: f64, reasoning: &str) -> Relation {
     Relation::new(
