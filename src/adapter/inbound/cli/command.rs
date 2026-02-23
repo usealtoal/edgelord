@@ -10,7 +10,7 @@ use super::provision::command::ProvisionCommand;
 #[derive(Parser, Debug)]
 #[command(name = "edgelord")]
 #[command(version)]
-#[command(about = "Arbitrage detection and execution for prediction markets")]
+#[command(about = "A prediction market arbitrage CLI")]
 pub struct Cli {
     /// Color output mode
     #[arg(long, global = true, default_value = "auto")]

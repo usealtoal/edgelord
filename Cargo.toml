@@ -3,15 +3,20 @@ name = "edgelord"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-description = "Arbitrage detection and execution for prediction markets."
+description = "A prediction market arbitrage CLI."
 authors = ["Rob Dekovich <rob@altoal.com>"]
 repository = "https://github.com/usealtoal/edgelord"
 homepage = "https://github.com/usealtoal/edgelord"
 documentation = "https://docs.rs/edgelord"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-keywords = ["arbitrage", "prediction-markets", "trading", "polymarket"]
-categories = ["command-line-utilities", "finance"]
+keywords = ["arbitrage", "prediction-markets", "trading", "polymarket", "cli"]
+categories = ["command-line-utilities", "finance", "cryptography::cryptocurrencies"]
+exclude = ["tests/", "docs/", ".github/"]
+
+[[bin]]
+name = "edgelord"
+path = "src/main.rs"
 
 [features]
 default = ["polymarket", "telegram"]

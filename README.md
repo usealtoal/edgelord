@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <em>Arbitrage detection and execution for prediction markets, written in Rust.</em>
+  <em>A prediction market arbitrage CLI, written in Rust.</em>
 </p>
 
 <p align="center">
