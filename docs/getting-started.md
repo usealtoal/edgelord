@@ -1,166 +1,89 @@
 # Getting Started
 
-This guide gets edgelord running in a safe baseline configuration.
-
-## 1. Prerequisites
+## Prerequisites
 
 - Rust 1.75+
-- [dugout](https://crates.io/crates/dugout) for secrets management (recommended)
-- Access to a Polymarket-compatible wallet setup
-- Polygon USDC + MATIC if you intend to trade live
+- [dugout](https://crates.io/crates/dugout) for secrets management
+- Polygon USDC + MATIC for live trading
 
-## 2. Build
+## Installation
 
-```bash
-git clone https://github.com/usealtoal/edgelord.git
-cd edgelord
-cargo build --release
+```console
+$ git clone https://github.com/usealtoal/edgelord.git
+$ cd edgelord
+$ cargo build --release
 ```
 
-Binary location:
+## Configuration
 
-```text
-./target/release/edgelord
+```console
+$ ./target/release/edgelord init config.toml
 ```
 
-## 3. Initialize Config
+The wizard configures network, strategies, and risk limits. Use `--force` to overwrite.
 
-Recommended (interactive wizard):
+## Secrets
 
-```bash
-./target/release/edgelord init config.toml
+```console
+$ cargo install dugout
+$ dugout setup              # First-time identity setup
+$ dugout init               # Initialize vault in project
+
+$ dugout set WALLET_PRIVATE_KEY
+$ dugout set TELEGRAM_BOT_TOKEN      # Optional
+$ dugout set TELEGRAM_CHAT_ID        # Optional
+$ dugout set ANTHROPIC_API_KEY       # Optional (combinatorial)
 ```
 
-The wizard configures:
-- Network (`testnet`/`mainnet`)
-- Enabled strategies (`single_condition`, `market_rebalancing`, `combinatorial`)
-- Risk limits
+## Validation
 
-Non-interactive (template only):
-
-```bash
-./target/release/edgelord config init config.toml
+```console
+$ dugout run -- ./target/release/edgelord check config --config config.toml
+$ dugout run -- ./target/release/edgelord check health --config config.toml
+$ dugout run -- ./target/release/edgelord check live --config config.toml
 ```
 
-If you need to overwrite, add `--force`.
+## Running
 
-## 4. Set Up Secrets with Dugout
-
-edgelord works best with dugout so secrets are encrypted at rest and injected at runtime.
-
-```bash
-# Install dugout (if not already installed)
-cargo install dugout
-
-# Initialize your identity (first time only)
-dugout setup
-
-# Initialize dugout in the project
-dugout init
-
-# Add your wallet private key
-dugout set WALLET_PRIVATE_KEY
-
-# Optional: Add Telegram credentials
-dugout set TELEGRAM_BOT_TOKEN
-dugout set TELEGRAM_CHAT_ID
-
-# Optional: Add LLM credentials for combinatorial inference
-dugout set ANTHROPIC_API_KEY
-dugout set OPENAI_API_KEY
-
-# Commit the encrypted vault
-git add .dugout.toml
-git commit -m "feat: add encrypted secrets vault"
+```console
+$ dugout run -- ./target/release/edgelord run --config config.toml
 ```
 
-## 5. Provision Wallet (Keystore Alternative)
+### CLI Flags
 
-If you prefer keystore-based wallet handling instead of `WALLET_PRIVATE_KEY`:
+| Flag | Description |
+|------|-------------|
+| `--testnet` | Run on Mumbai testnet |
+| `--mainnet` | Run on Polygon mainnet |
+| `--dry-run` | Detect opportunities without executing |
+| `--no-banner` | Suppress startup banner |
+| `--json-logs` | Structured JSON logging |
+| `--max-exposure N` | Override max total exposure |
 
-Generate new keystore:
+### Production Example
 
-```bash
-export EDGELORD_KEYSTORE_PASSWORD="change-me"
-./target/release/edgelord provision polymarket --wallet generate --config config.toml
+```console
+$ dugout run -- ./target/release/edgelord run \
+    --mainnet \
+    --no-banner \
+    --json-logs \
+    --max-exposure 5000
 ```
 
-Import an existing private key:
+## Monitoring
 
-```bash
-export EDGELORD_PRIVATE_KEY="0x..."
-export EDGELORD_KEYSTORE_PASSWORD="change-me"
-./target/release/edgelord provision polymarket --wallet import --config config.toml
+```console
+$ ./target/release/edgelord status --db edgelord.db
+$ ./target/release/edgelord statistics today --db edgelord.db
+$ ./target/release/edgelord statistics week --db edgelord.db
 ```
 
-## 6. Validate Configuration and Readiness
+## Mainnet Checklist
 
-```bash
-dugout run -- ./target/release/edgelord check config --config config.toml
-dugout run -- ./target/release/edgelord check health --config config.toml
-dugout run -- ./target/release/edgelord check connection --config config.toml
-dugout run -- ./target/release/edgelord check live --config config.toml
-```
+1. Run stable dry-run sessions on testnet
+2. Set `environment = "mainnet"` and `chain_id = 137`
+3. Re-run `check health` and `check live`
+4. Start with conservative risk limits
+5. Monitor first trades closely
 
-## 7. Run
-
-Using dugout (recommended):
-
-```bash
-dugout run -- ./target/release/edgelord run --config config.toml
-```
-
-Or spawn a shell with secrets loaded:
-
-```bash
-dugout env
-./target/release/edgelord run --config config.toml
-```
-
-### Environment Shortcuts
-
-Quickly switch between testnet and mainnet without editing config:
-
-```bash
-# Run on testnet
-dugout run -- ./target/release/edgelord run --testnet
-
-# Run on mainnet (shortcut for chain_id=137)
-dugout run -- ./target/release/edgelord run --mainnet --dry-run
-```
-
-### Typical Production Flags
-
-```bash
-dugout run -- ./target/release/edgelord run \
-  --mainnet \
-  --no-banner \
-  --json-logs \
-  --max-exposure 5000 \
-  --max-slippage 0.02
-```
-
-## 8. Observe and Inspect
-
-```bash
-./target/release/edgelord status --db edgelord.db --config config.toml
-./target/release/edgelord statistics today --db edgelord.db
-./target/release/edgelord statistics week --db edgelord.db
-```
-
-If running under systemd, use:
-
-```bash
-journalctl -u edgelord -f
-```
-
-## Moving to Mainnet
-
-Before switching from testnet to mainnet:
-
-1. Keep `dry_run = true` until repeated stable dry-run sessions are clean.
-2. Switch `[exchange_config] environment = "mainnet"` and `chain_id = 137`.
-3. Re-run `check health` and `check live` and confirm no blockers.
-4. Start with conservative `risk` limits.
-
-For infrastructure and operations details, continue to [Deployment](deployment/README.md).
+See [Deployment](deployment/README.md) for production operations.
