@@ -2,8 +2,7 @@
 
 ## Prerequisites
 
-- [Rust toolchain](https://rustup.rs/) (for `cargo install`)
-- [dugout](https://crates.io/crates/dugout) for secrets management
+- [Rust toolchain](https://rustup.rs/)
 - Polygon USDC + MATIC for live trading
 
 ## Installation
@@ -12,47 +11,46 @@
 $ cargo install edgelord
 ```
 
-Or build from source:
-
-```console
-$ git clone https://github.com/usealtoal/edgelord.git
-$ cd edgelord
-$ cargo build --release
-```
-
 ## Configuration
 
 ```console
 $ edgelord init config.toml
 ```
 
-The wizard configures network, strategies, and risk limits. Use `--force` to overwrite.
+The wizard configures network, strategies, and risk limits.
 
 ## Secrets
 
+**With [dugout](https://crates.io/crates/dugout)** (recommended—encrypted at rest):
+
 ```console
 $ cargo install dugout
-$ dugout setup              # First-time identity setup
-$ dugout init               # Initialize vault in project
-
+$ dugout setup && dugout init
 $ dugout set WALLET_PRIVATE_KEY
-$ dugout set TELEGRAM_BOT_TOKEN      # Optional
-$ dugout set TELEGRAM_CHAT_ID        # Optional
-$ dugout set ANTHROPIC_API_KEY       # Optional (combinatorial)
+$ dugout run -- edgelord run --config config.toml
 ```
+
+**With environment variables:**
+
+```console
+$ export WALLET_PRIVATE_KEY=<your-key>
+$ edgelord run --config config.toml
+```
+
+Optional secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `ANTHROPIC_API_KEY`
 
 ## Validation
 
 ```console
-$ dugout run -- edgelord check config --config config.toml
-$ dugout run -- edgelord check health --config config.toml
-$ dugout run -- edgelord check live --config config.toml
+$ edgelord check config --config config.toml
+$ edgelord check health --config config.toml
+$ edgelord check live --config config.toml    # Needs wallet secret
 ```
 
 ## Running
 
 ```console
-$ dugout run -- edgelord run --config config.toml
+$ edgelord run --config config.toml
 ```
 
 ### CLI Flags
