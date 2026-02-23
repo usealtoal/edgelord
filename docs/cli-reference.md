@@ -17,13 +17,8 @@ Available on every command:
 
 Commands that need wallet/API secrets should be run via dugout:
 
-```bash
-# Single command with secrets
-dugout run -- edgelord <command>
-
-# Or open a shell with secrets loaded
-dugout env
-edgelord <command>
+```console
+$ dugout run -- edgelord <command>
 ```
 
 Commands that typically need secrets:
@@ -49,22 +44,22 @@ Commands that typically do not need secrets:
 
 Interactive setup wizard:
 
-```bash
-edgelord init config.toml
+```console
+$ edgelord init config.toml
 ```
 
-For scripted setup use:
+For scripted setup:
 
-```bash
-edgelord config init config.toml
+```console
+$ edgelord config init config.toml
 ```
 
 ### `run`
 
 Run the detector/executor in foreground mode:
 
-```bash
-dugout run -- edgelord run --config config.toml
+```console
+$ dugout run -- edgelord run --config config.toml
 ```
 
 #### Important run flags
@@ -90,88 +85,71 @@ dugout run -- edgelord run --config config.toml
 
 Show current status from database-backed state:
 
-```bash
-edgelord status --db edgelord.db --config config.toml
+```console
+$ edgelord status --db edgelord.db --config config.toml
 ```
 
 ### `statistics`
 
 Query and export historical stats:
 
-```bash
-edgelord statistics today --db edgelord.db
-edgelord statistics week --db edgelord.db
-edgelord statistics history 30 --db edgelord.db
-edgelord statistics export --days 30 --output stats.csv --db edgelord.db
-edgelord statistics prune --days 30 --db edgelord.db
+```console
+$ edgelord statistics today --db edgelord.db
+$ edgelord statistics week --db edgelord.db
+$ edgelord statistics history 30 --db edgelord.db
+$ edgelord statistics export --days 30 --output stats.csv --db edgelord.db
+$ edgelord statistics prune --days 30 --db edgelord.db
 ```
 
 ## Configuration Commands
 
-```bash
-edgelord config init config.toml
-edgelord config show --config config.toml
-edgelord config validate --config config.toml
+```console
+$ edgelord config init config.toml
+$ edgelord config show --config config.toml
+$ edgelord config validate --config config.toml
 ```
 
 ## Diagnostics (`check`)
 
-```bash
-edgelord check config --config config.toml
-edgelord check health --config config.toml
-
-dugout run -- edgelord check connection --config config.toml
-dugout run -- edgelord check live --config config.toml
-dugout run -- edgelord check telegram --config config.toml
+```console
+$ edgelord check config --config config.toml
+$ edgelord check health --config config.toml
+$ dugout run -- edgelord check connection --config config.toml
+$ dugout run -- edgelord check live --config config.toml
+$ dugout run -- edgelord check telegram --config config.toml
 ```
 
-`check telegram` validates delivery only. Interactive bot commands are documented in `docs/deployment/telegram.md`.
+`check telegram` validates delivery only. See [Telegram Integration](deployment/telegram.md) for bot commands.
 
 ## Strategy Discovery
 
-```bash
-edgelord strategies list
-edgelord strategies explain single_condition
+```console
+$ edgelord strategies list
+$ edgelord strategies explain single_condition
 ```
 
-`strategies explain` also accepts hyphen aliases (for example `single-condition`) but canonical keys are snake_case.
+Hyphen aliases like `single-condition` also work.
 
 ## Provisioning
 
-Provision Polymarket wallet/config defaults:
-
-```bash
-dugout run -- edgelord provision polymarket --config config.toml
-dugout run -- edgelord provision polymarket --wallet import --config config.toml
+```console
+$ dugout run -- edgelord provision polymarket --config config.toml
+$ dugout run -- edgelord provision polymarket --wallet import --config config.toml
 ```
 
 ## Wallet Commands
 
-```bash
-dugout run -- edgelord wallet address --config config.toml
-dugout run -- edgelord wallet status --config config.toml
-dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
-dugout run -- edgelord wallet sweep --config config.toml --to 0x... --asset usdc --network polygon --yes
+```console
+$ dugout run -- edgelord wallet address --config config.toml
+$ dugout run -- edgelord wallet status --config config.toml
+$ dugout run -- edgelord wallet approve --config config.toml --amount 1000 --yes
+$ dugout run -- edgelord wallet sweep --config config.toml --to 0x... --yes
 ```
 
 ## Output Modes
 
-Human-readable default:
-
-```bash
-edgelord status
-```
-
-Machine-readable JSON:
-
-```bash
-edgelord --json status
-edgelord --json statistics today
-edgelord --json check health -c config.toml
-```
-
-Quiet mode:
-
-```bash
-edgelord --quiet run -c config.toml
+```console
+$ edgelord status                              # Human-readable (default)
+$ edgelord --json status                       # Machine-readable JSON
+$ edgelord --quiet run -c config.toml          # Quiet mode
 ```

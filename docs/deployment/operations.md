@@ -6,26 +6,19 @@ This runbook focuses on operating edgelord safely in production.
 
 Commands that don't need secrets:
 
-```bash
-systemctl status edgelord
-journalctl -u edgelord -f
-edgelord status --db /opt/edgelord/data/edgelord.db --config /opt/edgelord/config/config.toml
-edgelord statistics today --db /opt/edgelord/data/edgelord.db
+```console
+$ systemctl status edgelord
+$ journalctl -u edgelord -f
+$ edgelord status --db /opt/edgelord/data/edgelord.db
+$ edgelord statistics today --db /opt/edgelord/data/edgelord.db
 ```
 
-Commands that need secrets (use dugout):
+Commands that need secrets:
 
-```bash
-# Option A: Spawn shell with secrets loaded
-dugout env
-edgelord wallet status
-edgelord check health --config /opt/edgelord/config/config.toml
-edgelord check live --config /opt/edgelord/config/config.toml
-
-# Option B: Run individual commands
-dugout run -- edgelord wallet status
-dugout run -- edgelord check health --config /opt/edgelord/config/config.toml
-dugout run -- edgelord check connection --config /opt/edgelord/config/config.toml
+```console
+$ dugout run -- edgelord wallet status
+$ dugout run -- edgelord check health --config /opt/edgelord/config/config.toml
+$ dugout run -- edgelord check connection --config /opt/edgelord/config/config.toml
 ```
 
 ## Incident Triage Order

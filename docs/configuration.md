@@ -124,13 +124,9 @@ execution_timeout_secs = 30       # Trade execution timeout (seconds)
 
 CLI overrides: `--max-position`, `--max-exposure`, `--min-profit`, `--max-slippage`, `--execution-timeout`
 
-## Telegram Integration (Optional)
+## Telegram Integration
 
-Telegram support is optional and requires building with the `telegram` feature.
-
-```bash
-cargo build --release --features telegram
-```
+Telegram is enabled by default. Disable with `--no-default-features` if not needed.
 
 ```toml
 [telegram]
@@ -211,31 +207,18 @@ Do not commit secrets to `config.toml`. Use [dugout](https://crates.io/crates/du
 
 ### Dugout Setup (Recommended)
 
-```bash
-# Initialize dugout in the project
-dugout init
-
-# Add secrets interactively
-dugout set WALLET_PRIVATE_KEY
-dugout set TELEGRAM_BOT_TOKEN
-dugout set TELEGRAM_CHAT_ID
-
-# Commit encrypted vault
-git add .dugout.toml
-git commit -m "feat: add encrypted secrets vault"
+```console
+$ dugout init
+$ dugout set WALLET_PRIVATE_KEY
+$ dugout set TELEGRAM_BOT_TOKEN
+$ dugout set TELEGRAM_CHAT_ID
+$ git add .dugout.toml && git commit -m "chore: add secrets vault"
 ```
 
 Run commands with secrets injected:
 
-```bash
-dugout run -- edgelord run --config config.toml
-```
-
-Or spawn a shell with secrets loaded:
-
-```bash
-dugout env
-edgelord run --config config.toml
+```console
+$ dugout run -- edgelord run --config config.toml
 ```
 
 ### Required Secrets
@@ -278,11 +261,11 @@ All config values can be overridden via CLI flags. Here's a quick reference:
 
 ## Validation Workflow
 
-```bash
-./target/release/edgelord check config --config config.toml
-./target/release/edgelord check health --config config.toml
-./target/release/edgelord config show --config config.toml
-./target/release/edgelord check live --config config.toml
+```console
+$ edgelord check config --config config.toml
+$ edgelord check health --config config.toml
+$ edgelord config show --config config.toml
+$ dugout run -- edgelord check live --config config.toml
 ```
 
-For full command options, see [CLI Reference](cli-reference.md).
+See [CLI Reference](cli-reference.md) for full command options.

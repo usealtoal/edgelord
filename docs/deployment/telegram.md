@@ -1,21 +1,15 @@
 # Telegram Integration
 
-Telegram alerts provide lightweight execution and risk visibility.
-
-Build with Telegram support enabled:
-
-```bash
-cargo build --release --features telegram
-```
+Telegram alerts provide lightweight execution and risk visibility. Telegram is enabled by default.
 
 ## Required Secrets
 
 Set up Telegram credentials with dugout:
 
-```bash
-dugout set TELEGRAM_BOT_TOKEN    # Your bot token from @BotFather
-dugout set TELEGRAM_CHAT_ID      # Your chat ID
-git add .dugout.toml && git commit -m "chore: add telegram secrets"
+```console
+$ dugout set TELEGRAM_BOT_TOKEN    # Your bot token from @BotFather
+$ dugout set TELEGRAM_CHAT_ID      # Your chat ID
+$ git add .dugout.toml && git commit -m "chore: add telegram secrets"
 ```
 
 Required environment variables (injected by dugout at runtime):
@@ -35,8 +29,8 @@ notify_risk_rejections = true
 
 ## Connectivity Check
 
-```bash
-dugout run -- edgelord check telegram --config config.toml
+```console
+$ dugout run -- edgelord check telegram --config config.toml
 ```
 
 ## Bot Commands

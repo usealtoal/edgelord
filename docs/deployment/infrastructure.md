@@ -22,26 +22,27 @@ The workflow handles binary, config, and vault syncing automatically.
 
 ## VPS Bootstrap
 
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential pkg-config libssl-dev curl
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Install dugout
-cargo install dugout
+```console
+$ sudo apt update && sudo apt upgrade -y
+$ sudo apt install -y build-essential pkg-config libssl-dev curl
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ source ~/.cargo/env
+$ cargo install dugout
 ```
 
 ## Dugout Identity Setup
 
-```bash
-# Option A: Copy your local identity (simpler)
-# From your local machine:
-scp ~/.dugout/identity user@vps:~/.dugout/identity
+Copy your local identity to the VPS:
 
-# Option B: Generate new identity on VPS
-dugout setup
-dugout whoami  # Add this key as recipient locally
+```console
+$ scp ~/.dugout/identity user@vps:~/.dugout/identity
+```
+
+Or generate a new identity on the VPS:
+
+```console
+$ dugout setup
+$ dugout whoami    # Add this key as recipient locally
 ```
 
 ## Runtime Layout
@@ -59,26 +60,22 @@ After deployment:
 
 ## Systemd Service
 
-The deploy workflow installs and updates the `edgelord` systemd unit automatically.
+The deploy workflow installs and updates the `edgelord` systemd unit.
 
-Common lifecycle commands:
-
-```bash
-sudo systemctl status edgelord
-sudo systemctl restart edgelord
-sudo systemctl stop edgelord
-sudo systemctl start edgelord
-journalctl -u edgelord -f
+```console
+$ sudo systemctl status edgelord
+$ sudo systemctl restart edgelord
+$ journalctl -u edgelord -f
 ```
 
 ## Validation
 
 Before going live:
 
-```bash
-cd /opt/edgelord
-edgelord check config --config config/config.toml
-edgelord check health --config config/config.toml
-dugout run -- edgelord check connection --config config/config.toml
-dugout run -- edgelord check live --config config/config.toml
+```console
+$ cd /opt/edgelord
+$ edgelord check config --config config/config.toml
+$ edgelord check health --config config/config.toml
+$ dugout run -- edgelord check connection --config config/config.toml
+$ dugout run -- edgelord check live --config config/config.toml
 ```
