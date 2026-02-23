@@ -45,7 +45,9 @@ async fn main() {
         Commands::Statistics(cmd) => match cmd {
             StatsCommand::Today(args) => cli::stats::handler::execute_today(&args.db),
             StatsCommand::Week(args) => cli::stats::handler::execute_week(&args.db),
-            StatsCommand::History(args) => cli::stats::handler::execute_history(&args.db, args.days),
+            StatsCommand::History(args) => {
+                cli::stats::handler::execute_history(&args.db, args.days)
+            }
             StatsCommand::Export(args) => {
                 cli::stats::handler::execute_export(&args.db, args.days, args.output.as_deref())
             }

@@ -175,7 +175,7 @@ pub struct RebalancingOpportunity {
 impl RebalancingOpportunity {
     /// Number of outcomes in this opportunity.
     #[must_use]
-    pub const fn outcome_count(&self) -> usize {
+    pub fn outcome_count(&self) -> usize {
         self.legs.len()
     }
 }

@@ -12,12 +12,13 @@ pub fn aggregate_by_strategy(rows: &[StrategyStatsRecord]) -> HashMap<String, St
     let mut by_strategy: HashMap<String, StrategyStatsRecord> = HashMap::new();
 
     for row in rows {
-        let entry = by_strategy
-            .entry(row.strategy.clone())
-            .or_insert_with(|| StrategyStatsRecord {
-                strategy: row.strategy.clone(),
-                ..Default::default()
-            });
+        let entry =
+            by_strategy
+                .entry(row.strategy.clone())
+                .or_insert_with(|| StrategyStatsRecord {
+                    strategy: row.strategy.clone(),
+                    ..Default::default()
+                });
         entry.opportunities_detected += row.opportunities_detected;
         entry.opportunities_executed += row.opportunities_executed;
         entry.trades_opened += row.trades_opened;

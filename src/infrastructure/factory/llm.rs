@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use tracing::{info, warn};
 
-use crate::infrastructure::config::llm::LlmProvider;
-use crate::infrastructure::config::settings::Config;
 use crate::adapter::outbound::llm::anthropic::Anthropic;
 use crate::adapter::outbound::llm::openai::OpenAi;
+use crate::infrastructure::config::llm::LlmProvider;
+use crate::infrastructure::config::settings::Config;
 use crate::port::outbound::llm::Llm;
 
 /// Build LLM client from configuration.

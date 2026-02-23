@@ -91,7 +91,7 @@ impl LpProblem {
 
     /// Number of variables.
     #[must_use]
-    pub const fn num_vars(&self) -> usize {
+    pub fn num_vars(&self) -> usize {
         self.objective.len()
     }
 }

@@ -9,9 +9,7 @@ use crate::infrastructure::exchange::factory::ExchangeFactory;
 use crate::port::outbound::exchange::ArbitrageExecutor;
 
 /// Initialize the executor if wallet is configured.
-pub async fn build_executor(
-    config: &Config,
-) -> Option<Arc<dyn ArbitrageExecutor + Send + Sync>> {
+pub async fn build_executor(config: &Config) -> Option<Arc<dyn ArbitrageExecutor + Send + Sync>> {
     match ExchangeFactory::create_arbitrage_executor(config).await {
         Ok(Some(exec)) => {
             info!("Executor initialized - trading ENABLED");

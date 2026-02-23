@@ -7,7 +7,7 @@
 //! 1. Create a module under `adapter/outbound/<exchange>/`
 //! 2. Implement [`crate::port::outbound::exchange::MarketDataStream`] and [`crate::port::outbound::exchange::ArbitrageExecutor`]
 //! 3. Implement [`crate::port::outbound::exchange::MarketParser`] trait
-//! 4. Add to [`ExchangeFactory`] for runtime selection
+//! 4. Add to [`factory::ExchangeFactory`] for runtime selection
 
 pub mod factory;
 pub mod pool;
