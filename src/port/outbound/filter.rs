@@ -1,7 +1,13 @@
 //! Market filtering and scoring ports.
 //!
-//! Traits for filtering markets for subscription eligibility and
-//! scoring them for prioritization.
+//! Defines traits for filtering markets by eligibility criteria and scoring
+//! them for subscription prioritization.
+//!
+//! # Overview
+//!
+//! - [`MarketFilter`]: Filter markets by volume, liquidity, spread, etc.
+//! - [`MarketScorer`]: Score markets for prioritized subscription
+//! - [`MarketFilterConfig`]: Configuration for filtering criteria
 
 use async_trait::async_trait;
 
@@ -9,23 +15,30 @@ use crate::domain::{score::MarketScore, score::ScoreWeights};
 use crate::error::Result;
 use crate::port::outbound::exchange::MarketInfo;
 
-/// Configuration for market filtering.
+/// Configuration for market filtering criteria.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MarketFilterConfig {
     /// Maximum number of markets to consider for subscription.
     pub max_markets: usize,
+
     /// Maximum number of active subscriptions allowed.
     pub max_subscriptions: usize,
-    /// Minimum 24-hour trading volume (in USD).
+
+    /// Minimum 24-hour trading volume in USD.
     pub min_volume_24h: f64,
-    /// Minimum liquidity depth (in USD).
+
+    /// Minimum liquidity depth in USD.
     pub min_liquidity: f64,
+
     /// Maximum bid-ask spread as a percentage (e.g., 5.0 = 5%).
     pub max_spread_pct: f64,
-    /// Whether to include binary (YES/NO) markets.
+
+    /// Whether to include binary (two-outcome) markets.
     pub include_binary: bool,
+
     /// Whether to include multi-outcome markets.
     pub include_multi_outcome: bool,
+
     /// Maximum number of outcomes allowed in a market.
     pub max_outcomes: usize,
 }
@@ -45,12 +58,26 @@ impl Default for MarketFilterConfig {
     }
 }
 
-/// Filters markets for subscription eligibility.
+/// Filter for determining market subscription eligibility.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`).
 pub trait MarketFilter: Send + Sync {
-    /// Check if a single market is eligible for subscription.
+    /// Return `true` if the market is eligible for subscription.
+    ///
+    /// # Arguments
+    ///
+    /// * `market` - Market information to evaluate.
     fn is_eligible(&self, market: &MarketInfo) -> bool;
 
-    /// Filter a slice of markets, returning only eligible ones.
+    /// Filter a collection of markets, returning only eligible ones.
+    ///
+    /// # Arguments
+    ///
+    /// * `markets` - Markets to filter.
+    ///
+    /// Default implementation calls `is_eligible` for each market.
     fn filter(&self, markets: &[MarketInfo]) -> Vec<MarketInfo> {
         markets
             .iter()
@@ -59,20 +86,45 @@ pub trait MarketFilter: Send + Sync {
             .collect()
     }
 
-    /// Get the filter configuration.
+    /// Return the filter configuration.
     fn config(&self) -> &MarketFilterConfig;
 
-    /// Get the exchange name for logging and debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 }
 
-/// Scores markets for subscription prioritization.
+/// Scorer for prioritizing market subscriptions.
+///
+/// Markets with higher scores are prioritized when subscription slots are
+/// limited.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`).
 #[async_trait]
 pub trait MarketScorer: Send + Sync {
-    /// Score a single market for subscription prioritization.
+    /// Compute a priority score for a market.
+    ///
+    /// # Arguments
+    ///
+    /// * `market` - Market to score.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if scoring fails (e.g., missing data).
     async fn score(&self, market: &MarketInfo) -> Result<MarketScore>;
 
     /// Score multiple markets in batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `markets` - Markets to score.
+    ///
+    /// Default implementation scores markets sequentially.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any market fails to score.
     async fn score_batch(&self, markets: &[MarketInfo]) -> Result<Vec<MarketScore>> {
         let mut scores = Vec::with_capacity(markets.len());
         for market in markets {
@@ -81,9 +133,9 @@ pub trait MarketScorer: Send + Sync {
         Ok(scores)
     }
 
-    /// Get the scoring weights used by this scorer.
+    /// Return the scoring weights used by this scorer.
     fn weights(&self) -> &ScoreWeights;
 
-    /// Get the exchange name for logging and debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 }

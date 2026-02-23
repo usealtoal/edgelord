@@ -1,8 +1,35 @@
 //! Market-related domain types.
 //!
+//! This module provides the core market representation used throughout the system:
+//!
 //! - [`Market`] - A prediction market with N outcomes and configurable payout
 //! - [`Outcome`] - A single tradeable outcome within a market
 //! - [`MarketRegistry`] - Index of markets by token ID and market ID
+//!
+//! # Examples
+//!
+//! Creating a binary market:
+//!
+//! ```
+//! use edgelord::domain::market::{Market, Outcome};
+//! use edgelord::domain::id::{MarketId, TokenId};
+//! use rust_decimal_macros::dec;
+//!
+//! let outcomes = vec![
+//!     Outcome::new(TokenId::new("yes-token"), "Yes"),
+//!     Outcome::new(TokenId::new("no-token"), "No"),
+//! ];
+//!
+//! let market = Market::new(
+//!     MarketId::new("will-it-rain"),
+//!     "Will it rain tomorrow?",
+//!     outcomes,
+//!     dec!(1.00),
+//! );
+//!
+//! assert!(market.is_binary());
+//! assert_eq!(market.outcome_count(), 2);
+//! ```
 
 use std::collections::HashMap;
 use std::result::Result;
@@ -12,19 +39,32 @@ use rust_decimal::Decimal;
 use super::error::DomainError;
 use super::id::{MarketId, TokenId};
 
-/// A single outcome within a market.
+/// A single tradeable outcome within a prediction market.
 ///
-/// Each outcome has a unique token ID (used for trading) and a human-readable name.
-/// For binary markets, typical names are "Yes"/"No". For multi-outcome markets,
-/// names might be candidate names, team names, etc.
+/// Each outcome has a unique token ID used for trading operations and a
+/// human-readable name for display. For binary markets, typical names are
+/// "Yes" and "No". For multi-outcome markets, names might be candidate names,
+/// team names, or other descriptive labels.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::market::Outcome;
+/// use edgelord::domain::id::TokenId;
+///
+/// let outcome = Outcome::new(TokenId::new("candidate-a"), "Candidate A");
+/// assert_eq!(outcome.name(), "Candidate A");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
+    /// The unique token identifier for trading this outcome.
     token_id: TokenId,
+    /// Human-readable name for display purposes.
     name: String,
 }
 
 impl Outcome {
-    /// Create a new outcome.
+    /// Creates a new outcome with the given token ID and name.
     pub fn new(token_id: TokenId, name: impl Into<String>) -> Self {
         Self {
             token_id,
@@ -32,13 +72,13 @@ impl Outcome {
         }
     }
 
-    /// Get the token ID for this outcome.
+    /// Returns the token ID for this outcome.
     #[must_use]
     pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
-    /// Get the name of this outcome.
+    /// Returns the human-readable name of this outcome.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
@@ -48,38 +88,73 @@ impl Outcome {
 /// A prediction market supporting N outcomes with configurable payout.
 ///
 /// This is the core market representation used throughout the system. It supports:
+///
 /// - **Binary markets** (2 outcomes, e.g., Yes/No)
 /// - **Multi-outcome markets** (3+ outcomes, e.g., election candidates)
 ///
 /// The `payout` field specifies how much one share pays out on resolution.
 /// For Polymarket, this is $1.00. Other exchanges may use different values.
 ///
-/// # Example
+/// # Examples
 ///
-/// ```ignore
-/// use edgelord::domain::{market::Market, market::Outcome, id::MarketId, id::TokenId};
+/// Creating a binary market:
+///
+/// ```
+/// use edgelord::domain::market::{Market, Outcome};
+/// use edgelord::domain::id::{MarketId, TokenId};
 /// use rust_decimal_macros::dec;
 ///
 /// let market = Market::new(
-///     MarketId::from("market-123"),
+///     MarketId::new("market-123"),
 ///     "Will it rain tomorrow?",
 ///     vec![
-///         Outcome::new(TokenId::from("yes-token"), "Yes"),
-///         Outcome::new(TokenId::from("no-token"), "No"),
+///         Outcome::new(TokenId::new("yes-token"), "Yes"),
+///         Outcome::new(TokenId::new("no-token"), "No"),
 ///     ],
-///     dec!(1.00), // $1 payout per share
+///     dec!(1.00),
 /// );
+///
+/// assert!(market.is_binary());
+/// ```
+///
+/// Creating a multi-outcome market:
+///
+/// ```
+/// use edgelord::domain::market::{Market, Outcome};
+/// use edgelord::domain::id::{MarketId, TokenId};
+/// use rust_decimal_macros::dec;
+///
+/// let market = Market::new(
+///     MarketId::new("election-2024"),
+///     "Who will win the election?",
+///     vec![
+///         Outcome::new(TokenId::new("candidate-a"), "Candidate A"),
+///         Outcome::new(TokenId::new("candidate-b"), "Candidate B"),
+///         Outcome::new(TokenId::new("candidate-c"), "Candidate C"),
+///     ],
+///     dec!(1.00),
+/// );
+///
+/// assert!(!market.is_binary());
+/// assert_eq!(market.outcome_count(), 3);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Market {
+    /// Unique identifier for this market.
     market_id: MarketId,
+    /// The question this market is predicting.
     question: String,
+    /// All possible outcomes for this market.
     outcomes: Vec<Outcome>,
+    /// Amount paid out per share on correct resolution.
     payout: Decimal,
 }
 
 impl Market {
-    /// Create a new market.
+    /// Creates a new market with the given parameters.
+    ///
+    /// This constructor does not validate invariants. Use [`Market::try_new`]
+    /// for validated construction.
     pub fn new(
         market_id: MarketId,
         question: impl Into<String>,
@@ -94,28 +169,27 @@ impl Market {
         }
     }
 
-    /// Create a new market with domain invariant validation.
+    /// Creates a new market with domain invariant validation.
     ///
     /// # Domain Invariants
     ///
     /// - `outcomes` must not be empty
-    /// - `payout` must be positive (> 0)
+    /// - `payout` must be positive (greater than 0)
     ///
     /// # Errors
     ///
-    /// Returns `DomainError` if any invariant is violated.
+    /// Returns [`DomainError::EmptyOutcomes`] if outcomes is empty.
+    /// Returns [`DomainError::NonPositivePayout`] if payout is zero or negative.
     pub fn try_new(
         market_id: MarketId,
         question: impl Into<String>,
         outcomes: Vec<Outcome>,
         payout: Decimal,
     ) -> Result<Self, DomainError> {
-        // Validate outcomes is not empty
         if outcomes.is_empty() {
             return Err(DomainError::EmptyOutcomes);
         }
 
-        // Validate payout is positive
         if payout <= Decimal::ZERO {
             return Err(DomainError::NonPositivePayout { payout });
         }
@@ -128,43 +202,45 @@ impl Market {
         })
     }
 
-    /// Get the market ID.
+    /// Returns the market ID.
     #[must_use]
     pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
-    /// Get the market question.
+    /// Returns the market question text.
     #[must_use]
     pub fn question(&self) -> &str {
         &self.question
     }
 
-    /// Get the payout amount.
+    /// Returns the payout amount per share.
     #[must_use]
     pub const fn payout(&self) -> Decimal {
         self.payout
     }
 
-    /// Get all outcomes.
+    /// Returns all outcomes for this market.
     #[must_use]
     pub fn outcomes(&self) -> &[Outcome] {
         &self.outcomes
     }
 
-    /// Check if this is a binary (YES/NO) market.
+    /// Returns true if this is a binary (two-outcome) market.
     #[must_use]
     pub fn is_binary(&self) -> bool {
         self.outcomes.len() == 2
     }
 
-    /// Get the number of outcomes.
+    /// Returns the number of outcomes in this market.
     #[must_use]
     pub fn outcome_count(&self) -> usize {
         self.outcomes.len()
     }
 
-    /// Find an outcome by name (case-insensitive).
+    /// Finds an outcome by name using case-insensitive matching.
+    ///
+    /// Returns `None` if no outcome matches the given name.
     #[must_use]
     pub fn outcome_by_name(&self, name: &str) -> Option<&Outcome> {
         let name_lower = name.to_lowercase();
@@ -173,25 +249,60 @@ impl Market {
             .find(|o| o.name.to_lowercase() == name_lower)
     }
 
-    /// Get all token IDs in outcome order.
+    /// Returns all token IDs in outcome order.
     #[must_use]
     pub fn token_ids(&self) -> Vec<&TokenId> {
         self.outcomes.iter().map(|o| &o.token_id).collect()
     }
 }
 
-/// Index of markets by token ID and market ID.
+/// Index of markets by token ID and market ID for efficient lookups.
 ///
-/// Enables efficient lookup from order book events.
+/// The registry maintains multiple indices to support fast lookups from
+/// different starting points (token ID from order book events, market ID
+/// from API responses, etc.).
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::market::{Market, MarketRegistry, Outcome};
+/// use edgelord::domain::id::{MarketId, TokenId};
+/// use rust_decimal_macros::dec;
+///
+/// let mut registry = MarketRegistry::new();
+///
+/// let market = Market::new(
+///     MarketId::new("market-1"),
+///     "Test market?",
+///     vec![
+///         Outcome::new(TokenId::new("yes"), "Yes"),
+///         Outcome::new(TokenId::new("no"), "No"),
+///     ],
+///     dec!(1.00),
+/// );
+///
+/// registry.add(market);
+///
+/// // Look up by token ID (from order book event)
+/// let found = registry.get_by_token(&TokenId::new("yes"));
+/// assert!(found.is_some());
+///
+/// // Look up by market ID
+/// let found = registry.get_by_market_id(&MarketId::new("market-1"));
+/// assert!(found.is_some());
+/// ```
 #[derive(Debug, Default)]
 pub struct MarketRegistry {
+    /// Index from token ID to containing market.
     token_to_market: HashMap<TokenId, Market>,
+    /// Index from market ID to market.
     market_id_to_market: HashMap<MarketId, Market>,
+    /// All markets in registration order.
     markets: Vec<Market>,
 }
 
 impl MarketRegistry {
-    /// Create an empty market registry.
+    /// Creates an empty market registry.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -201,7 +312,7 @@ impl MarketRegistry {
         }
     }
 
-    /// Add a market to the registry, indexing all its token IDs.
+    /// Adds a market to the registry, indexing all its token IDs.
     pub fn add(&mut self, market: Market) {
         self.market_id_to_market
             .insert(market.market_id().clone(), market.clone());
@@ -212,46 +323,50 @@ impl MarketRegistry {
         self.markets.push(market);
     }
 
-    /// Look up a market by its market ID.
+    /// Looks up a market by its market ID.
+    ///
+    /// Returns `None` if no market with the given ID is registered.
     #[must_use]
     pub fn get_by_market_id(&self, market_id: &MarketId) -> Option<&Market> {
         self.market_id_to_market.get(market_id)
     }
 
-    /// Look up the market for a given token ID.
+    /// Looks up a market by one of its token IDs.
+    ///
+    /// Returns `None` if no market contains the given token ID.
     #[must_use]
     pub fn get_by_token(&self, token_id: &TokenId) -> Option<&Market> {
         self.token_to_market.get(token_id)
     }
 
-    /// Get all registered markets.
+    /// Returns all registered markets.
     #[must_use]
     pub fn markets(&self) -> &[Market] {
         &self.markets
     }
 
-    /// Get markets with exactly 2 outcomes (binary markets).
+    /// Returns an iterator over binary (two-outcome) markets only.
     pub fn binary_markets(&self) -> impl Iterator<Item = &Market> {
         self.markets.iter().filter(|m| m.outcome_count() == 2)
     }
 
-    /// Get markets with 3 or more outcomes.
+    /// Returns an iterator over multi-outcome (3+) markets only.
     pub fn multi_outcome_markets(&self) -> impl Iterator<Item = &Market> {
         self.markets.iter().filter(|m| m.outcome_count() >= 3)
     }
 
-    /// Get all token IDs across all registered markets.
+    /// Returns an iterator over all token IDs across all registered markets.
     pub fn all_token_ids(&self) -> impl Iterator<Item = &TokenId> {
         self.token_to_market.keys()
     }
 
-    /// Get the number of registered markets.
+    /// Returns the number of registered markets.
     #[must_use]
     pub fn len(&self) -> usize {
         self.markets.len()
     }
 
-    /// Check if the registry is empty.
+    /// Returns true if no markets are registered.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.markets.is_empty()

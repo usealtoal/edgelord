@@ -1,7 +1,7 @@
 //! Inference service for continuous market relation discovery.
 //!
-//! Handles both multi-batch startup inference and periodic cycling
-//! to maximize market coverage for arbitrage detection.
+//! Provides both batch startup inference and periodic background cycling
+//! to maximize market coverage for combinatorial arbitrage detection.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,8 +14,9 @@ use crate::application::cache::cluster::ClusterCache;
 use crate::domain::relation::Relation;
 use crate::port::{outbound::inference::MarketSummary, outbound::inference::RelationInferrer};
 
-/// Handle to control the inference service.
+/// Handle for controlling the inference service lifecycle.
 pub struct InferenceServiceHandle {
+    /// Channel for sending shutdown signal.
     shutdown_tx: mpsc::Sender<()>,
 }
 
@@ -26,23 +27,35 @@ impl InferenceServiceHandle {
     }
 }
 
-/// Result of running inference on all markets.
+/// Result of running inference across markets.
 #[derive(Debug, Clone)]
 pub struct InferenceResult {
-    /// Total markets processed.
+    /// Total number of markets processed.
     pub markets_processed: usize,
-    /// Total relations discovered.
+    /// Total number of relations discovered.
     pub relations_discovered: usize,
-    /// Number of batches run.
+    /// Number of inference batches executed.
     pub batches_run: usize,
-    /// All discovered relations (for notifications).
+    /// All discovered relations (for notifications and caching).
     pub relations: Vec<Relation>,
 }
 
-/// Run inference on all markets in batches.
+/// Run inference on all markets in sequential batches.
 ///
-/// This processes ALL markets by chunking them into batches and running
-/// inference on each batch sequentially.
+/// Processes all markets by chunking them into batches of the configured
+/// size and running LLM inference on each batch. Discovered relations are
+/// automatically added to the cluster cache.
+///
+/// # Arguments
+///
+/// * `inferrer` - The relation inferrer implementation to use.
+/// * `markets` - All markets to process.
+/// * `batch_size` - Maximum markets per inference batch.
+/// * `cluster_cache` - Cache to store discovered relations.
+///
+/// # Returns
+///
+/// Summary of the inference run including counts and discovered relations.
 pub async fn run_full_inference(
     inferrer: &dyn RelationInferrer,
     markets: &[MarketSummary],
@@ -114,15 +127,21 @@ pub async fn run_full_inference(
     }
 }
 
-/// Inference service for continuous relation discovery.
+/// Background service for continuous relation discovery.
+///
+/// Periodically runs inference on all markets to discover new relations
+/// and update the cluster cache for combinatorial arbitrage detection.
 pub struct InferenceService {
+    /// Relation inferrer implementation.
     inferrer: Arc<dyn RelationInferrer>,
+    /// Service configuration.
     config: InferenceConfig,
+    /// Cluster cache for storing discovered relations.
     cluster_cache: Arc<ClusterCache>,
 }
 
 impl InferenceService {
-    /// Create a new inference service.
+    /// Create a new inference service with the given dependencies.
     pub fn new(
         inferrer: Arc<dyn RelationInferrer>,
         config: InferenceConfig,
@@ -135,9 +154,11 @@ impl InferenceService {
         }
     }
 
-    /// Start the continuous inference service.
+    /// Start the background inference service.
     ///
-    /// Returns a handle to control the service and a receiver for results.
+    /// Spawns an async task that periodically runs inference on all markets.
+    /// Returns a handle for lifecycle control and a channel for receiving
+    /// inference results.
     pub fn start(
         self,
         markets: Arc<Vec<MarketSummary>>,

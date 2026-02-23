@@ -1,4 +1,7 @@
-//! Database layer for persistence using Diesel ORM.
+//! Database connection management using Diesel ORM.
+//!
+//! Provides connection pooling, migration support, and connection
+//! configuration for SQLite databases.
 
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -7,10 +10,10 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
 use crate::error::Result;
 
-/// Embedded migrations from the migrations/ directory.
+/// Embedded database migrations compiled from the migrations/ directory.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-/// Database connection pool type alias.
+/// Type alias for a SQLite connection pool.
 pub type DbPool = Pool<ConnectionManager<SqliteConnection>>;
 
 /// Create a connection pool for the given database URL.

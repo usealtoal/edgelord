@@ -1,23 +1,33 @@
 //! Solver utilities for LMSR Bregman divergence.
 //!
 //! For the Logarithmic Market Scoring Rule (LMSR):
-//! - Cost function: C(q) = b * log(Σ exp(qᵢ/b))
-//! - Conjugate: R(μ) = Σ μᵢ * ln(μᵢ) (negative entropy)
-//! - Bregman divergence: D(μ||θ) = KL divergence
 //!
-//! The divergence D(μ*||θ) equals the maximum arbitrage profit.
+//! - Cost function: `C(q) = b * log(sum(exp(q_i/b)))`
+//! - Conjugate: `R(mu) = sum(mu_i * ln(mu_i))` (negative entropy)
+//! - Bregman divergence: `D(mu||theta) = KL divergence`
+//!
+//! The divergence `D(mu*||theta)` equals the maximum arbitrage profit,
+//! making these calculations central to combinatorial arbitrage detection.
 
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 
-/// Compute Bregman divergence D(μ||θ) for LMSR.
+/// Compute Bregman divergence `D(mu||theta)` for LMSR.
 ///
-/// This is the KL divergence when R is negative entropy.
-/// D(μ||θ) = Σ μᵢ * ln(μᵢ/θᵢ)
+/// This is the Kullback-Leibler divergence when R is negative entropy:
+/// `D(mu||theta) = sum(mu_i * ln(mu_i/theta_i))`
+///
+/// The result measures how far the market prices `theta` are from the
+/// target distribution `mu`, with larger values indicating more arbitrage potential.
 ///
 /// # Arguments
-/// * `mu` - Target probability vector (must be valid distribution)
-/// * `theta` - Current market prices
+///
+/// * `mu` - Target probability vector (must be a valid distribution summing to 1).
+/// * `theta` - Current market prices (may not sum to 1 if mispriced).
+///
+/// # Returns
+///
+/// The divergence value, or zero if inputs are empty or mismatched.
 #[must_use]
 pub fn bregman_divergence(mu: &[Decimal], theta: &[Decimal]) -> Decimal {
     if mu.len() != theta.len() || mu.is_empty() {
@@ -43,13 +53,20 @@ pub fn bregman_divergence(mu: &[Decimal], theta: &[Decimal]) -> Decimal {
     divergence
 }
 
-/// Compute gradient of Bregman divergence ∇D(μ||θ) w.r.t. μ.
+/// Compute the gradient of Bregman divergence with respect to mu.
 ///
-/// For KL divergence: ∂D/∂μᵢ = ln(μᵢ/θᵢ) + 1
+/// For KL divergence: `dD/dmu_i = ln(mu_i/theta_i) + 1`
+///
+/// Used by the Frank-Wolfe algorithm to determine the descent direction.
 ///
 /// # Arguments
-/// * `mu` - Current iterate
-/// * `theta` - Target (fixed)
+///
+/// * `mu` - Current iterate (probability vector being optimized).
+/// * `theta` - Target prices (fixed during optimization).
+///
+/// # Returns
+///
+/// Gradient vector with one element per outcome.
 #[must_use]
 pub fn bregman_gradient(mu: &[Decimal], theta: &[Decimal]) -> Vec<Decimal> {
     let epsilon = Decimal::new(1, 10);
@@ -72,11 +89,19 @@ pub fn bregman_gradient(mu: &[Decimal], theta: &[Decimal]) -> Vec<Decimal> {
 
 /// Compute the LMSR cost function C(q).
 ///
-/// C(q) = b * ln(Σ exp(qᵢ/b))
+/// `C(q) = b * ln(sum(exp(q_i/b)))`
+///
+/// This is the standard cost function for Logarithmic Market Scoring Rule
+/// automated market makers.
 ///
 /// # Arguments
-/// * `q` - Quantity vector
-/// * `b` - Liquidity parameter
+///
+/// * `q` - Quantity vector (shares outstanding for each outcome).
+/// * `b` - Liquidity parameter (controls price sensitivity).
+///
+/// # Returns
+///
+/// The market cost, or zero if inputs are empty or b is zero.
 #[must_use]
 pub fn lmsr_cost(q: &[Decimal], b: Decimal) -> Decimal {
     if q.is_empty() || b == Decimal::ZERO {
@@ -99,7 +124,19 @@ pub fn lmsr_cost(q: &[Decimal], b: Decimal) -> Decimal {
 
 /// Compute LMSR prices from quantities.
 ///
-/// Pᵢ = exp(qᵢ/b) / Σₖ exp(qₖ/b)
+/// `P_i = exp(q_i/b) / sum_k(exp(q_k/b))`
+///
+/// Derives the implied probability (price) for each outcome from the
+/// current quantity state. Prices always sum to 1.
+///
+/// # Arguments
+///
+/// * `q` - Quantity vector (shares outstanding for each outcome).
+/// * `b` - Liquidity parameter.
+///
+/// # Returns
+///
+/// Price vector summing to 1, or empty if inputs are invalid.
 #[must_use]
 pub fn lmsr_prices(q: &[Decimal], b: Decimal) -> Vec<Decimal> {
     if q.is_empty() || b == Decimal::ZERO {

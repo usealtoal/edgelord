@@ -1,4 +1,7 @@
-//! Port for token approval workflows.
+//! Token approval port for ERC-20 spending workflows.
+//!
+//! Defines traits and types for managing token spending approvals required
+//! by exchanges that interact with smart contracts.
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -8,50 +11,79 @@ use crate::error::Result;
 /// Result of a token approval operation.
 #[derive(Debug, Clone)]
 pub enum ApprovalResult {
-    /// Approval transaction submitted successfully.
+    /// Approval transaction was submitted successfully.
     Approved {
-        /// Transaction hash.
+        /// Transaction hash for tracking.
         tx_hash: String,
-        /// Amount approved.
+
+        /// Amount approved for spending.
         amount: Decimal,
     },
-    /// Already approved for sufficient amount.
+
+    /// Sufficient allowance already exists.
     AlreadyApproved {
-        /// Current allowance.
+        /// Current spending allowance.
         current_allowance: Decimal,
     },
-    /// Approval failed.
+
+    /// Approval transaction failed.
     Failed {
-        /// Error message.
+        /// Human-readable error description.
         reason: String,
     },
 }
 
-/// Current approval status for a token.
+/// Current token approval status.
 #[derive(Debug, Clone)]
 pub struct ApprovalStatus {
     /// Token symbol (e.g., "USDC").
     pub token: String,
-    /// Current allowance.
+
+    /// Current spending allowance.
     pub allowance: Decimal,
-    /// Spender address (the exchange contract).
+
+    /// Spender contract address.
     pub spender: String,
-    /// Whether approval is needed for the requested amount.
+
+    /// Whether additional approval is needed for trading.
     pub needs_approval: bool,
 }
 
-/// Port for exchanges that require token approvals.
+/// Port for managing ERC-20 token approvals.
+///
+/// Implementations handle the approval workflow for exchanges that require
+/// token spending permissions (e.g., DEX contracts).
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`).
+///
+/// # Errors
+///
+/// Methods return [`Result`] for blockchain interaction failures.
 #[async_trait]
 pub trait TokenApproval: Send + Sync {
-    /// Get the current approval status.
+    /// Retrieve the current approval status.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the allowance cannot be read from the blockchain.
     async fn get_approval_status(&self) -> Result<ApprovalStatus>;
 
-    /// Approve token spending for the exchange.
+    /// Submit a token approval transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `amount` - Amount to approve for spending.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be submitted or confirmed.
     async fn approve(&self, amount: Decimal) -> Result<ApprovalResult>;
 
-    /// Exchange name for display and logging.
+    /// Return the exchange name for logging and display.
     fn exchange_name(&self) -> &'static str;
 
-    /// Token name being approved.
+    /// Return the token symbol being approved.
     fn token_name(&self) -> &'static str;
 }

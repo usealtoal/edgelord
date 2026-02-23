@@ -1,7 +1,7 @@
 //! Context types for strategy detection.
 //!
-//! Provides the concrete implementation of DetectionContext that
-//! wraps a Market and BookCache.
+//! Provides concrete implementations of the [`DetectionContext`](DetectionContextTrait)
+//! trait that wrap market metadata and order book cache.
 
 use rust_decimal::Decimal;
 
@@ -11,26 +11,28 @@ use crate::port::{
     inbound::strategy::DetectionContext as DetectionContextTrait, inbound::strategy::MarketContext,
 };
 
-/// Concrete detection context wrapping market and cache.
+/// Concrete detection context wrapping market metadata and order book cache.
 ///
-/// This is passed to strategies' `detect()` method.
+/// Passed to strategies during the detection phase. Provides access to market
+/// properties and current prices through the [`DetectionContext`](DetectionContextTrait)
+/// interface.
 ///
-/// Strategies should fail closed when required order books are missing
-/// (return no opportunities).
+/// Strategies should fail closed (return no opportunities) when required
+/// order books are missing from the cache.
 pub struct ConcreteDetectionContext<'a> {
-    /// The market being analyzed.
+    /// Reference to the market being analyzed.
     pub market: &'a Market,
-    /// Order book cache with current prices.
+    /// Reference to the order book cache for price lookups.
     pub cache: &'a BookCache,
-    /// Additional market context.
+    /// Pre-computed market context (binary vs multi-outcome).
     market_ctx: MarketContext,
 }
 
 impl<'a> ConcreteDetectionContext<'a> {
     /// Create a new detection context for a market.
     ///
-    /// Uses the market's payout and determines the market context
-    /// (binary vs multi-outcome) automatically from the market.
+    /// Automatically determines whether the market is binary or multi-outcome
+    /// based on the number of outcomes defined in the market.
     pub fn new(market: &'a Market, cache: &'a BookCache) -> Self {
         let market_ctx = if market.is_binary() {
             MarketContext::binary()
@@ -44,7 +46,10 @@ impl<'a> ConcreteDetectionContext<'a> {
         }
     }
 
-    /// Set custom market context.
+    /// Override the market context with a custom value.
+    ///
+    /// Useful for testing or when the context should differ from what
+    /// would be inferred from the market structure.
     #[must_use]
     pub fn with_market_context(mut self, ctx: MarketContext) -> Self {
         self.market_ctx = ctx;

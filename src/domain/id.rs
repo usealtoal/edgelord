@@ -1,23 +1,62 @@
 //! Domain identifier types with proper encapsulation.
+//!
+//! This module provides strongly-typed identifiers for domain entities.
+//! Using newtypes instead of raw strings prevents accidental mixing of
+//! different identifier types and provides better documentation.
+//!
+//! # Type Safety
+//!
+//! Each identifier type wraps a string (or integer) and only exposes
+//! controlled construction methods. This ensures:
+//!
+//! - Compile-time prevention of mixing market IDs with token IDs
+//! - Clear documentation of what each function expects
+//! - Easy refactoring if identifier formats change
+//!
+//! # Examples
+//!
+//! ```
+//! use edgelord::domain::id::{TokenId, MarketId, PositionId};
+//!
+//! let token = TokenId::new("0x1234abcd");
+//! let market = MarketId::new("election-2024-president");
+//! let position = PositionId::new(42);
+//!
+//! // Type safety prevents mixing:
+//! // let wrong: TokenId = market; // Compile error!
+//! ```
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Token identifier - newtype for type safety.
+/// Unique identifier for a tradeable token (outcome share).
 ///
-/// The inner String is private to ensure all construction goes through
-/// the defined constructors.
+/// Each outcome in a prediction market has a unique token ID used for
+/// trading operations. The inner string is private to ensure all
+/// construction goes through defined constructors.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::TokenId;
+///
+/// let token = TokenId::new("yes-token-12345");
+/// assert_eq!(token.as_str(), "yes-token-12345");
+///
+/// // From string conversion
+/// let token2 = TokenId::from("no-token-67890");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TokenId(String);
 
 impl TokenId {
-    /// Create a new `TokenId` from a string.
+    /// Creates a new token identifier from a string value.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
-    /// Get the token ID as a string slice.
+    /// Returns the token ID as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -42,20 +81,33 @@ impl From<&str> for TokenId {
     }
 }
 
-/// Market condition identifier - newtype for type safety.
+/// Unique identifier for a prediction market.
 ///
-/// The inner String is private to ensure all construction goes through
-/// the defined constructors.
+/// Markets are the top-level entity containing one or more outcomes.
+/// The inner string is private to ensure all construction goes through
+/// defined constructors.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::MarketId;
+///
+/// let market = MarketId::new("polymarket-election-2024");
+/// assert_eq!(market.as_str(), "polymarket-election-2024");
+///
+/// // Display formatting
+/// println!("Market: {}", market);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MarketId(String);
 
 impl MarketId {
-    /// Create a new `MarketId` from a string.
+    /// Creates a new market identifier from a string value.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
-    /// Get the market ID as a string slice.
+    /// Returns the market ID as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -82,19 +134,33 @@ impl From<&str> for MarketId {
 
 /// Unique identifier for an inferred relation between markets.
 ///
-/// Generated as UUID v4 for new relations, or constructed from
-/// existing string for persistence/deserialization.
+/// Generated as UUID v4 for new relations. For persistence and deserialization,
+/// use the `From<String>` implementation to reconstruct from stored values.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::RelationId;
+///
+/// // Generate a new unique ID
+/// let id1 = RelationId::new();
+/// let id2 = RelationId::new();
+/// assert_ne!(id1, id2);
+///
+/// // Reconstruct from stored value
+/// let stored = RelationId::from("550e8400-e29b-41d4-a716-446655440000");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RelationId(String);
 
 impl RelationId {
-    /// Create a new `RelationId` with a generated UUID.
+    /// Creates a new relation identifier with a randomly generated UUID v4.
     #[must_use]
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
 
-    /// Get the relation ID as a string slice.
+    /// Returns the relation ID as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -127,19 +193,34 @@ impl From<&str> for RelationId {
 
 /// Unique identifier for a cluster of related markets.
 ///
-/// Generated as UUID v4 for new clusters, or constructed from
-/// existing string for persistence/deserialization.
+/// Clusters group markets connected by logical relations. Generated as UUID v4
+/// for new clusters. For persistence and deserialization, use the `From<String>`
+/// implementation to reconstruct from stored values.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::ClusterId;
+///
+/// // Generate a new unique ID
+/// let cluster = ClusterId::new();
+/// println!("Created cluster: {}", cluster);
+///
+/// // Default also generates a new ID
+/// let cluster2 = ClusterId::default();
+/// assert_ne!(cluster, cluster2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ClusterId(String);
 
 impl ClusterId {
-    /// Create a new `ClusterId` with a generated UUID.
+    /// Creates a new cluster identifier with a randomly generated UUID v4.
     #[must_use]
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
 
-    /// Get the cluster ID as a string slice.
+    /// Returns the cluster ID as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -170,20 +251,30 @@ impl From<&str> for ClusterId {
     }
 }
 
-/// Unique identifier for an order.
+/// Unique identifier for an exchange order.
 ///
-/// The inner String is private to ensure all construction goes through
-/// the defined constructors.
+/// Order IDs are typically assigned by the exchange when an order is placed.
+/// The inner string is private to ensure all construction goes through
+/// defined constructors.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::OrderId;
+///
+/// let order = OrderId::new("exchange-order-12345");
+/// assert_eq!(order.as_str(), "exchange-order-12345");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(String);
 
 impl OrderId {
-    /// Create a new order ID.
+    /// Creates a new order identifier from a string value.
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
     }
 
-    /// Get the order ID as a string slice.
+    /// Returns the order ID as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -208,21 +299,34 @@ impl From<&str> for OrderId {
     }
 }
 
-/// Unique position identifier.
+/// Unique identifier for a trading position.
 ///
-/// The inner u64 is private to ensure all construction goes through
-/// the defined constructors.
+/// Positions track open arbitrage trades with their entry costs and expected
+/// payouts. The inner `u64` is private to ensure all construction goes through
+/// defined constructors.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::id::PositionId;
+///
+/// let pos = PositionId::new(42);
+/// assert_eq!(pos.value(), 42);
+///
+/// // Display shows "pos-N" format
+/// assert_eq!(format!("{}", pos), "pos-42");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PositionId(u64);
 
 impl PositionId {
-    /// Create a new `PositionId` from a u64 value.
+    /// Creates a new position identifier from a numeric value.
     #[must_use]
     pub const fn new(id: u64) -> Self {
         Self(id)
     }
 
-    /// Get the underlying value.
+    /// Returns the underlying numeric value.
     #[must_use]
     pub const fn value(&self) -> u64 {
         self.0

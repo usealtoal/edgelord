@@ -1,7 +1,15 @@
-//! Exchange port for market data and order execution.
+//! Exchange integration ports for market data and order execution.
 //!
-//! This module defines the traits for interacting with prediction market
-//! exchanges. These are the primary integration points for external services.
+//! Defines traits for interacting with prediction market exchanges. These are
+//! the primary integration points for connecting to external trading platforms.
+//!
+//! # Overview
+//!
+//! - [`MarketFetcher`]: Fetch market listings from REST APIs
+//! - [`MarketParser`]: Parse exchange-specific formats into domain types
+//! - [`MarketDataStream`]: Real-time order book updates via WebSocket
+//! - [`OrderExecutor`]: Submit and cancel orders
+//! - [`ArbitrageExecutor`]: Execute multi-leg arbitrage trades
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -12,71 +20,86 @@ use crate::domain::{
 };
 use crate::error::Error;
 
-/// Runtime statistics for a connection pool.
+/// Runtime statistics for a WebSocket connection pool.
 ///
-/// Used for observability and monitoring (e.g., Telegram `/pool` command).
+/// Provides observability metrics for monitoring connection health and
+/// performance. Used by operator interfaces such as the Telegram `/pool` command.
 #[derive(Debug, Clone, Default)]
 pub struct PoolStats {
-    /// Number of currently active connections.
+    /// Number of currently active WebSocket connections.
     pub active_connections: usize,
-    /// Total number of connection rotations (TTL-triggered).
+
+    /// Total number of connection rotations triggered by TTL expiry.
     pub total_rotations: u64,
-    /// Total number of restarts (crash/silence-triggered).
+
+    /// Total number of connection restarts due to crashes or silence detection.
     pub total_restarts: u64,
-    /// Total number of events dropped due to a full channel.
+
+    /// Total number of events dropped because the channel buffer was full.
     pub events_dropped: u64,
 }
 
-/// Result of attempting to execute an order.
+/// Result of attempting to execute an order on an exchange.
+///
+/// Represents the three possible outcomes: full fill, partial fill, or failure.
 #[derive(Debug, Clone)]
 pub enum ExecutionResult {
-    /// Order was fully filled.
+    /// Order was fully filled at or better than the limit price.
     Success {
-        /// The order ID returned by the exchange.
+        /// Unique order identifier returned by the exchange.
         order_id: OrderId,
-        /// Total amount filled.
+
+        /// Total quantity filled.
         filled_amount: Decimal,
-        /// Average execution price.
+
+        /// Volume-weighted average execution price.
         average_price: Decimal,
     },
-    /// Order was partially filled.
+
+    /// Order was partially filled before expiring or being cancelled.
     PartialFill {
-        /// The order ID returned by the exchange.
+        /// Unique order identifier returned by the exchange.
         order_id: OrderId,
-        /// Amount that was filled.
+
+        /// Quantity that was filled.
         filled_amount: Decimal,
-        /// Amount still unfilled.
+
+        /// Quantity remaining unfilled.
         remaining_amount: Decimal,
-        /// Average execution price for filled portion.
+
+        /// Volume-weighted average execution price for the filled portion.
         average_price: Decimal,
     },
+
     /// Order failed to execute.
     Failed {
-        /// The failure reason.
+        /// Human-readable description of the failure reason.
         reason: String,
     },
 }
 
 impl ExecutionResult {
-    /// Check if the execution was successful (fully filled).
+    /// Return `true` if the order was fully filled.
     #[must_use]
     pub const fn is_success(&self) -> bool {
         matches!(self, Self::Success { .. })
     }
 
-    /// Check if the execution resulted in a partial fill.
+    /// Return `true` if the order was partially filled.
     #[must_use]
     pub const fn is_partial(&self) -> bool {
         matches!(self, Self::PartialFill { .. })
     }
 
-    /// Check if the execution failed.
+    /// Return `true` if the order failed to execute.
     #[must_use]
     pub const fn is_failed(&self) -> bool {
         matches!(self, Self::Failed { .. })
     }
 
-    /// Get the order ID if available.
+    /// Return the order identifier if the order was accepted by the exchange.
+    ///
+    /// Returns `None` for failed orders that were never assigned an ID.
     #[must_use]
     pub const fn order_id(&self) -> Option<&OrderId> {
         match self {
@@ -87,110 +110,187 @@ impl ExecutionResult {
     }
 }
 
-/// Represents an order to be executed.
+/// Request to place an order on an exchange.
+///
+/// Contains all parameters needed to submit a limit order.
 #[derive(Debug, Clone)]
 pub struct OrderRequest {
-    /// The token/asset ID to trade.
+    /// Token identifier for the outcome to trade.
     pub token_id: String,
-    /// Buy or Sell.
+
+    /// Direction of the order (buy or sell).
     pub side: OrderSide,
-    /// Order size.
+
+    /// Quantity to trade in shares.
     pub size: Decimal,
-    /// Limit price.
+
+    /// Maximum price for buys or minimum price for sells.
     pub price: Decimal,
 }
 
-/// Order side.
+/// Direction of an order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OrderSide {
-    /// Buy order.
+    /// Buy order (acquire shares).
     Buy,
-    /// Sell order.
+
+    /// Sell order (dispose of shares).
     Sell,
 }
 
-/// Executor for submitting orders to an exchange.
+/// Order executor for submitting and cancelling orders on an exchange.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`) to support concurrent
+/// order submission from multiple strategies.
+///
+/// # Errors
+///
+/// Methods return [`Error`] for network failures, authentication issues,
+/// insufficient funds, or exchange-specific rejections.
 #[async_trait]
 pub trait OrderExecutor: Send + Sync {
-    /// Execute an order on the exchange.
+    /// Submit an order to the exchange.
+    ///
+    /// # Arguments
+    ///
+    /// * `order` - Order parameters including token, side, size, and price.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the order cannot be submitted due to network issues,
+    /// authentication failures, or validation errors.
     async fn execute(&self, order: &OrderRequest) -> Result<ExecutionResult, Error>;
 
-    /// Cancel an existing order.
+    /// Cancel an existing order by its identifier.
+    ///
+    /// # Arguments
+    ///
+    /// * `order_id` - Identifier of the order to cancel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the order cannot be found or cancellation fails.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;
 
-    /// Get the exchange name for logging/debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 }
 
 /// Exchange-agnostic market information.
 ///
 /// Represents the minimal information needed to identify and trade a market
-/// across different prediction market exchanges.
+/// across different prediction market exchanges. Used as an intermediate
+/// representation before conversion to domain types.
 #[derive(Debug, Clone)]
 pub struct MarketInfo {
-    /// Unique identifier for the market on the exchange.
+    /// Unique identifier for this market on the exchange.
     pub id: String,
-    /// Human-readable market question or name.
+
+    /// Human-readable market question or title.
     pub question: String,
-    /// Token/outcome identifiers for this market.
+
+    /// Outcome information including token identifiers and names.
     pub outcomes: Vec<OutcomeInfo>,
-    /// Whether the market is currently active for trading.
+
+    /// Whether the market is currently accepting orders.
     pub active: bool,
-    /// Trading volume in the last 24 hours (USD), if available.
+
+    /// Trading volume over the last 24 hours in USD.
+    ///
+    /// `None` if volume data is not available from the exchange API.
     pub volume_24h: Option<f64>,
-    /// Current liquidity depth (USD), if available.
+
+    /// Current liquidity depth in USD.
+    ///
+    /// `None` if liquidity data is not available from the exchange API.
     pub liquidity: Option<f64>,
 }
 
 /// Information about a single outcome in a market.
 #[derive(Debug, Clone)]
 pub struct OutcomeInfo {
-    /// Token ID for this outcome.
+    /// Token identifier for this outcome.
     pub token_id: String,
+
     /// Human-readable outcome name (e.g., "Yes", "No", "Trump", "Biden").
     pub name: String,
-    /// Current price for this outcome (0.0-1.0), if available from REST API.
+
+    /// Current price for this outcome as a probability (0.0 to 1.0).
+    ///
+    /// `None` if price data is not available from the REST API.
     pub price: Option<f64>,
 }
 
 impl MarketInfo {
-    /// Get all token IDs for this market.
+    /// Return all token identifiers for this market.
     #[must_use]
     pub fn token_ids(&self) -> Vec<&str> {
         self.outcomes.iter().map(|o| o.token_id.as_str()).collect()
     }
 
-    /// Check if this is a binary (YES/NO) market.
+    /// Return `true` if this is a binary (two-outcome) market.
     #[must_use]
     pub fn is_binary(&self) -> bool {
         self.outcomes.len() == 2
     }
 }
 
-/// Parses exchange-specific market payloads into domain markets.
+/// Parser for converting exchange-specific market data into domain types.
+///
+/// Implementations handle the idiosyncrasies of each exchange's data format
+/// and naming conventions.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`).
 pub trait MarketParser: Send + Sync {
-    /// Exchange name for logging and selection.
+    /// Return the exchange name for logging and adapter selection.
     fn name(&self) -> &'static str;
 
-    /// Default payout amount for winning outcomes.
+    /// Return the default payout amount for winning outcomes.
+    ///
+    /// Typically `1.00` for prediction markets where shares pay $1 on resolution.
     fn default_payout(&self) -> Decimal;
 
-    /// Binary outcome names as `(positive, negative)`.
+    /// Return the canonical outcome names for binary markets.
+    ///
+    /// Returns a tuple of `(positive, negative)` names, e.g., `("Yes", "No")`.
     fn binary_outcome_names(&self) -> (&'static str, &'static str);
 
-    /// Check if an outcome name maps to the positive side.
+    /// Return `true` if the outcome name represents the positive side.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Outcome name from exchange data.
+    ///
+    /// Default implementation performs case-insensitive comparison.
     fn is_positive_outcome(&self, name: &str) -> bool {
         let (positive, _) = self.binary_outcome_names();
         name.eq_ignore_ascii_case(positive)
     }
 
-    /// Check if an outcome name maps to the negative side.
+    /// Return `true` if the outcome name represents the negative side.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Outcome name from exchange data.
+    ///
+    /// Default implementation performs case-insensitive comparison.
     fn is_negative_outcome(&self, name: &str) -> bool {
         let (_, negative) = self.binary_outcome_names();
         name.eq_ignore_ascii_case(negative)
     }
 
-    /// Parse exchange-agnostic market info into domain markets.
+    /// Convert exchange-agnostic market information into domain markets.
+    ///
+    /// # Arguments
+    ///
+    /// * `market_infos` - Raw market data from the exchange.
+    ///
+    /// Filters to binary markets only and maps outcome names to canonical forms.
+    /// Returns an empty vector if no valid markets are found.
     fn parse_markets(&self, market_infos: &[MarketInfo]) -> Vec<Market> {
         let mut markets = Vec::new();
         let (positive_name, negative_name) = self.binary_outcome_names();
@@ -229,57 +329,94 @@ pub trait MarketParser: Send + Sync {
     }
 }
 
-/// Fetches market information from an exchange.
+/// Fetcher for retrieving market listings from an exchange REST API.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`).
+///
+/// # Errors
+///
+/// Methods return [`Error`] for network failures or API errors.
 #[async_trait]
 pub trait MarketFetcher: Send + Sync {
     /// Fetch active markets from the exchange.
     ///
     /// # Arguments
     ///
-    /// * `limit` - Maximum number of markets to fetch
+    /// * `limit` - Maximum number of markets to return.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the API request fails or returns invalid data.
     async fn get_markets(&self, limit: usize) -> Result<Vec<MarketInfo>, Error>;
 
-    /// Get the exchange name for logging/debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 }
 
-/// Events received from a market data stream.
+/// Event received from a real-time market data stream.
+///
+/// Represents the different types of updates that can arrive from an exchange
+/// WebSocket connection.
 #[derive(Debug, Clone)]
 pub enum MarketEvent {
     /// Full order book snapshot for a token.
+    ///
+    /// Received on initial subscription or after reconnection. Contains the
+    /// complete order book state.
     BookSnapshot {
-        /// The token this order book belongs to.
+        /// Token identifier this order book belongs to.
         token_id: TokenId,
-        /// The full order book state.
+
+        /// Complete order book state.
         book: Book,
     },
-    /// Incremental order book update (deltas).
+
+    /// Incremental order book update.
+    ///
+    /// Contains only the changes since the last update. Apply these deltas
+    /// to maintain a local order book copy.
     BookDelta {
-        /// The token this update applies to.
+        /// Token identifier this update applies to.
         token_id: TokenId,
-        /// The order book delta.
+
+        /// Order book changes (price levels to update or remove).
         book: Book,
     },
-    /// Market has settled (prediction resolved).
+
+    /// Market settlement notification.
+    ///
+    /// Indicates that a prediction market has resolved and shares are being
+    /// paid out.
     MarketSettled {
-        /// The settled market ID.
+        /// Identifier of the settled market.
         market_id: crate::domain::id::MarketId,
-        /// The winning outcome name.
+
+        /// Name of the winning outcome.
         winning_outcome: String,
-        /// Payout amount per share.
+
+        /// Payout amount per winning share.
         payout_per_share: Decimal,
     },
-    /// Connection established.
+
+    /// Connection successfully established.
     Connected,
-    /// Connection lost (may reconnect).
+
+    /// Connection lost.
+    ///
+    /// The stream may attempt automatic reconnection depending on
+    /// implementation.
     Disconnected {
-        /// The disconnection reason.
+        /// Human-readable description of why the connection was lost.
         reason: String,
     },
 }
 
 impl MarketEvent {
-    /// Get the token ID if this event contains market data.
+    /// Return the token identifier if this event contains market data.
+    ///
+    /// Returns `Some` for `BookSnapshot` and `BookDelta` events, `None` otherwise.
     #[must_use]
     pub fn token_id(&self) -> Option<&TokenId> {
         match self {
@@ -289,7 +426,9 @@ impl MarketEvent {
         }
     }
 
-    /// Get the order book if this event contains one.
+    /// Return the order book if this event contains one.
+    ///
+    /// Returns `Some` for `BookSnapshot` and `BookDelta` events, `None` otherwise.
     #[must_use]
     pub fn order_book(&self) -> Option<&Book> {
         match self {
@@ -300,40 +439,64 @@ impl MarketEvent {
     }
 }
 
-/// Real-time market data stream from an exchange.
+/// Real-time market data stream from an exchange via WebSocket.
 ///
-/// Implementations handle connection management, subscriptions, and message parsing
-/// for their specific exchange protocols.
+/// Implementations handle connection lifecycle management, subscription
+/// management, and protocol-specific message parsing.
+///
+/// # Lifecycle
+///
+/// 1. Call [`connect`](Self::connect) to establish the connection
+/// 2. Call [`subscribe`](Self::subscribe) to register for market updates
+/// 3. Call [`next_event`](Self::next_event) in a loop to receive updates
+///
+/// # Errors
+///
+/// Connection and subscription methods return [`Error`] for network failures
+/// or protocol errors.
 #[async_trait]
 pub trait MarketDataStream: Send {
-    /// Connect to the exchange's real-time data feed.
+    /// Establish a connection to the exchange's real-time data feed.
+    ///
+    /// Must be called before subscribing to markets.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection cannot be established.
     async fn connect(&mut self) -> Result<(), Error>;
 
-    /// Subscribe to market data for the given tokens.
+    /// Subscribe to market data for the specified tokens.
     ///
     /// # Arguments
     ///
-    /// * `token_ids` - Token IDs to subscribe to
+    /// * `token_ids` - Token identifiers to subscribe to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the subscription request fails.
     async fn subscribe(&mut self, token_ids: &[TokenId]) -> Result<(), Error>;
 
-    /// Receive the next market event.
+    /// Receive the next market event from the stream.
     ///
-    /// This method blocks until an event is available or the connection closes.
-    /// Returns `None` when the stream is closed.
+    /// Blocks asynchronously until an event is available or the connection
+    /// closes. Returns `None` when the stream is permanently closed.
     async fn next_event(&mut self) -> Option<MarketEvent>;
 
-    /// Get the exchange name for logging/debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 
-    /// Get connection pool statistics if this stream uses pooling.
+    /// Return connection pool statistics if this stream uses connection pooling.
     ///
-    /// Returns `None` for non-pooled streams.
+    /// Returns `None` for single-connection streams.
     fn pool_stats(&self) -> Option<PoolStats> {
         None
     }
 }
 
-/// Implement MarketDataStream for boxed trait objects to allow use with generic wrappers.
+/// Blanket implementation of [`MarketDataStream`] for boxed trait objects.
+///
+/// Enables use of `Box<dyn MarketDataStream>` with generic wrappers and
+/// collection types.
 #[async_trait]
 impl MarketDataStream for Box<dyn MarketDataStream> {
     async fn connect(&mut self) -> Result<(), Error> {
@@ -357,15 +520,45 @@ impl MarketDataStream for Box<dyn MarketDataStream> {
     }
 }
 
-/// Executor for arbitrage opportunities across multiple legs.
+/// Executor for multi-leg arbitrage opportunities.
+///
+/// Handles the complexity of placing multiple coordinated orders to capture
+/// an arbitrage opportunity.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`) to support concurrent
+/// opportunity execution.
+///
+/// # Errors
+///
+/// Methods return [`Error`] for network failures, partial fills, or exchange
+/// rejections.
 #[async_trait]
 pub trait ArbitrageExecutor: Send + Sync {
     /// Execute an arbitrage opportunity by placing orders on all legs.
+    ///
+    /// # Arguments
+    ///
+    /// * `opportunity` - The detected arbitrage opportunity to execute.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any leg fails to execute. Partial execution results
+    /// are captured in [`TradeResult::Partial`].
     async fn execute_arbitrage(&self, opportunity: &Opportunity) -> Result<TradeResult, Error>;
 
-    /// Cancel a specific order by ID.
+    /// Cancel an order by its identifier.
+    ///
+    /// # Arguments
+    ///
+    /// * `order_id` - Identifier of the order to cancel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the order cannot be found or cancellation fails.
     async fn cancel(&self, order_id: &OrderId) -> Result<(), Error>;
 
-    /// Get the exchange name for logging/debugging.
+    /// Return the exchange name for logging and debugging.
     fn exchange_name(&self) -> &'static str;
 }

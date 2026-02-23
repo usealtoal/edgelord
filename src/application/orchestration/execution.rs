@@ -1,4 +1,7 @@
 //! Execution spawning workflow.
+//!
+//! Handles asynchronous trade execution in a background task, managing
+//! success/failure outcomes, partial fills, and resource cleanup.
 
 use std::sync::Arc;
 
@@ -18,12 +21,19 @@ use crate::port::{
     outbound::notifier::ExecutionEvent,
 };
 
+/// RAII guard that releases the execution lock when dropped.
+///
+/// Ensures the market execution lock is released even if the execution
+/// task panics or is cancelled.
 struct ExecutionLockGuard {
+    /// Shared application state containing the lock.
     state: Arc<AppState>,
+    /// Market ID whose lock is held.
     market_id: String,
 }
 
 impl ExecutionLockGuard {
+    /// Create a new guard (assumes lock is already held).
     fn new(state: Arc<AppState>, market_id: String) -> Self {
         Self { state, market_id }
     }
@@ -35,7 +45,14 @@ impl Drop for ExecutionLockGuard {
     }
 }
 
-/// Spawn async execution without blocking message processing.
+/// Spawn asynchronous trade execution without blocking the event loop.
+///
+/// Executes the opportunity in a background task, handling all outcomes:
+/// - Success: Records position and updates exposure tracking
+/// - Partial fill: Attempts cancellation, records partial position if needed
+/// - Failure/timeout: Releases reserved exposure
+///
+/// Sends execution result notifications regardless of outcome.
 pub(crate) fn spawn_execution(
     executor: Arc<dyn ArbitrageExecutor + Send + Sync>,
     opportunity: Opportunity,

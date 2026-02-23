@@ -1,7 +1,10 @@
 //! Single-condition arbitrage strategy.
 //!
-//! Detects when YES + NO < $1.00 for binary markets.
-//! This captured 26.7% ($10.5M) of historical arbitrage profits.
+//! Detects when YES + NO < $1.00 for binary markets, indicating risk-free
+//! profit by purchasing both outcomes.
+//!
+//! Historical data shows this strategy captured 26.7% ($10.5M) of arbitrage
+//! profits, making it the second-largest contributor after market rebalancing.
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -12,14 +15,16 @@ use crate::port::{
     inbound::strategy::Strategy,
 };
 
-/// Configuration for single-condition detection.
+/// Configuration for single-condition arbitrage detection.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SingleConditionConfig {
-    /// Minimum edge (profit per $1) to consider.
+    /// Minimum edge (profit per dollar) required to consider an opportunity.
+    /// Helps filter out opportunities where transaction costs exceed profit.
     #[serde(default = "default_min_edge")]
     pub min_edge: Decimal,
 
-    /// Minimum expected profit in dollars.
+    /// Minimum expected profit in dollars required to execute.
+    /// Prevents trading on opportunities too small to be worthwhile.
     #[serde(default = "default_min_profit")]
     pub min_profit: Decimal,
 }
@@ -41,11 +46,13 @@ impl Default for SingleConditionConfig {
     }
 }
 
-/// Single-condition arbitrage detector.
+/// Single-condition arbitrage detector for binary markets.
 ///
-/// Finds opportunities where buying YES + NO costs less than $1.00.
-/// Since one must pay out, guaranteed $1.00 return.
+/// Identifies opportunities where purchasing both YES and NO outcomes costs
+/// less than the guaranteed payout. Since exactly one outcome must win,
+/// the position guarantees a profit equal to (payout - total cost).
 pub struct SingleConditionStrategy {
+    /// Strategy configuration.
     config: SingleConditionConfig,
 }
 
@@ -56,7 +63,7 @@ impl SingleConditionStrategy {
         Self { config }
     }
 
-    /// Get the strategy configuration.
+    /// Return the current configuration.
     #[must_use]
     pub const fn config(&self) -> &SingleConditionConfig {
         &self.config
@@ -82,7 +89,14 @@ impl Strategy for SingleConditionStrategy {
 
 /// Core detection logic for single-condition arbitrage.
 ///
-/// Checks if YES ask + NO ask < payout, indicating risk-free profit.
+/// Checks if the sum of ask prices for both outcomes is less than the
+/// guaranteed payout, indicating a risk-free profit opportunity.
+///
+/// Returns `None` if:
+/// - The market does not have exactly 2 outcomes
+/// - Any required order book is missing or has no asks
+/// - The edge is below the configured minimum
+/// - The expected profit is below the configured minimum
 pub fn detect_single_condition(
     ctx: &dyn DetectionContext,
     config: &SingleConditionConfig,

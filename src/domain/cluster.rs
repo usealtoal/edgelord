@@ -2,6 +2,40 @@
 //!
 //! A [`Cluster`] represents a group of markets connected by logical relations.
 //! Clusters cache pre-computed solver constraints for fast arbitrage detection.
+//!
+//! # Purpose
+//!
+//! When markets are logically related (e.g., "If A wins state X, then A wins nationally"),
+//! their probabilities must be consistent. Clusters group these related markets
+//! and pre-compute the linear constraints needed for efficient arbitrage detection.
+//!
+//! # Examples
+//!
+//! Building a cluster from relations:
+//!
+//! ```
+//! use edgelord::domain::cluster::Cluster;
+//! use edgelord::domain::relation::{Relation, RelationKind};
+//! use edgelord::domain::id::MarketId;
+//!
+//! let relations = vec![
+//!     Relation::new(
+//!         RelationKind::MutuallyExclusive {
+//!             markets: vec![
+//!                 MarketId::new("candidate-a"),
+//!                 MarketId::new("candidate-b"),
+//!                 MarketId::new("candidate-c"),
+//!             ],
+//!         },
+//!         0.95,
+//!         "Election candidates are mutually exclusive",
+//!     ),
+//! ];
+//!
+//! let cluster = Cluster::from_relations(relations);
+//! assert_eq!(cluster.market_count(), 3);
+//! assert_eq!(cluster.constraint_count(), 1);
+//! ```
 
 use std::collections::HashMap;
 
@@ -19,21 +53,22 @@ use super::relation::Relation;
 pub struct Cluster {
     /// Unique identifier for this cluster.
     pub id: ClusterId,
-    /// Markets in this cluster (ordered for ILP variable mapping).
+    /// Markets in this cluster, ordered for ILP variable mapping.
     pub markets: Vec<MarketId>,
     /// Source relations within this cluster.
     pub relations: Vec<Relation>,
-    /// Pre-computed ILP constraints for the solver (hot path).
+    /// Pre-computed ILP constraints for the solver.
     pub constraints: Vec<Constraint>,
-    /// Last update timestamp.
+    /// Timestamp of the last update.
     pub updated_at: DateTime<Utc>,
 }
 
 impl Cluster {
-    /// Create a new cluster from a set of relations.
+    /// Creates a new cluster from a set of relations.
     ///
-    /// Automatically extracts all referenced markets and builds
-    /// the market index mapping for constraint conversion.
+    /// Automatically extracts all referenced markets, sorts them for
+    /// deterministic variable ordering, and converts relations to
+    /// solver constraints.
     pub fn from_relations(relations: Vec<Relation>) -> Self {
         // Collect all unique markets, sorted for deterministic ordering
         let mut markets: Vec<MarketId> = relations
@@ -66,17 +101,17 @@ impl Cluster {
         }
     }
 
-    /// Check if this cluster contains a specific market.
+    /// Returns true if this cluster contains the specified market.
     pub fn contains_market(&self, market_id: &MarketId) -> bool {
         self.markets.iter().any(|m| m == market_id)
     }
 
-    /// Get the number of markets in this cluster.
+    /// Returns the number of markets in this cluster.
     pub fn market_count(&self) -> usize {
         self.markets.len()
     }
 
-    /// Get the number of constraints in this cluster.
+    /// Returns the number of constraints in this cluster.
     pub fn constraint_count(&self) -> usize {
         self.constraints.len()
     }

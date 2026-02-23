@@ -1,6 +1,8 @@
 //! SQLite statistics persistence.
 //!
 //! Records opportunities, trades, and daily aggregates for historical analysis.
+//! Implements the [`StatsRecorder`](crate::port::outbound::stats::StatsRecorder)
+//! trait for the statistics recording port.
 
 use std::sync::Arc;
 
@@ -24,17 +26,23 @@ use crate::domain::stats::{
     OpportunitySummary, RecordedOpportunity, StatsSummary, TradeCloseEvent, TradeOpenEvent,
 };
 
+/// Convert a decimal to f32 for storage.
 fn decimal_to_f32(d: Decimal) -> f32 {
     d.to_f32().unwrap_or(0.0)
 }
 
-/// Convert f32 to Decimal (used by CLI for summary calculations).
+/// Convert f32 to Decimal for summary calculations.
+#[must_use]
 pub fn f32_to_decimal(f: f32) -> Decimal {
     Decimal::from_f32(f).unwrap_or(Decimal::ZERO)
 }
 
 /// SQLite-backed statistics recorder.
+///
+/// Records trading events and maintains daily aggregate statistics.
+/// Implements the [`StatsRecorder`](crate::port::outbound::stats::StatsRecorder) trait.
 pub struct SqliteRecorder {
+    /// Database connection pool.
     pool: Pool<ConnectionManager<SqliteConnection>>,
 }
 
@@ -46,13 +54,15 @@ struct LastInsertRowId {
 }
 
 impl SqliteRecorder {
-    /// Create a new stats recorder.
+    /// Create a new statistics recorder with the given connection pool.
     #[must_use]
     pub fn new(pool: Pool<ConnectionManager<SqliteConnection>>) -> Self {
         Self { pool }
     }
 
-    /// Record an opportunity detection.
+    /// Record an opportunity detection event.
+    ///
+    /// Returns the database row ID if successful, or `None` on failure.
     pub fn record_opportunity(&self, event: &RecordedOpportunity) -> Option<i32> {
         let market_ids_json = serde_json::to_string(&event.market_ids).unwrap_or_default();
         let now = Utc::now().to_rfc3339();
@@ -108,7 +118,9 @@ impl SqliteRecorder {
         }
     }
 
-    /// Record a trade opening.
+    /// Record a trade opening event.
+    ///
+    /// Returns the database row ID if successful, or `None` on failure.
     pub fn record_trade_open(&self, event: &TradeOpenEvent) -> Option<i32> {
         let market_ids_json = serde_json::to_string(&event.market_ids).unwrap_or_default();
         let legs_json = serde_json::to_string(&event.legs).unwrap_or_default();
@@ -161,7 +173,7 @@ impl SqliteRecorder {
         }
     }
 
-    /// Record a trade closing.
+    /// Record a trade closing event.
     pub fn record_trade_close(&self, event: &TradeCloseEvent) {
         let now = Utc::now().to_rfc3339();
         let today = Utc::now().date_naive().to_string();
@@ -218,7 +230,7 @@ impl SqliteRecorder {
         debug!(trade_id = event.trade_id, profit = %event.realized_profit, "Recorded trade close");
     }
 
-    /// Record latency sample.
+    /// Record a latency measurement sample.
     pub fn record_latency(&self, latency_ms: u32) {
         let today = Utc::now().date_naive().to_string();
         self.update_daily_stats(&today, "", |daily, _| {
@@ -227,7 +239,7 @@ impl SqliteRecorder {
         });
     }
 
-    /// Update peak exposure if current is higher.
+    /// Update peak exposure if the current value is higher than recorded.
     pub fn update_peak_exposure(&self, exposure: Decimal) {
         let today = Utc::now().date_naive().to_string();
         let exp = decimal_to_f32(exposure);
@@ -238,7 +250,8 @@ impl SqliteRecorder {
         });
     }
 
-    /// Get summary for a date range.
+    /// Retrieve aggregated statistics for a date range.
+    #[must_use]
     pub fn get_summary(&self, from: NaiveDate, to: NaiveDate) -> StatsSummary {
         let mut conn = match self.pool.get() {
             Ok(c) => c,
@@ -254,13 +267,14 @@ impl SqliteRecorder {
         summary_from_rows(&rows)
     }
 
-    /// Get today's summary.
+    /// Retrieve today's aggregated statistics.
+    #[must_use]
     pub fn get_today(&self) -> StatsSummary {
         let today = Utc::now().date_naive();
         self.get_summary(today, today)
     }
 
-    /// Prune old records, keeping aggregated daily stats.
+    /// Prune old records while preserving aggregated daily statistics.
     pub fn prune_old_records(&self, retention_days: u32) {
         let cutoff = Utc::now().date_naive() - chrono::Duration::days(i64::from(retention_days));
         let cutoff_str = cutoff.to_string();
@@ -378,7 +392,7 @@ impl crate::port::outbound::stats::StatsRecorder for SqliteRecorder {
     }
 }
 
-/// Create a stats recorder from a database pool.
+/// Create a statistics recorder from a database connection pool.
 #[must_use]
 pub fn create_recorder(
     pool: Pool<ConnectionManager<SqliteConnection>>,
@@ -386,7 +400,8 @@ pub fn create_recorder(
     Arc::new(SqliteRecorder::new(pool))
 }
 
-/// Export daily stats to CSV format.
+/// Export daily statistics to CSV format.
+#[must_use]
 pub fn export_daily_csv(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
     from: NaiveDate,
@@ -437,7 +452,8 @@ pub fn export_daily_csv(
     csv
 }
 
-/// Get recent opportunities.
+/// Retrieve recent opportunity records.
+#[must_use]
 pub fn recent_opportunities(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
     limit: i64,
@@ -466,7 +482,8 @@ pub fn recent_opportunities(
         .collect()
 }
 
-/// Build summary from daily stats rows.
+/// Build a statistics summary from daily stats rows.
+#[must_use]
 pub fn summary_from_rows(rows: &[DailyStatsRow]) -> StatsSummary {
     let mut summary = StatsSummary::default();
     for row in rows {

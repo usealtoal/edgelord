@@ -1,4 +1,7 @@
-//! Market-event flow for orchestration.
+//! Market event flow for orchestration.
+//!
+//! Processes incoming market events and triggers appropriate actions:
+//! order book updates, strategy detection, and position settlements.
 
 use std::time::Instant;
 
@@ -11,7 +14,12 @@ use super::handler::MarketEventHandlingContext;
 use crate::application::position::manager::{CloseReason, PositionManager};
 use crate::port::outbound::exchange::MarketEvent;
 
-/// Handle incoming market events from the data stream.
+/// Process an incoming market event from the data stream.
+///
+/// Dispatches to the appropriate handler based on event type:
+/// - Book snapshots/deltas: Update cache and run strategy detection
+/// - Market settled: Close all positions for the market
+/// - Connection events: Log status changes
 pub(crate) fn handle_market_event(event: MarketEvent, context: MarketEventHandlingContext<'_>) {
     let start = Instant::now();
 

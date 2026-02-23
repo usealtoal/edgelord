@@ -1,12 +1,17 @@
 //! Frank-Wolfe algorithm for Bregman projection.
 //!
 //! The Frank-Wolfe (conditional gradient) algorithm solves:
-//!   min_{μ ∈ M} D(μ || θ)
 //!
-//! where D is the Bregman divergence and M is the marginal polytope.
+//! ```text
+//! min_{mu in M} D(mu || theta)
+//! ```
 //!
-//! Instead of full projection, it uses a linear minimization oracle (ILP)
-//! to iteratively improve the solution.
+//! where D is the Bregman divergence and M is the marginal polytope (the set
+//! of valid probability distributions satisfying market constraints).
+//!
+//! Instead of computing a full projection, it uses a linear minimization
+//! oracle (ILP) to iteratively improve the solution, making it efficient
+//! for large constraint sets.
 
 // Allow large error types - inherited from crate's unified Error type
 #![allow(clippy::result_large_err)]
@@ -20,12 +25,12 @@ use crate::port::{
     outbound::solver::Solver,
 };
 
-/// Configuration for Frank-Wolfe algorithm.
+/// Configuration for the Frank-Wolfe algorithm.
 #[derive(Debug, Clone)]
 pub struct FrankWolfeConfig {
-    /// Maximum iterations.
+    /// Maximum number of iterations before terminating.
     pub max_iterations: usize,
-    /// Convergence tolerance.
+    /// Convergence tolerance for the duality gap.
     pub tolerance: Decimal,
 }
 
@@ -38,9 +43,13 @@ impl Default for FrankWolfeConfig {
     }
 }
 
-/// Frank-Wolfe algorithm state.
+/// Frank-Wolfe algorithm implementation.
+///
+/// Provides iterative projection of market prices onto the marginal polytope,
+/// detecting arbitrage by measuring the projection distance.
 #[derive(Clone)]
 pub struct FrankWolfe {
+    /// Algorithm configuration.
     config: FrankWolfeConfig,
 }
 
@@ -51,28 +60,33 @@ impl FrankWolfe {
         Self { config }
     }
 
-    /// Get the configuration.
+    /// Return the current configuration.
     #[must_use]
     pub const fn config(&self) -> &FrankWolfeConfig {
         &self.config
     }
 
-    /// Run Frank-Wolfe projection.
+    /// Run Frank-Wolfe projection to find arbitrage opportunities.
     ///
-    /// The Frank-Wolfe algorithm (also known as conditional gradient descent) projects
-    /// market prices onto the marginal polytope M by iteratively solving:
-    ///   min_{mu ∈ M} D(mu || theta)
+    /// Projects market prices onto the marginal polytope M by iteratively solving:
+    /// `min_{mu in M} D(mu || theta)`
     ///
-    /// where D is the Bregman divergence. This is useful for arbitrage detection:
-    /// if theta lies outside M, the projection distance indicates arbitrage profit.
+    /// If theta lies outside M (prices are mispriced), the projection distance
+    /// indicates the maximum arbitrage profit available.
     ///
     /// # Arguments
-    /// * `theta` - Current market prices (may be outside M)
-    /// * `ilp_problem` - ILP defining the feasible set M
-    /// * `solver` - ILP solver to use
+    ///
+    /// * `theta` - Current market prices (may be outside M).
+    /// * `ilp_problem` - ILP defining the feasible set M via constraints.
+    /// * `solver` - ILP solver implementation to use.
     ///
     /// # Returns
-    /// * `FrankWolfeResult` with projected prices and arbitrage gap
+    ///
+    /// A [`FrankWolfeResult`] containing projected prices and arbitrage gap.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ILP solver fails during any iteration.
     pub fn project(
         &self,
         theta: &[Decimal],
@@ -184,21 +198,23 @@ impl FrankWolfe {
     }
 }
 
-/// Result of Frank-Wolfe projection.
+/// Result of a Frank-Wolfe projection.
 #[derive(Debug, Clone)]
 pub struct FrankWolfeResult {
-    /// Projected prices (on or near the marginal polytope).
+    /// Projected prices on or near the marginal polytope.
     pub mu: Vec<Decimal>,
-    /// Final gap (approximates arbitrage profit).
+    /// Final Bregman divergence (approximates maximum arbitrage profit).
     pub gap: Decimal,
-    /// Number of iterations run.
+    /// Number of iterations executed.
     pub iterations: usize,
-    /// Whether algorithm converged.
+    /// Whether the algorithm converged within tolerance.
     pub converged: bool,
 }
 
 impl FrankWolfeResult {
-    /// Check if significant arbitrage exists.
+    /// Check if the gap indicates significant arbitrage opportunity.
+    ///
+    /// Returns true if the gap exceeds the given threshold.
     #[must_use]
     pub fn has_arbitrage(&self, threshold: Decimal) -> bool {
         self.gap > threshold

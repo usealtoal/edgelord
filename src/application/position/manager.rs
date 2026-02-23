@@ -1,7 +1,7 @@
 //! Position lifecycle management service.
 //!
-//! Handles position state transitions from open → closed, tracking
-//! settlement events and recording stats.
+//! Handles position state transitions from open to closed, integrating with
+//! the statistics recorder for trade tracking and PnL reporting.
 
 use std::sync::Arc;
 
@@ -15,20 +15,34 @@ use crate::domain::{
 use crate::port::outbound::stats::StatsRecorder;
 
 /// Reason for closing a position.
+///
+/// Tracks why a position was closed for analytics and debugging.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CloseReason {
     /// Market settled with a winning outcome.
-    Settlement { winning_outcome: String },
-    /// Manual exit before settlement.
+    Settlement {
+        /// Name or identifier of the winning outcome.
+        winning_outcome: String,
+    },
+    /// Manual exit requested by operator.
     ManualExit,
-    /// Stop loss triggered.
-    StopLoss { trigger_price: Decimal },
-    /// Take profit target reached.
-    TakeProfit { trigger_price: Decimal },
-    /// Position expired (time limit).
+    /// Stop loss threshold was triggered.
+    StopLoss {
+        /// Price at which stop loss triggered.
+        trigger_price: Decimal,
+    },
+    /// Take profit target was reached.
+    TakeProfit {
+        /// Price at which take profit triggered.
+        trigger_price: Decimal,
+    },
+    /// Position reached its time limit.
     Expired,
-    /// System shutdown or error recovery.
-    SystemExit { reason: String },
+    /// System shutdown or error recovery forced closure.
+    SystemExit {
+        /// Description of why the system exit occurred.
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for CloseReason {
@@ -46,32 +60,39 @@ impl std::fmt::Display for CloseReason {
     }
 }
 
-/// Result of a position close operation.
+/// Result of a successful position close operation.
 #[derive(Debug, Clone)]
 pub struct CloseResult {
-    /// Position ID that was closed.
+    /// ID of the position that was closed.
     pub position_id: PositionId,
-    /// Realized profit/loss.
+    /// Realized profit or loss from the position.
     pub realized_pnl: Price,
-    /// Reason for closing.
+    /// Reason the position was closed.
     pub reason: CloseReason,
 }
 
-/// Manages position lifecycle and integrates with stats.
+/// Manages position lifecycle transitions and statistics recording.
+///
+/// Coordinates position closures across the tracker and stats recorder,
+/// ensuring consistent state and metrics.
 pub struct PositionManager {
+    /// Statistics recorder for trade close events.
     stats: Arc<dyn StatsRecorder>,
 }
 
 impl PositionManager {
-    /// Create a new position manager.
+    /// Create a new position manager with the given stats recorder.
     #[must_use]
     pub fn new(stats: Arc<dyn StatsRecorder>) -> Self {
         Self { stats }
     }
 
-    /// Close a position by ID with the given PnL and reason.
+    /// Close a position by ID with the given realized PnL.
     ///
-    /// Updates the position tracker, records stats, and returns the close result.
+    /// Updates the position in the tracker, records the close event in stats,
+    /// and returns the close result.
+    ///
+    /// Returns `None` if the position was not found or is already closed.
     pub fn close_position(
         &self,
         tracker: &mut PositionTracker,
@@ -116,7 +137,10 @@ impl PositionManager {
         })
     }
 
-    /// Close all positions for a market (e.g., on settlement).
+    /// Close all open positions for a market.
+    ///
+    /// Typically called on market settlement. Uses the provided calculator
+    /// to determine the realized PnL for each position.
     ///
     /// Returns the total realized PnL across all closed positions.
     pub fn close_all_for_market(
@@ -151,23 +175,31 @@ impl PositionManager {
 
     /// Calculate settlement PnL for an arbitrage position.
     ///
-    /// For arbitrage, we hold all outcomes so we always get the payout
-    /// minus our entry cost.
+    /// For arbitrage positions that hold all outcomes, the PnL is simply
+    /// the payout received minus the entry cost paid.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The arbitrage position being settled.
+    /// * `payout_per_share` - Payout amount per share from the settlement.
     #[must_use]
     pub fn calculate_arbitrage_pnl(position: &Position, payout_per_share: Decimal) -> Price {
         // Arbitrage position: we hold all outcomes
-        // PnL = (payout × shares) - entry_cost
+        // PnL = (payout * shares) - entry_cost
         let shares = position.guaranteed_payout(); // This is actually volume
         (payout_per_share * shares) - position.entry_cost()
     }
 }
 
 /// Event indicating a market has settled.
+///
+/// Received from the exchange when a market resolves, triggering
+/// position settlement.
 #[derive(Debug, Clone)]
 pub struct MarketSettledEvent {
-    /// Market that settled.
+    /// ID of the market that settled.
     pub market_id: MarketId,
-    /// Which outcome won (e.g., "Yes", "No", outcome name).
+    /// Name or identifier of the winning outcome.
     pub winning_outcome: String,
     /// Payout amount per winning share.
     pub payout_per_share: Decimal,

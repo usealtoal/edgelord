@@ -1,3 +1,8 @@
+//! Connection spawning utilities.
+//!
+//! Provides functions for spawning new connection tasks and creating
+//! connection state objects.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -15,8 +20,13 @@ use super::StreamFactory;
 
 /// Spawn a connection task that reads events and forwards them to `event_tx`.
 ///
+/// Creates a tokio task that:
+/// 1. Connects to the WebSocket
+/// 2. Subscribes to the specified tokens
+/// 3. Forwards received events to the shared channel
+///
 /// This is a free function (not a method) so both the pool and the management
-/// task can call it without borrow conflicts on `self`.
+/// task can call it without borrow conflicts.
 fn spawn_connection(
     factory: &StreamFactory,
     reconnection_config: ReconnectionConfig,
@@ -75,11 +85,11 @@ fn spawn_connection(
     })
 }
 
-/// Build a fresh [`ConnectionState`], spawning its task immediately.
+/// Build a fresh [`ConnectionState`] and spawn its task immediately.
 ///
-/// `last_event_at` is initialized to the current timestamp so that the
-/// silent-death detector doesn't flag a brand-new connection that hasn't
-/// received its first event yet.
+/// Initializes `last_event_at` to the current timestamp so that the
+/// silent-death detector does not flag a brand-new connection that has not
+/// yet received its first event.
 pub(super) fn new_connection(
     id: u64,
     tokens: Vec<TokenId>,

@@ -1,4 +1,6 @@
-//! SQLite store implementation using Diesel.
+//! SQLite relation store implementation.
+//!
+//! Provides persistent storage for market relations using SQLite and Diesel ORM.
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -11,12 +13,17 @@ use crate::error::{Error, Result};
 use crate::port::outbound::store::RelationStore;
 
 /// SQLite-backed relation store.
+///
+/// Implements the [`RelationStore`] trait for persistent storage of
+/// inferred market relations.
 pub struct SqliteRelationStore {
+    /// Database connection pool.
     pool: DbPool,
 }
 
 impl SqliteRelationStore {
-    /// Create a new SQLite relation store.
+    /// Create a new SQLite relation store with the given connection pool.
+    #[must_use]
     pub fn new(pool: DbPool) -> Self {
         Self { pool }
     }

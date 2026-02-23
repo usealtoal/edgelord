@@ -1,4 +1,8 @@
 //! Order execution for Polymarket CLOB.
+//!
+//! Provides the [`PolymarketExecutor`] adapter for submitting and managing
+//! orders on the Polymarket Central Limit Order Book (CLOB). Supports both
+//! individual order execution and parallel multi-leg arbitrage trades.
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -28,16 +32,25 @@ use crate::port::{
 /// Type alias for the authenticated CLOB client.
 type AuthenticatedClient = Client<Authenticated<Normal>>;
 
-/// Executes trades on Polymarket CLOB.
+/// Trade executor for the Polymarket CLOB.
+///
+/// Handles order signing, submission, and cancellation using the Polymarket
+/// SDK. Supports both single orders via [`OrderExecutor`] and multi-leg
+/// arbitrage via [`ArbitrageExecutor`].
 pub struct PolymarketExecutor {
-    /// The authenticated CLOB client.
+    /// Authenticated CLOB client for API communication.
     client: Arc<AuthenticatedClient>,
-    /// The signer for signing orders.
+    /// Local signer for order signatures.
     signer: Arc<PrivateKeySigner>,
 }
 
 impl PolymarketExecutor {
-    /// Create new executor by authenticating with Polymarket CLOB.
+    /// Create a new executor by authenticating with the Polymarket CLOB.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the private key is missing or invalid, or if
+    /// CLOB authentication fails.
     pub async fn new(config: &PolymarketRuntimeConfig) -> Result<Self> {
         if config.private_key.trim().is_empty() {
             return Err(ConfigError::MissingField {
@@ -79,6 +92,9 @@ impl PolymarketExecutor {
     }
 
     /// Execute an arbitrage opportunity by placing orders on all legs in parallel.
+    ///
+    /// Submits buy orders for all legs concurrently and aggregates results
+    /// into success, partial fill, or failure outcomes.
     async fn execute_arbitrage_impl(&self, opportunity: &Opportunity) -> Result<TradeResult> {
         info!(
             market = %opportunity.market_id(),
@@ -155,7 +171,12 @@ impl PolymarketExecutor {
         }
     }
 
-    /// Submit a single order to the CLOB.
+    /// Submit a single limit order to the CLOB.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the token ID is invalid, order building fails,
+    /// signing fails, or the exchange rejects the order.
     async fn submit_order(
         &self,
         token_id: &str,
@@ -208,7 +229,12 @@ impl PolymarketExecutor {
         Ok(response)
     }
 
-    /// Cancel an order by ID.
+    /// Cancel an open order by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the cancellation request fails or the order
+    /// cannot be cancelled (e.g., already filled or does not exist).
     async fn cancel_order_impl(&self, order_id: &OrderId) -> Result<()> {
         let response = self
             .client

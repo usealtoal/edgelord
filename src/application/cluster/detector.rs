@@ -1,4 +1,7 @@
 //! Cluster detection logic using Frank-Wolfe projection.
+//!
+//! Encapsulates the arbitrage detection algorithm for a single cluster,
+//! separate from the service lifecycle management.
 
 use std::sync::Arc;
 
@@ -16,19 +19,32 @@ use crate::port::{
 
 use super::service::{ClusterDetectionConfig, ClusterOpportunity};
 
-/// Errors specific to cluster detection.
+/// Errors specific to cluster detection operations.
 #[derive(Debug, Clone)]
 pub enum DetectionError {
-    /// Cluster not found in cache.
+    /// The specified cluster was not found in the cache.
     ClusterNotFound(String),
-    /// Not enough markets in cluster.
-    InsufficientMarkets { cluster_id: String, count: usize },
-    /// Missing price data for market.
-    MissingPriceData { market_id: String },
-    /// Frank-Wolfe solver failed.
+    /// The cluster contains fewer than the minimum required markets.
+    InsufficientMarkets {
+        /// ID of the cluster with insufficient markets.
+        cluster_id: String,
+        /// Actual number of markets in the cluster.
+        count: usize,
+    },
+    /// Price data is not available for a market in the cluster.
+    MissingPriceData {
+        /// ID of the market missing price data.
+        market_id: String,
+    },
+    /// The Frank-Wolfe solver encountered an error.
     SolverFailed(String),
-    /// Gap below threshold.
-    GapBelowThreshold { gap: Decimal, threshold: Decimal },
+    /// The arbitrage gap is below the configured threshold.
+    GapBelowThreshold {
+        /// Detected gap value.
+        gap: Decimal,
+        /// Required threshold.
+        threshold: Decimal,
+    },
 }
 
 impl std::fmt::Display for DetectionError {
@@ -51,19 +67,23 @@ impl std::fmt::Display for DetectionError {
 
 impl std::error::Error for DetectionError {}
 
-/// Function type for looking up order books.
+/// Function type for looking up order books by token ID.
 pub type BookLookup<'a> = &'a dyn Fn(&TokenId) -> Option<Book>;
 
 /// Cluster detector using Frank-Wolfe projection.
 ///
-/// Encapsulates the detection logic separate from the service lifecycle.
+/// Encapsulates the detection algorithm for finding arbitrage within a
+/// cluster of related markets. Separate from the service lifecycle to
+/// enable both synchronous (strategy) and asynchronous (service) usage.
 pub struct ClusterDetector {
+    /// Detection configuration.
     config: ClusterDetectionConfig,
+    /// Projection solver for running Frank-Wolfe.
     projection_solver: Arc<dyn ProjectionSolver>,
 }
 
 impl ClusterDetector {
-    /// Create a new detector with the given configuration.
+    /// Create a new detector with the given configuration and solver.
     pub fn new(
         config: ClusterDetectionConfig,
         projection_solver: Arc<dyn ProjectionSolver>,
@@ -74,16 +94,26 @@ impl ClusterDetector {
         }
     }
 
-    /// Detect arbitrage in a cluster.
+    /// Detect arbitrage opportunities in a cluster.
     ///
-    /// Returns `Ok(Some(opportunity))` if arbitrage found,
-    /// `Ok(None)` if gap below threshold,
-    /// `Err` if detection failed.
+    /// Runs Frank-Wolfe projection to find the distance between current
+    /// market prices and the arbitrage-free manifold.
     ///
     /// # Arguments
-    /// * `cluster` - The cluster to analyze
-    /// * `book_lookup` - Function to look up order books by token ID
-    /// * `registry` - Market registry for resolving market metadata
+    ///
+    /// * `cluster` - The cluster of related markets to analyze.
+    /// * `book_lookup` - Function to look up order books by token ID.
+    /// * `registry` - Market registry for resolving market metadata.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Some(opportunity))` if arbitrage is found above threshold
+    /// - `Ok(None)` if gap is below threshold (no actionable opportunity)
+    /// - `Err` if detection failed (missing data, solver error, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if price data is missing or the solver fails.
     pub fn detect(
         &self,
         cluster: &Cluster,
@@ -149,7 +179,7 @@ impl ClusterDetector {
         }))
     }
 
-    /// Gather current prices for all markets in a cluster.
+    /// Gather current ask prices for all markets in a cluster.
     fn gather_prices(
         &self,
         cluster: &Cluster,
@@ -195,7 +225,7 @@ impl ClusterDetector {
         Ok((prices, token_ids))
     }
 
-    /// Build an opportunity from detection results.
+    /// Build an opportunity from Frank-Wolfe projection results.
     fn build_opportunity(
         &self,
         cluster: &Cluster,

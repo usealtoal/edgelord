@@ -1,5 +1,9 @@
 //! Telegram notification and command handling.
 //!
+//! Provides the [`TelegramNotifier`] for sending trade notifications and
+//! handling bot commands. Spawns background workers for both outbound
+//! messages and inbound command processing.
+//!
 //! Requires the `telegram` feature to be enabled.
 
 use std::sync::Arc;
@@ -17,25 +21,32 @@ use super::command::bot_commands;
 use super::control::{RuntimeStats, TelegramControl};
 use super::format::format_event_message;
 
-/// Configuration for Telegram notifier.
+/// Configuration for the Telegram notifier.
+///
+/// Controls which events trigger notifications and display limits for
+/// bot command responses.
 #[derive(Debug, Clone)]
 pub struct TelegramConfig {
-    /// Bot token from @`BotFather`.
+    /// Bot API token obtained from BotFather.
     pub bot_token: String,
-    /// Chat ID to send notifications to.
+    /// Target chat ID for notifications.
     pub chat_id: i64,
-    /// Whether to send opportunity alerts (can be noisy).
+    /// Send notifications for detected opportunities (can be noisy).
     pub notify_opportunities: bool,
-    /// Whether to send execution alerts.
+    /// Send notifications for executed trades.
     pub notify_executions: bool,
-    /// Whether to send risk rejections.
+    /// Send notifications for risk-rejected opportunities.
     pub notify_risk_rejections: bool,
-    /// Maximum positions to display in /positions command.
+    /// Maximum positions to display in the /positions command response.
     pub position_display_limit: usize,
 }
 
 impl TelegramConfig {
-    /// Create config from environment variables.
+    /// Create configuration from environment variables.
+    ///
+    /// Reads `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and optionally
+    /// `TELEGRAM_NOTIFY_OPPORTUNITIES`. Returns `None` if required
+    /// variables are missing or invalid.
     #[must_use]
     pub fn from_env() -> Option<Self> {
         let bot_token = std::env::var("TELEGRAM_BOT_TOKEN").ok()?;
@@ -57,24 +68,35 @@ impl TelegramConfig {
 }
 
 /// Telegram notifier that sends messages to a chat.
+///
+/// Implements the [`Notifier`] trait and spawns background workers for
+/// message delivery and command handling.
 pub struct TelegramNotifier {
+    /// Channel sender for queuing outbound notifications.
     sender: mpsc::UnboundedSender<Event>,
 }
 
 impl TelegramNotifier {
-    /// Create a new Telegram notifier and spawn the background task.
+    /// Create a new Telegram notifier and spawn the background worker.
+    ///
+    /// This constructor creates a notification-only notifier without
+    /// command handling capabilities.
     #[must_use]
     pub fn new(config: TelegramConfig) -> Self {
         Self::new_inner(config, None, None, None)
     }
 
-    /// Create a notifier and enable Telegram command handling tied to app state.
+    /// Create a notifier with command handling tied to application state.
+    ///
+    /// Enables basic bot commands like /status and /pause.
     #[must_use]
     pub fn new_with_control(config: TelegramConfig, state: Arc<dyn RuntimeState>) -> Self {
         Self::new_inner(config, Some(state), None, None)
     }
 
-    /// Create a notifier with full dependencies for all commands.
+    /// Create a notifier with full command handling capabilities.
+    ///
+    /// Enables all bot commands including /stats and /positions.
     #[must_use]
     pub fn new_with_full_control(
         config: TelegramConfig,

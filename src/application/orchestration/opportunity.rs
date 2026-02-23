@@ -1,4 +1,7 @@
 //! Opportunity decision flow for orchestration.
+//!
+//! Evaluates detected opportunities through slippage checks, risk validation,
+//! and execution routing.
 
 use std::sync::Arc;
 
@@ -12,7 +15,15 @@ use crate::error::RiskError;
 use crate::port::inbound::risk::RiskCheckResult;
 use crate::port::outbound::notifier::{Event, OpportunityEvent, RiskEvent};
 
-/// Handle a detected opportunity.
+/// Process a detected opportunity through validation and execution.
+///
+/// Performs the following steps:
+/// 1. Acquire execution lock (skip if market already being executed)
+/// 2. Check slippage against configured threshold
+/// 3. Validate opportunity against risk manager
+/// 4. Either spawn execution (live mode) or log (dry-run mode)
+///
+/// Releases locks and reserved exposure on all exit paths.
 pub(crate) fn handle_opportunity(opp: Opportunity, context: OpportunityHandlingContext<'_>) {
     let OpportunityHandlingContext {
         executor,

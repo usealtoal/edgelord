@@ -1,11 +1,20 @@
 //! Infrastructure layer.
 //!
-//! Technical concerns that support the application:
+//! Provides technical concerns that support the application without containing
+//! business logic. This layer handles configuration, connection management,
+//! and runtime resource coordination.
 //!
-//! - `config` - Configuration loading and validation
-//! - `exchange` - Connection pooling and factory
-//! - `governor` - Adaptive performance monitoring and scaling
-//! - `subscription` - WebSocket subscription management
+//! # Submodules
+//!
+//! - [`bootstrap`] - Composition root for runtime wiring
+//! - [`config`] - Configuration loading and validation
+//! - [`exchange`] - Connection pooling and exchange factory
+//! - [`factory`] - Component factory functions
+//! - [`governor`] - Adaptive performance monitoring and scaling
+//! - [`operator`] - CLI operator interface
+//! - [`orchestration`] - Runtime orchestration
+//! - [`subscription`] - WebSocket subscription management
+//! - [`wallet`] - Wallet operations facade
 
 pub mod bootstrap;
 pub mod config;

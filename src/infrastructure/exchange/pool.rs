@@ -43,22 +43,30 @@ use replace::ManagementContext;
 use spawn::new_connection;
 use state::{lock_or_recover, ConnectionState, SharedCounters};
 
-/// Factory function for creating new data stream instances.
+/// Factory function type for creating new data stream instances.
 ///
 /// Used by the connection pool to create new connections on demand.
+/// The factory must be thread-safe and produce independent stream instances.
 pub type StreamFactory = Arc<dyn Fn() -> Box<dyn MarketDataStream> + Send + Sync>;
 
 /// Duration to drain events from an old connection before aborting it.
+///
+/// Allows in-flight events to be delivered before the connection task
+/// is terminated.
 pub(super) const DRAIN_GRACE_PERIOD: Duration = Duration::from_millis(100);
 
-/// Polling interval during handoff (checking for first event).
+/// Polling interval during handoff.
+///
+/// How frequently to check if a replacement connection has received its
+/// first event.
 pub(super) const HANDOFF_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Starting ID for management-spawned connections.
 ///
-/// Initial connections get IDs 1, 2, 3, ... Management-spawned replacements
-/// start at this value to avoid ID collisions and make logs easier to follow.
-pub(super) const MANAGEMENT_CONNECTION_ID_START: u64 = 1_000_000;
+/// Initial connections during subscribe get sequential IDs (1, 2, 3, ...).
+/// Management-spawned replacements start at this value to avoid ID collisions
+/// and make logs easier to follow.
+pub(super) const MANAGEMENT_CONNECTION_ID_START: u64 = 10_000;
 
 /// Exchange-agnostic connection pool that manages multiple WebSocket connections.
 ///
@@ -69,15 +77,25 @@ pub(super) const MANAGEMENT_CONNECTION_ID_START: u64 = 1_000_000;
 /// The event channel is bounded (configurable via `channel_capacity`) to
 /// prevent unbounded memory growth under backpressure.
 pub struct ConnectionPool {
+    /// Pool configuration settings.
     pool_config: ConnectionPoolConfig,
+    /// Reconnection and backoff settings.
     reconnection_config: ReconnectionConfig,
+    /// Factory for creating new data stream instances.
     stream_factory: StreamFactory,
+    /// Receiver end of the merged event channel.
     event_rx: mpsc::Receiver<MarketEvent>,
+    /// Sender end of the merged event channel (cloned to each connection).
     event_tx: mpsc::Sender<MarketEvent>,
+    /// Active connection states protected by a mutex.
     connections: Arc<Mutex<Vec<ConnectionState>>>,
+    /// Shared counters for observability metrics.
     counters: Arc<SharedCounters>,
+    /// Handle to the background management task.
     management_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Exchange name for logging.
     exchange_name: &'static str,
+    /// Next connection ID to assign.
     next_conn_id: u64,
 }
 
@@ -122,6 +140,10 @@ impl ConnectionPool {
     }
 
     /// Validate pool configuration values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any configuration value is invalid.
     fn validate_config(config: &ConnectionPoolConfig) -> Result<()> {
         let invalid = |field: &'static str, reason: &str| -> crate::error::Error {
             ConfigError::InvalidValue {
@@ -158,7 +180,9 @@ impl ConnectionPool {
         Ok(())
     }
 
-    /// Runtime statistics for observability (e.g. Telegram `/health` command).
+    /// Return runtime statistics for observability.
+    ///
+    /// Provides metrics suitable for health checks and monitoring dashboards.
     pub fn stats(&self) -> PoolStats {
         let active = lock_or_recover(&self.connections).len();
         PoolStats {
@@ -169,10 +193,11 @@ impl ConnectionPool {
         }
     }
 
-    /// Distribute `token_ids` into chunks respecting pool limits.
+    /// Distribute token IDs into chunks for each connection.
     ///
-    /// Overflow tokens are appended to the last chunk when the number of
-    /// tokens exceeds `max_connections * subscriptions_per_connection`.
+    /// Respects `subscriptions_per_connection` and `max_connections` limits.
+    /// Overflow tokens are appended to the last chunk when the total exceeds
+    /// capacity.
     fn distribute_tokens(&self, token_ids: &[TokenId]) -> Vec<Vec<TokenId>> {
         let per_conn = self.pool_config.subscriptions_per_connection;
         let max_conns = self.pool_config.max_connections;
@@ -196,6 +221,9 @@ impl ConnectionPool {
     }
 
     /// Tear down all existing connections and the management task.
+    ///
+    /// Aborts all connection tasks and the management task. Safe to call
+    /// multiple times.
     fn shutdown(&mut self) {
         if let Some(h) = self.management_handle.take() {
             h.abort();

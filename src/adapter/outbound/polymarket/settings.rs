@@ -1,13 +1,20 @@
 //! Polymarket exchange configuration.
+//!
+//! Defines configuration types for the Polymarket adapter including connection
+//! settings, market filtering, scoring weights, and deduplication options.
 
 use serde::Deserialize;
 
-/// Exchange environment (testnet vs mainnet).
+/// Exchange deployment environment.
+///
+/// Determines which blockchain network and API endpoints to use.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Environment {
+    /// Amoy testnet (chain ID 80002).
     #[default]
     Testnet,
+    /// Polygon mainnet (chain ID 137).
     Mainnet,
 }
 
@@ -20,28 +27,31 @@ impl std::fmt::Display for Environment {
     }
 }
 
-/// Connection management settings for Polymarket streams.
+/// WebSocket connection pool configuration.
+///
+/// Controls connection lifecycle, health monitoring, and capacity limits
+/// for the WebSocket connection pool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketConnectionConfig {
-    /// Maximum number of connections in the pool.
+    /// Maximum number of concurrent WebSocket connections.
     #[serde(default = "default_pool_max_connections")]
     pub max_connections: usize,
-    /// Maximum subscriptions per connection.
+    /// Maximum market subscriptions per connection.
     #[serde(default = "default_pool_subscriptions_per_connection")]
     pub subscriptions_per_connection: usize,
-    /// Connection time-to-live in seconds.
+    /// Connection time-to-live in seconds before refresh.
     #[serde(default = "default_pool_connection_ttl_secs")]
     pub connection_ttl_secs: u64,
-    /// Seconds before TTL to preemptively reconnect.
+    /// Seconds before TTL to start preemptive reconnection.
     #[serde(default = "default_pool_preemptive_reconnect_secs")]
     pub preemptive_reconnect_secs: u64,
-    /// Health check interval in seconds.
+    /// Interval between health check cycles in seconds.
     #[serde(default = "default_pool_health_check_interval_secs")]
     pub health_check_interval_secs: u64,
-    /// Maximum seconds with no events before considering a connection unhealthy.
+    /// Maximum idle time before marking a connection unhealthy.
     #[serde(default = "default_pool_max_silent_secs")]
     pub max_silent_secs: u64,
-    /// Event channel capacity.
+    /// Capacity of the internal event channel.
     #[serde(default = "default_pool_channel_capacity")]
     pub channel_capacity: usize,
 }
@@ -88,19 +98,22 @@ impl Default for PolymarketConnectionConfig {
     }
 }
 
-/// Polymarket HTTP client configuration.
+/// HTTP client configuration for REST API calls.
+///
+/// Controls timeouts and retry behavior for HTTP requests to the
+/// Polymarket REST APIs.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketHttpConfig {
     /// Request timeout in milliseconds.
     #[serde(default = "default_http_timeout_ms")]
     pub timeout_ms: u64,
-    /// Connect timeout in milliseconds.
+    /// Connection establishment timeout in milliseconds.
     #[serde(default = "default_http_connect_timeout_ms")]
     pub connect_timeout_ms: u64,
-    /// Maximum number of retry attempts for transient failures.
+    /// Maximum retry attempts for transient failures.
     #[serde(default = "default_http_retry_max_attempts")]
     pub retry_max_attempts: u32,
-    /// Backoff between retries in milliseconds.
+    /// Backoff delay between retries in milliseconds.
     #[serde(default = "default_http_retry_backoff_ms")]
     pub retry_backoff_ms: u64,
 }
@@ -132,31 +145,34 @@ impl Default for PolymarketHttpConfig {
     }
 }
 
-/// Polymarket market filter configuration.
+/// Market filter configuration for subscription eligibility.
+///
+/// Defines criteria for determining which markets are eligible for
+/// tracking and subscription.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketFilterConfig {
-    /// Maximum number of markets to track.
+    /// Maximum number of markets to track simultaneously.
     #[serde(default = "default_filter_max_markets")]
     pub max_markets: usize,
-    /// Maximum number of subscriptions.
+    /// Maximum total subscriptions across all connections.
     #[serde(default = "default_filter_max_subscriptions")]
     pub max_subscriptions: usize,
-    /// Minimum 24-hour volume threshold.
+    /// Minimum 24-hour trading volume in USD.
     #[serde(default = "default_min_volume_24h")]
     pub min_volume_24h: f64,
-    /// Minimum liquidity threshold.
+    /// Minimum liquidity depth in USD.
     #[serde(default = "default_min_liquidity")]
     pub min_liquidity: f64,
-    /// Maximum spread percentage (e.g., 0.10 = 10%).
+    /// Maximum bid-ask spread as a fraction (e.g., 0.10 for 10%).
     #[serde(default = "default_max_spread_pct")]
     pub max_spread_pct: f64,
-    /// Include binary (two-outcome) markets.
+    /// Include binary (two-outcome) markets in filtering.
     #[serde(default = "default_true")]
     pub include_binary: bool,
-    /// Include multi-outcome markets.
+    /// Include multi-outcome markets (3+ outcomes) in filtering.
     #[serde(default = "default_true")]
     pub include_multi_outcome: bool,
-    /// Maximum number of outcomes per market.
+    /// Maximum allowed outcomes per market.
     #[serde(default = "default_max_outcomes")]
     pub max_outcomes: usize,
 }
@@ -204,22 +220,25 @@ impl Default for PolymarketFilterConfig {
     }
 }
 
-/// Scoring weights for market prioritization.
+/// Scoring weight configuration for market prioritization.
+///
+/// Weights determine the relative importance of each scoring factor
+/// when computing composite market scores.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScoringWeightsConfig {
-    /// Weight for liquidity factor.
+    /// Weight for liquidity depth factor.
     #[serde(default = "default_weight_liquidity")]
     pub liquidity: f64,
-    /// Weight for spread factor.
+    /// Weight for bid-ask spread factor.
     #[serde(default = "default_weight_spread")]
     pub spread: f64,
-    /// Weight for opportunity factor.
+    /// Weight for arbitrage opportunity factor.
     #[serde(default = "default_weight_opportunity")]
     pub opportunity: f64,
     /// Weight for outcome count factor.
     #[serde(default = "default_weight_outcome_count")]
     pub outcome_count: f64,
-    /// Weight for activity factor.
+    /// Weight for trading activity factor.
     #[serde(default = "default_weight_activity")]
     pub activity: f64,
 }
@@ -256,16 +275,19 @@ impl Default for ScoringWeightsConfig {
     }
 }
 
-/// Outcome count bonus configuration.
+/// Outcome count bonus configuration for market scoring.
+///
+/// Configures bonus multipliers applied to markets based on their
+/// outcome count, favoring multi-outcome markets for arbitrage potential.
 #[derive(Debug, Clone, Deserialize)]
 pub struct OutcomeBonusConfig {
     /// Bonus multiplier for binary (2-outcome) markets.
     #[serde(default = "default_bonus_binary")]
     pub binary: f64,
-    /// Bonus multiplier for 3-5 outcome markets.
+    /// Bonus multiplier for markets with 3 to 5 outcomes.
     #[serde(default = "default_bonus_three_to_five")]
     pub three_to_five: f64,
-    /// Bonus multiplier for 6+ outcome markets.
+    /// Bonus multiplier for markets with 6 or more outcomes.
     #[serde(default = "default_bonus_six_plus")]
     pub six_plus: f64,
 }
@@ -292,46 +314,55 @@ impl Default for OutcomeBonusConfig {
     }
 }
 
-/// Polymarket scoring configuration.
+/// Market scoring configuration.
+///
+/// Combines scoring weights and outcome bonuses for computing composite
+/// market scores used in subscription prioritization.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct PolymarketScoringConfig {
-    /// Scoring weights for market prioritization.
+    /// Factor weights for composite score calculation.
     #[serde(default)]
     pub weights: ScoringWeightsConfig,
-    /// Outcome count bonus configuration.
+    /// Bonus multipliers based on outcome count.
     #[serde(default)]
     pub outcome_bonus: OutcomeBonusConfig,
 }
 
-/// Deduplication strategy.
+/// Message deduplication strategy.
+///
+/// Determines how duplicate messages are detected across redundant
+/// WebSocket connections.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DedupStrategyConfig {
-    /// Hash-based deduplication (default).
+    /// Hash-based deduplication using message content hash.
     #[default]
     Hash,
-    /// Timestamp-based deduplication.
+    /// Timestamp-based deduplication using message timestamps.
     Timestamp,
-    /// Content-based deduplication.
+    /// Full content comparison for deduplication.
     Content,
 }
 
-/// Polymarket deduplication configuration.
+/// Message deduplication configuration.
+///
+/// Controls duplicate message filtering when using multiple WebSocket
+/// connections for redundancy.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketDedupConfig {
-    /// Enable deduplication.
+    /// Enable duplicate message filtering.
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// Primary deduplication strategy.
     #[serde(default)]
     pub strategy: DedupStrategyConfig,
-    /// Fallback deduplication strategy.
+    /// Fallback strategy when primary fails.
     #[serde(default = "default_fallback_strategy")]
     pub fallback: DedupStrategyConfig,
-    /// Cache time-to-live in seconds.
+    /// Cache entry time-to-live in seconds.
     #[serde(default = "default_dedup_cache_ttl_secs")]
     pub cache_ttl_secs: u64,
-    /// Maximum cache entries.
+    /// Maximum entries in the deduplication cache.
     #[serde(default = "default_max_cache_entries")]
     pub max_cache_entries: usize,
 }
@@ -360,37 +391,40 @@ impl Default for PolymarketDedupConfig {
     }
 }
 
-/// Polymarket exchange configuration.
+/// Complete Polymarket exchange configuration.
+///
+/// Aggregates all configuration subsections for the Polymarket adapter
+/// including network settings, connection management, and trading parameters.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PolymarketConfig {
-    /// Environment: testnet or mainnet.
+    /// Deployment environment (testnet or mainnet).
     #[serde(default)]
     pub environment: Environment,
-    /// WebSocket URL for market data.
+    /// WebSocket URL for real-time market data.
     #[serde(default = "default_polymarket_ws_url")]
     pub ws_url: String,
-    /// CLOB REST API URL (order execution, order book queries).
+    /// CLOB REST API URL for order execution.
     #[serde(default = "default_polymarket_api_url")]
     pub api_url: String,
-    /// Gamma REST API URL (market discovery, volume/liquidity metadata).
+    /// Gamma REST API URL for market discovery.
     #[serde(default = "default_polymarket_gamma_url")]
     pub gamma_api_url: String,
-    /// Chain ID: 80002 for Amoy testnet, 137 for Polygon mainnet.
+    /// Blockchain chain ID (80002 for Amoy, 137 for Polygon).
     #[serde(default = "default_polymarket_chain_id")]
     pub chain_id: u64,
-    /// Connection management configuration.
+    /// WebSocket connection pool settings.
     #[serde(default)]
     pub connections: PolymarketConnectionConfig,
-    /// HTTP client configuration for REST API calls.
+    /// HTTP client settings for REST API.
     #[serde(default)]
     pub http: PolymarketHttpConfig,
-    /// Market filter configuration.
+    /// Market eligibility filter settings.
     #[serde(default)]
     pub market_filter: PolymarketFilterConfig,
-    /// Scoring configuration for market prioritization.
+    /// Market scoring and prioritization settings.
     #[serde(default)]
     pub scoring: PolymarketScoringConfig,
-    /// Deduplication configuration.
+    /// Message deduplication settings.
     #[serde(default)]
     pub dedup: PolymarketDedupConfig,
 }
@@ -429,15 +463,19 @@ impl Default for PolymarketConfig {
     }
 }
 
-/// Runtime credentials and network settings required by signing adapters.
+/// Runtime credentials and network settings for signing adapters.
+///
+/// Contains sensitive credentials and network settings required for
+/// order signing and execution. Typically populated from environment
+/// variables at runtime.
 #[derive(Debug, Clone)]
 pub struct PolymarketRuntimeConfig {
-    /// Wallet private key (hex, no 0x prefix).
+    /// Wallet private key in hex format (without 0x prefix).
     pub private_key: String,
-    /// Chain ID for signature domain separation.
+    /// Blockchain chain ID for EIP-712 signature domain.
     pub chain_id: u64,
-    /// CLOB API base URL.
+    /// CLOB REST API base URL.
     pub api_url: String,
-    /// Deployment environment.
+    /// Current deployment environment.
     pub environment: Environment,
 }

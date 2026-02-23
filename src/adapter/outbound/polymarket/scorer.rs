@@ -1,6 +1,8 @@
 //! Market scorer for Polymarket exchange.
 //!
-//! Implements [`MarketScorer`] to score Polymarket markets for subscription prioritization.
+//! Implements the [`MarketScorer`] trait to compute composite scores for
+//! Polymarket markets based on opportunity potential, outcome count, and
+//! other factors. Scores are used for subscription prioritization.
 
 use async_trait::async_trait;
 
@@ -9,20 +11,21 @@ use crate::domain::{id::MarketId, score::MarketScore, score::ScoreFactors, score
 use crate::error::Result;
 use crate::port::{outbound::exchange::MarketInfo, outbound::filter::MarketScorer};
 
-/// Scorer for Polymarket markets.
+/// Market scorer for Polymarket subscription prioritization.
 ///
-/// Analyzes market characteristics and computes scores used for
-/// subscription prioritization in adaptive subscription management.
+/// Computes composite scores by analyzing market characteristics including
+/// price imbalance (opportunity), outcome count, and other factors weighted
+/// by configuration.
 #[derive(Debug, Clone)]
 pub struct PolymarketScorer {
-    /// Scoring weights for factor combination.
+    /// Weights for combining scoring factors.
     weights: ScoreWeights,
-    /// Outcome bonus configuration.
+    /// Bonus multipliers based on outcome count.
     outcome_bonus: OutcomeBonusConfig,
 }
 
 impl PolymarketScorer {
-    /// Create a new Polymarket scorer from configuration.
+    /// Create a new Polymarket scorer from scoring configuration.
     #[must_use]
     pub fn new(config: &PolymarketScoringConfig) -> Self {
         Self {
@@ -31,7 +34,7 @@ impl PolymarketScorer {
         }
     }
 
-    /// Convert config weights to domain weights.
+    /// Convert configuration weights to domain weight type.
     fn weights_from_config(config: &ScoringWeightsConfig) -> ScoreWeights {
         ScoreWeights::new(
             config.liquidity,

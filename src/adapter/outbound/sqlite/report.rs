@@ -1,4 +1,7 @@
 //! SQLite read-side report adapter.
+//!
+//! Provides implementations of the status and statistics report reader
+//! traits for CLI commands and status displays.
 
 use chrono::{Duration, NaiveDate, Utc};
 use diesel::prelude::*;
@@ -20,13 +23,17 @@ use crate::port::outbound::report::{
     StrategyDailyStatsRecord,
 };
 
-/// SQLite report reader that provides status and statistics query surfaces.
+/// SQLite report reader for status and statistics queries.
+///
+/// Implements both [`StatusReportReader`] and [`StatisticsReportReader`]
+/// traits for CLI status and statistics commands.
 pub struct SqliteReportReader {
+    /// SQLite database URL or file path.
     database_url: String,
 }
 
 impl SqliteReportReader {
-    /// Creates a report reader backed by a sqlite URL.
+    /// Create a report reader backed by the given SQLite database URL.
     #[must_use]
     pub fn new(database_url: impl Into<String>) -> Self {
         Self {
@@ -34,6 +41,7 @@ impl SqliteReportReader {
         }
     }
 
+    /// Establish a connection pool to the database.
     fn connect(&self) -> Result<Pool<ConnectionManager<SqliteConnection>>> {
         let manager = ConnectionManager::<SqliteConnection>::new(&self.database_url);
         Pool::builder()

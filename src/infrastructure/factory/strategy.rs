@@ -1,4 +1,7 @@
 //! Strategy registry factory.
+//!
+//! Provides factory functions for constructing the strategy registry
+//! with configured detection strategies.
 
 use std::sync::Arc;
 
@@ -10,7 +13,11 @@ use crate::infrastructure::config::settings::Config;
 
 use super::solver::build_projection_solver;
 
-/// Build strategy registry from configuration using builder pattern.
+/// Build the strategy registry from configuration.
+///
+/// Creates a registry containing all enabled detection strategies as
+/// specified in the configuration. Unknown strategy names are logged
+/// and skipped.
 pub fn build_strategy_registry(
     config: &Config,
     cluster_cache: Arc<ClusterCache>,

@@ -1,8 +1,38 @@
 //! Strategy port for arbitrage detection.
 //!
-//! This module defines the Strategy trait and supporting types for
-//! detection algorithms. Strategies analyze market data and find
-//! arbitrage opportunities.
+//! Defines the [`Strategy`] trait and supporting types for arbitrage detection
+//! algorithms. Strategies analyze market data (order books, prices) and identify
+//! profitable trading opportunities.
+//!
+//! # Overview
+//!
+//! The strategy system is designed for extensibility:
+//!
+//! - Implement [`Strategy`] to add new detection algorithms
+//! - Use [`DetectionContext`] to access market data during detection
+//! - Use [`MarketContext`] to filter which markets a strategy applies to
+//!
+//! # Example
+//!
+//! ```ignore
+//! use edgelord::port::inbound::strategy::{Strategy, MarketContext, DetectionContext};
+//! use edgelord::domain::opportunity::Opportunity;
+//!
+//! struct MyStrategy;
+//!
+//! impl Strategy for MyStrategy {
+//!     fn name(&self) -> &'static str { "my_strategy" }
+//!
+//!     fn applies_to(&self, ctx: &MarketContext) -> bool {
+//!         ctx.is_binary()
+//!     }
+//!
+//!     fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
+//!         // Detection logic here
+//!         vec![]
+//!     }
+//! }
+//! ```
 
 use std::sync::Arc;
 
@@ -13,22 +43,36 @@ use crate::domain::{
     opportunity::Opportunity,
 };
 
-/// Context describing the market being analyzed.
+/// Metadata describing the structure of a market being analyzed.
 ///
-/// Provides metadata about market structure that strategies use
-/// to determine applicability.
+/// Provides information about market structure that strategies use to determine
+/// whether they are applicable. For example, a binary arbitrage strategy only
+/// applies to markets with exactly two outcomes.
 #[derive(Debug, Clone, Default)]
 pub struct MarketContext {
-    /// Number of outcomes in the market (2 for binary, 3+ for multi-outcome).
+    /// Number of outcomes in this market.
+    ///
+    /// A value of 2 indicates a binary (YES/NO) market. Values greater than 2
+    /// indicate multi-outcome markets.
     pub outcome_count: usize,
-    /// Whether this market has known dependencies with others.
+
+    /// Whether this market has known dependencies with other markets.
+    ///
+    /// Set to `true` when logical relations (implication, mutual exclusion, etc.)
+    /// have been discovered between this market and others.
     pub has_dependencies: bool,
-    /// Market IDs of correlated markets (for combinatorial detection).
+
+    /// Identifiers of markets correlated with this one.
+    ///
+    /// Used by combinatorial detection strategies that analyze multiple
+    /// related markets together.
     pub correlated_markets: Vec<MarketId>,
 }
 
 impl MarketContext {
-    /// Create context for a simple binary market (YES/NO).
+    /// Create a context for a simple binary (YES/NO) market.
+    ///
+    /// Returns a context with `outcome_count` set to 2 and no dependencies.
     #[must_use]
     pub const fn binary() -> Self {
         Self {
@@ -38,7 +82,11 @@ impl MarketContext {
         }
     }
 
-    /// Create context for a multi-outcome market.
+    /// Create a context for a multi-outcome market.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - Number of outcomes in the market (should be greater than 2).
     #[must_use]
     pub const fn multi_outcome(count: usize) -> Self {
         Self {
@@ -48,7 +96,14 @@ impl MarketContext {
         }
     }
 
-    /// Create context for a market with dependencies.
+    /// Add dependency information to this context.
+    ///
+    /// Returns a new context with dependencies set based on the provided
+    /// correlated market identifiers.
+    ///
+    /// # Arguments
+    ///
+    /// * `markets` - Identifiers of markets correlated with this one.
     #[must_use]
     pub fn with_dependencies(mut self, markets: Vec<MarketId>) -> Self {
         self.has_dependencies = !markets.is_empty();
@@ -56,40 +111,53 @@ impl MarketContext {
         self
     }
 
-    /// Check if this is a binary market.
+    /// Return `true` if this is a binary (two-outcome) market.
     #[must_use]
     pub const fn is_binary(&self) -> bool {
         self.outcome_count == 2
     }
 
-    /// Check if this is a multi-outcome market.
+    /// Return `true` if this is a multi-outcome market (more than two outcomes).
     #[must_use]
     pub const fn is_multi_outcome(&self) -> bool {
         self.outcome_count > 2
     }
 }
 
-/// Result from a detection run (for warm-starting).
+/// Result from a detection run, used for warm-starting subsequent detections.
 ///
-/// Strategies can use this to optimize subsequent detections.
+/// Strategies can return detection results containing state that helps optimize
+/// future detection runs. This enables incremental detection and solver warm-starting.
 #[derive(Debug, Clone, Default)]
 pub struct DetectionResult {
-    /// Number of opportunities found.
+    /// Number of opportunities found in this detection run.
     pub opportunity_count: usize,
-    /// Solver state for warm-starting (opaque bytes).
+
+    /// Opaque solver state for warm-starting optimization.
+    ///
+    /// Contains serialized solver state that can be passed to subsequent
+    /// detection runs to speed up convergence.
     pub solver_state: Option<Vec<u8>>,
-    /// Last computed prices (for delta detection).
+
+    /// Last computed prices for delta-based detection.
+    ///
+    /// Strategies can compare current prices against these values to detect
+    /// significant changes worth re-analyzing.
     pub last_prices: Vec<(TokenId, Decimal)>,
 }
 
 impl DetectionResult {
-    /// Create an empty result.
+    /// Create an empty detection result with no opportunities.
     #[must_use]
     pub fn empty() -> Self {
         Self::default()
     }
 
-    /// Create a result with opportunity count.
+    /// Create a detection result with the specified opportunity count.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - Number of opportunities found.
     #[must_use]
     pub fn with_count(count: usize) -> Self {
         Self {
@@ -99,52 +167,92 @@ impl DetectionResult {
     }
 }
 
-/// Context for strategy detection.
+/// Read-only context providing market data for strategy detection.
 ///
-/// Provides read-only access to market data needed for detection.
-/// Implementations typically wrap a Market and BookCache.
+/// Implementations wrap market metadata and order book caches to provide
+/// strategies with the data they need for opportunity detection.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`) to support concurrent
+/// strategy execution.
 pub trait DetectionContext: Send + Sync {
-    /// Get the market ID being analyzed.
+    /// Return the identifier of the market being analyzed.
     fn market_id(&self) -> &MarketId;
 
-    /// Get the market question.
+    /// Return the human-readable market question.
     fn question(&self) -> &str;
 
-    /// Get the token IDs for this market's outcomes.
+    /// Return the token identifiers for all outcomes in this market.
     fn token_ids(&self) -> Vec<TokenId>;
 
-    /// Get the payout amount for this market.
+    /// Return the payout amount for winning outcomes.
+    ///
+    /// Typically 1.00 for prediction markets where shares pay out $1 on resolution.
     fn payout(&self) -> Decimal;
 
-    /// Get the market context (outcome count, dependencies, etc.).
+    /// Return metadata about the market structure.
+    ///
+    /// Includes outcome count, dependency information, and correlated markets.
     fn market_context(&self) -> MarketContext;
 
-    /// Get the best ask price for a token, if available.
+    /// Return the best (lowest) ask price for the specified token.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_id` - Token to query.
+    ///
+    /// Returns `None` if no ask orders exist for this token.
     fn best_ask(&self, token_id: &TokenId) -> Option<Decimal>;
 
-    /// Get the best bid price for a token, if available.
+    /// Return the best (highest) bid price for the specified token.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_id` - Token to query.
+    ///
+    /// Returns `None` if no bid orders exist for this token.
     fn best_bid(&self, token_id: &TokenId) -> Option<Decimal>;
 
-    /// Get available volume at the best ask for a token.
+    /// Return the available volume at the best ask price for the specified token.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_id` - Token to query.
+    ///
+    /// Returns `None` if no ask orders exist for this token.
     fn ask_volume(&self, token_id: &TokenId) -> Option<Decimal>;
 
-    /// Get the full order book for a token, if available.
+    /// Return the full order book for the specified token.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_id` - Token to query.
+    ///
+    /// Returns `None` if no order book data is available for this token.
     fn order_book(&self, token_id: &TokenId) -> Option<Book>;
 
-    /// Get the underlying market reference.
+    /// Return a reference to the underlying market.
     fn market(&self) -> &Market;
 }
 
-/// A detection strategy that finds arbitrage opportunities.
+/// Arbitrage detection strategy.
 ///
-/// Strategies encapsulate specific detection algorithms. Each strategy
-/// can be configured independently and may apply to different market types.
+/// Strategies encapsulate specific detection algorithms for finding profitable
+/// trading opportunities. Each strategy can be configured independently and
+/// may apply to different market types (binary, multi-outcome, cross-market).
 ///
-/// # Implementing a Strategy
+/// # Implementation Requirements
+///
+/// - Strategies must be thread-safe (`Send + Sync`)
+/// - The `detect` method should be fast and non-blocking
+/// - Use `applies_to` to filter markets before calling `detect`
+///
+/// # Example
 ///
 /// ```ignore
-/// use edgelord::port::{inbound::strategy::Strategy, inbound::strategy::MarketContext, inbound::strategy::DetectionContext};
-/// use edgelord::domain::Opportunity;
+/// use edgelord::port::inbound::strategy::{Strategy, MarketContext, DetectionContext};
+/// use edgelord::domain::opportunity::Opportunity;
 ///
 /// pub struct MyStrategy;
 ///
@@ -156,39 +264,90 @@ pub trait DetectionContext: Send + Sync {
 ///     }
 ///
 ///     fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
-///         // Your detection logic
+///         // Detection logic here
 ///         vec![]
 ///     }
 /// }
 /// ```
 pub trait Strategy: Send + Sync {
-    /// Unique identifier for this strategy.
+    /// Return the unique identifier for this strategy.
+    ///
+    /// Used for logging, configuration, and strategy selection.
     fn name(&self) -> &'static str;
 
-    /// Check if this strategy should run for a given market context.
+    /// Return `true` if this strategy should run for the given market context.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Metadata about the market being considered.
+    ///
+    /// Strategies should return `false` for markets they cannot analyze
+    /// (e.g., a binary arbitrage strategy should reject multi-outcome markets).
     fn applies_to(&self, ctx: &MarketContext) -> bool;
 
-    /// Detect opportunities given current market state.
+    /// Detect arbitrage opportunities in the provided market context.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Read-only access to market data (prices, order books, etc.).
+    ///
+    /// Returns a vector of detected opportunities. May return an empty vector
+    /// if no opportunities are found.
     fn detect(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity>;
 
-    /// Optional: provide warm-start hint from previous detection.
+    /// Accept a warm-start hint from a previous detection run.
+    ///
+    /// # Arguments
+    ///
+    /// * `previous` - Result from the previous detection run.
+    ///
+    /// Strategies can use this to optimize subsequent detection runs by
+    /// reusing solver state or comparing against previous prices.
     fn warm_start(&mut self, _previous: &DetectionResult) {}
 
-    /// Optional: inject the market registry for strategies that need it.
+    /// Inject the market registry for cross-market strategies.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - Shared market registry for accessing related markets.
+    ///
+    /// Strategies that analyze multiple markets together (combinatorial
+    /// arbitrage) can use this to look up correlated markets.
     fn set_market_registry(&mut self, _registry: Arc<MarketRegistry>) {}
 }
 
-/// Runtime strategy engine used by application services.
+/// Runtime strategy engine for orchestrating detection across multiple strategies.
 ///
-/// This abstracts over strategy registry implementations so application
-/// orchestration code does not depend on concrete adapter types.
+/// Abstracts over strategy registry implementations so application orchestration
+/// code does not depend on concrete adapter types. The engine manages a collection
+/// of strategies and runs them against markets in a configured order.
+///
+/// # Thread Safety
+///
+/// Implementations must be thread-safe (`Send + Sync`) to support concurrent
+/// market analysis.
 pub trait StrategyEngine: Send + Sync {
-    /// Names of configured strategies in evaluation order.
+    /// Return the names of configured strategies in evaluation order.
+    ///
+    /// The order reflects the priority in which strategies are executed.
     fn strategy_names(&self) -> Vec<&'static str>;
 
-    /// Inject market registry into strategies that need cross-market context.
+    /// Inject the market registry into strategies that require cross-market context.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - Shared market registry containing all known markets.
+    ///
+    /// Call this after loading markets to enable combinatorial strategies.
     fn set_market_registry(&mut self, registry: Arc<MarketRegistry>);
 
-    /// Run all applicable strategies for the provided detection context.
+    /// Run all applicable strategies and return detected opportunities.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Detection context providing market data.
+    ///
+    /// Filters strategies using `applies_to`, then calls `detect` on each
+    /// applicable strategy. Returns the combined results from all strategies.
     fn detect_opportunities(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity>;
 }

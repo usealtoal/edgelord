@@ -1,4 +1,7 @@
 //! LLM client factory.
+//!
+//! Provides factory functions for constructing LLM clients based on
+//! configuration. Supports both Anthropic and OpenAI providers.
 
 use std::sync::Arc;
 
@@ -10,9 +13,16 @@ use crate::infrastructure::config::llm::LlmProvider;
 use crate::infrastructure::config::settings::Config;
 use crate::port::outbound::llm::Llm;
 
-/// Build LLM client from configuration.
+/// Build an LLM client from configuration.
 ///
-/// Returns `None` if inference is disabled or required API keys are missing.
+/// Creates the appropriate client based on the configured provider.
+/// Returns `None` if inference is disabled or the required API key
+/// environment variable is not set.
+///
+/// # Environment Variables
+///
+/// - `ANTHROPIC_API_KEY` - Required for Anthropic provider
+/// - `OPENAI_API_KEY` - Required for OpenAI provider
 pub fn build_llm_client(config: &Config) -> Option<Arc<dyn Llm>> {
     if !config.inference.enabled {
         return None;

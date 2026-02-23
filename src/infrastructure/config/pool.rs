@@ -1,23 +1,45 @@
 //! Connection pool and reconnection configuration.
+//!
+//! Provides configuration for WebSocket connection pooling and automatic
+//! reconnection with exponential backoff.
 
 use serde::Deserialize;
 
 /// WebSocket reconnection configuration.
+///
+/// Controls automatic reconnection behavior with exponential backoff and
+/// circuit breaker protection against repeated failures.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReconnectionConfig {
-    /// Initial delay before first reconnection attempt (milliseconds).
+    /// Initial delay before first reconnection attempt in milliseconds.
+    ///
+    /// Defaults to 1000 (1 second).
     #[serde(default = "default_initial_delay_ms")]
     pub initial_delay_ms: u64,
-    /// Maximum delay between reconnection attempts (milliseconds).
+
+    /// Maximum delay between reconnection attempts in milliseconds.
+    ///
+    /// The backoff delay is capped at this value. Defaults to 60000 (60 seconds).
     #[serde(default = "default_max_delay_ms")]
     pub max_delay_ms: u64,
+
     /// Multiplier applied to delay after each failed attempt.
+    ///
+    /// Creates exponential backoff. Must be >= 1.0. Defaults to 2.0.
     #[serde(default = "default_backoff_multiplier")]
     pub backoff_multiplier: f64,
+
     /// Maximum consecutive failures before circuit breaker trips.
+    ///
+    /// After this many failures, reconnection attempts are paused.
+    /// Defaults to 10.
     #[serde(default = "default_max_consecutive_failures")]
     pub max_consecutive_failures: u32,
-    /// Cooldown period after circuit breaker trips (milliseconds).
+
+    /// Cooldown period after circuit breaker trips in milliseconds.
+    ///
+    /// Duration to wait before resuming reconnection attempts.
+    /// Defaults to 300000 (5 minutes).
     #[serde(default = "default_circuit_breaker_cooldown_ms")]
     pub circuit_breaker_cooldown_ms: u64,
 }
@@ -56,29 +78,57 @@ impl Default for ReconnectionConfig {
 
 /// Connection pool configuration for WebSocket multiplexing.
 ///
-/// These settings control how multiple WebSocket connections are managed
-/// to distribute subscriptions across connections.
+/// Controls how multiple WebSocket connections are managed to distribute
+/// subscriptions across connections. This helps avoid per-connection
+/// subscription limits imposed by exchanges.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConnectionPoolConfig {
     /// Maximum number of connections in the pool.
+    ///
+    /// Subscriptions are distributed across up to this many connections.
+    /// Defaults to 10.
     #[serde(default = "default_pool_max_connections")]
     pub max_connections: usize,
+
     /// Maximum subscriptions per connection.
+    ///
+    /// When a connection reaches this limit, new subscriptions use a
+    /// different connection. Defaults to 500.
     #[serde(default = "default_pool_subscriptions_per_connection")]
     pub subscriptions_per_connection: usize,
+
     /// Connection time-to-live in seconds.
+    ///
+    /// Connections are rotated after this duration to prevent stale state.
+    /// Defaults to 120 (2 minutes).
     #[serde(default = "default_pool_connection_ttl_secs")]
     pub connection_ttl_secs: u64,
-    /// Seconds before TTL to preemptively reconnect.
+
+    /// Seconds before TTL to begin preemptive reconnection.
+    ///
+    /// New connections are established this many seconds before TTL expiry
+    /// to enable zero-gap handoff. Defaults to 30.
     #[serde(default = "default_pool_preemptive_reconnect_secs")]
     pub preemptive_reconnect_secs: u64,
+
     /// Health check interval in seconds.
+    ///
+    /// How often the management task checks connection health.
+    /// Defaults to 30.
     #[serde(default = "default_pool_health_check_interval_secs")]
     pub health_check_interval_secs: u64,
+
     /// Maximum seconds with no events before considering a connection unhealthy.
+    ///
+    /// Silent connections are restarted. Defaults to 60.
     #[serde(default = "default_pool_max_silent_secs")]
     pub max_silent_secs: u64,
-    /// Event channel capacity (bounded to prevent unbounded memory growth).
+
+    /// Event channel capacity.
+    ///
+    /// Size of the bounded channel that buffers events from all connections.
+    /// Bounded to prevent unbounded memory growth under backpressure.
+    /// Defaults to 10000.
     #[serde(default = "default_pool_channel_capacity")]
     pub channel_capacity: usize,
 }

@@ -1,3 +1,5 @@
+//! Strategy registry for managing and executing detection algorithms.
+
 use std::sync::Arc;
 
 use crate::application::cache::cluster::ClusterCache;
@@ -12,14 +14,25 @@ use super::combinatorial::{CombinatorialConfig, CombinatorialStrategy};
 use super::market_rebalancing::{MarketRebalancingConfig, MarketRebalancingStrategy};
 use super::single_condition::{SingleConditionConfig, SingleConditionStrategy};
 
-/// Registry of enabled strategies.
+/// Registry of enabled arbitrage detection strategies.
 ///
-/// The registry manages a collection of strategies and coordinates
-/// running them during detection.
+/// Manages a collection of strategies and coordinates running applicable
+/// strategies during opportunity detection. Strategies are executed in
+/// registration order.
 ///
-/// Use [`StrategyRegistryBuilder`] for convenient construction from config.
+/// Use [`StrategyRegistryBuilder`] for convenient construction from configuration.
+///
+/// # Example
+///
+/// ```ignore
+/// let registry = StrategyRegistry::builder()
+///     .single_condition(config.single_condition)
+///     .market_rebalancing(config.market_rebalancing)
+///     .build();
+/// ```
 #[derive(Default)]
 pub struct StrategyRegistry {
+    /// Registered strategies in execution order.
     strategies: Vec<Box<dyn Strategy>>,
 }
 
@@ -30,50 +43,51 @@ impl StrategyRegistry {
         Self::default()
     }
 
-    /// Create a builder for constructing a registry from config.
+    /// Create a builder for constructing a registry from configuration.
     #[must_use]
     pub fn builder() -> StrategyRegistryBuilder {
         StrategyRegistryBuilder::new()
     }
 
-    /// Register a strategy.
+    /// Register a strategy to be run during detection.
     ///
-    /// Strategies are run in registration order.
+    /// Strategies are executed in the order they are registered.
     pub fn register(&mut self, strategy: Box<dyn Strategy>) {
         self.strategies.push(strategy);
     }
 
-    /// Get all registered strategies.
+    /// Return a slice of all registered strategies.
     #[must_use]
     pub fn strategies(&self) -> &[Box<dyn Strategy>] {
         &self.strategies
     }
 
-    /// Number of registered strategies.
+    /// Return the number of registered strategies.
     #[must_use]
     pub fn len(&self) -> usize {
         self.strategies.len()
     }
 
-    /// Check if registry is empty.
+    /// Return true if no strategies are registered.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.strategies.is_empty()
     }
 
-    /// Inject the market registry into strategies that need it (e.g. combinatorial).
+    /// Inject the market registry into strategies that require it.
     ///
-    /// This must be called after the [`MarketRegistry`] is built, since markets
-    /// are fetched after strategy construction in the orchestrator.
+    /// Must be called after the [`MarketRegistry`] is built, as markets are
+    /// typically fetched after strategy construction during orchestrator setup.
     pub fn set_registry(&mut self, registry: Arc<MarketRegistry>) {
         for strategy in &mut self.strategies {
             strategy.set_market_registry(registry.clone());
         }
     }
 
-    /// Run all applicable strategies and collect opportunities.
+    /// Run all applicable strategies and collect detected opportunities.
     ///
-    /// Only strategies where `applies_to()` returns true are run.
+    /// Only strategies where [`Strategy::applies_to`] returns true for the
+    /// current market context are executed.
     #[must_use]
     pub fn detect_all(&self, ctx: &dyn DetectionContext) -> Vec<Opportunity> {
         let market_ctx = ctx.market_context();
@@ -84,7 +98,10 @@ impl StrategyRegistry {
             .collect()
     }
 
-    /// Run all applicable strategies given a market context (for filtering).
+    /// Run all applicable strategies with an explicit market context.
+    ///
+    /// Useful when the market context is known ahead of time and does not
+    /// need to be derived from the detection context.
     #[must_use]
     pub fn detect_all_with_context(
         &self,
@@ -118,6 +135,9 @@ impl StrategyEngine for StrategyRegistry {
 
 /// Builder for constructing a [`StrategyRegistry`] from configuration.
 ///
+/// Provides a fluent API for enabling strategies with their configurations
+/// and injecting required dependencies.
+///
 /// # Example
 ///
 /// ```ignore
@@ -130,49 +150,54 @@ impl StrategyEngine for StrategyRegistry {
 /// ```
 #[derive(Default)]
 pub struct StrategyRegistryBuilder {
+    /// Cluster cache for combinatorial strategy (optional).
     cluster_cache: Option<Arc<ClusterCache>>,
+    /// Projection solver for combinatorial strategy (optional).
     projection_solver: Option<Arc<dyn ProjectionSolver>>,
+    /// Single-condition strategy configuration (optional).
     single_condition: Option<SingleConditionConfig>,
+    /// Market rebalancing strategy configuration (optional).
     market_rebalancing: Option<MarketRebalancingConfig>,
+    /// Combinatorial strategy configuration (optional).
     combinatorial: Option<CombinatorialConfig>,
 }
 
 impl StrategyRegistryBuilder {
-    /// Create a new builder.
+    /// Create a new empty builder.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the cluster cache for combinatorial strategy.
+    /// Set the cluster cache for the combinatorial strategy.
     #[must_use]
     pub fn cluster_cache(mut self, cache: Arc<ClusterCache>) -> Self {
         self.cluster_cache = Some(cache);
         self
     }
 
-    /// Set a projection solver for combinatorial strategy.
+    /// Set the projection solver for the combinatorial strategy.
     #[must_use]
     pub fn projection_solver(mut self, solver: Arc<dyn ProjectionSolver>) -> Self {
         self.projection_solver = Some(solver);
         self
     }
 
-    /// Enable single-condition strategy with config.
+    /// Enable the single-condition strategy with the given configuration.
     #[must_use]
     pub fn single_condition(mut self, config: SingleConditionConfig) -> Self {
         self.single_condition = Some(config);
         self
     }
 
-    /// Enable market rebalancing strategy with config.
+    /// Enable the market rebalancing strategy with the given configuration.
     #[must_use]
     pub fn market_rebalancing(mut self, config: MarketRebalancingConfig) -> Self {
         self.market_rebalancing = Some(config);
         self
     }
 
-    /// Enable combinatorial strategy with config.
+    /// Enable the combinatorial strategy with the given configuration.
     #[must_use]
     pub fn combinatorial(mut self, config: CombinatorialConfig) -> Self {
         self.combinatorial = Some(config);
@@ -180,6 +205,9 @@ impl StrategyRegistryBuilder {
     }
 
     /// Build the registry with all configured strategies.
+    ///
+    /// Strategies are registered in order: single-condition, market rebalancing,
+    /// then combinatorial.
     #[must_use]
     pub fn build(self) -> StrategyRegistry {
         let cluster_cache = self.cluster_cache;

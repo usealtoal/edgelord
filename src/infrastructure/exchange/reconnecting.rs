@@ -1,7 +1,8 @@
 //! Reconnecting wrapper for MarketDataStream.
 //!
 //! Provides automatic reconnection with exponential backoff and circuit breaker
-//! for any MarketDataStream implementation.
+//! protection for any [`MarketDataStream`] implementation. The wrapper
+//! transparently handles disconnections and resubscribes to tracked tokens.
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -14,35 +15,52 @@ use crate::error::Error;
 use crate::infrastructure::config::pool::ReconnectionConfig;
 use crate::port::{outbound::exchange::MarketDataStream, outbound::exchange::MarketEvent};
 
-/// Circuit breaker state.
+/// Circuit breaker state for connection attempts.
+///
+/// Implements the circuit breaker pattern to prevent thundering herd problems
+/// when the remote service is unavailable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CircuitState {
-    /// Normal operation, connections allowed.
+    /// Normal operation; connections are allowed.
     Closed,
-    /// Too many failures, blocking connections temporarily.
-    Open { until: Instant },
+    /// Too many consecutive failures; connections blocked until cooldown expires.
+    Open {
+        /// Instant when the circuit breaker will transition back to Closed.
+        until: Instant,
+    },
 }
 
-/// Wrapper that adds reconnection logic to any MarketDataStream.
+/// Wrapper that adds automatic reconnection to any [`MarketDataStream`].
+///
+/// Transparently handles disconnections by:
+/// 1. Waiting with exponential backoff
+/// 2. Reconnecting to the WebSocket
+/// 3. Resubscribing to all previously tracked tokens
+///
+/// A circuit breaker trips after too many consecutive failures to prevent
+/// resource exhaustion.
 pub struct ReconnectingDataStream<S: MarketDataStream> {
-    /// The underlying data stream.
+    /// The underlying data stream being wrapped.
     inner: S,
-    /// Reconnection configuration.
+    /// Reconnection and backoff configuration.
     config: ReconnectionConfig,
     /// Token IDs to resubscribe after reconnection.
     subscribed_tokens: Vec<TokenId>,
     /// Current consecutive failure count.
     consecutive_failures: u32,
-    /// Current backoff delay.
+    /// Current backoff delay in milliseconds.
     current_delay_ms: u64,
     /// Circuit breaker state.
     circuit_state: CircuitState,
-    /// Whether we're currently connected.
+    /// Whether the stream is currently connected.
     connected: bool,
 }
 
 impl<S: MarketDataStream> ReconnectingDataStream<S> {
-    /// Create a new reconnecting wrapper.
+    /// Create a new reconnecting wrapper around a data stream.
+    ///
+    /// The wrapper starts in a disconnected state; call [`connect`](Self::connect)
+    /// before reading events.
     pub fn new(inner: S, config: ReconnectionConfig) -> Self {
         let initial_delay = config.initial_delay_ms;
         Self {
@@ -56,14 +74,19 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
         }
     }
 
-    /// Reset backoff state after successful connection.
+    /// Reset backoff state after a successful connection.
+    ///
+    /// Clears the failure count and resets the delay to the initial value.
     fn reset_backoff(&mut self) {
         self.consecutive_failures = 0;
         self.current_delay_ms = self.config.initial_delay_ms;
         self.circuit_state = CircuitState::Closed;
     }
 
-    /// Calculate next backoff delay using exponential backoff.
+    /// Calculate the next backoff delay using exponential backoff with jitter.
+    ///
+    /// Returns the current delay and advances the internal delay state for
+    /// the next call.
     fn next_delay(&mut self) -> Duration {
         let base_delay = Duration::from_millis(self.current_delay_ms);
         let jitter_ms = self.jitter_ms(base_delay);
@@ -76,6 +99,9 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
         delay
     }
 
+    /// Calculate jitter to add to the base delay.
+    ///
+    /// Adds up to 20% random jitter to prevent synchronized reconnection storms.
     fn jitter_ms(&self, base_delay: Duration) -> u64 {
         let jitter_range_ms = (base_delay.as_millis() as u64) / 5;
         if jitter_range_ms == 0 {
@@ -89,7 +115,10 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
         (nanos as u64) % (jitter_range_ms + 1)
     }
 
-    /// Check if circuit breaker allows connection attempts.
+    /// Check if the circuit breaker allows connection attempts.
+    ///
+    /// Returns true if the circuit is closed or has cooled down.
+    /// Resets the circuit to closed if the cooldown has expired.
     fn circuit_allows_connection(&mut self) -> bool {
         match self.circuit_state {
             CircuitState::Closed => true,
@@ -106,7 +135,10 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
         }
     }
 
-    /// Record a connection failure and possibly trip circuit breaker.
+    /// Record a connection failure.
+    ///
+    /// Increments the failure count and trips the circuit breaker if the
+    /// maximum consecutive failures threshold is exceeded.
     fn record_failure(&mut self) {
         self.consecutive_failures += 1;
         self.connected = false;
@@ -124,6 +156,13 @@ impl<S: MarketDataStream> ReconnectingDataStream<S> {
     }
 
     /// Attempt to reconnect with backoff.
+    ///
+    /// Waits for the backoff delay, then attempts to reconnect and resubscribe
+    /// to all previously tracked tokens.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if connection or resubscription fails.
     async fn reconnect(&mut self) -> Result<(), Error> {
         if !self.circuit_allows_connection() {
             // Circuit is open, wait for cooldown

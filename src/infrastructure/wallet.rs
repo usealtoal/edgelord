@@ -1,7 +1,8 @@
 //! Wallet operations facade for CLI.
 //!
 //! Provides CLI-friendly types and methods for wallet-related operations
-//! like token approvals without exposing core layer internals.
+//! like token approvals, balance queries, and fund transfers. This module
+//! abstracts exchange-specific wallet implementations behind a unified API.
 
 use rust_decimal::Decimal;
 
@@ -18,66 +19,76 @@ use crate::adapter::outbound::polymarket::settings::PolymarketRuntimeConfig;
 #[cfg(feature = "polymarket")]
 use crate::port::{outbound::approval::ApprovalResult, outbound::approval::TokenApproval};
 
-/// Current approval status for CLI display.
+/// Current token approval status for CLI display.
 ///
-/// This is a CLI-friendly representation that doesn't expose
-/// core layer types to the CLI.
+/// Provides a CLI-friendly representation of approval state without
+/// exposing core layer types.
 #[derive(Debug, Clone)]
 pub struct WalletApprovalStatus {
-    /// Exchange name.
+    /// Name of the exchange.
     pub exchange: String,
-    /// Wallet address.
+    /// Wallet address that owns the tokens.
     pub wallet_address: String,
     /// Token symbol (e.g., "USDC").
     pub token: String,
-    /// Current allowance amount.
+    /// Current allowance amount in token units.
     pub allowance: Decimal,
-    /// Spender contract address.
+    /// Contract address approved to spend tokens.
     pub spender: String,
-    /// Whether additional approval is needed.
+    /// Whether additional approval is needed for trading.
     pub needs_approval: bool,
 }
 
-/// Outcome of an approval operation.
+/// Outcome of a token approval operation.
 ///
-/// CLI-friendly wrapper that doesn't expose core layer types.
+/// Provides a CLI-friendly result type without exposing core layer types.
 #[derive(Debug, Clone)]
 pub enum ApprovalOutcome {
     /// Approval transaction was submitted and confirmed.
     Approved {
-        /// Transaction hash.
+        /// Transaction hash on the blockchain.
         tx_hash: String,
-        /// Amount approved.
+        /// Amount approved in token units.
         amount: Decimal,
     },
-    /// Token was already approved for the requested amount.
+    /// Token was already approved for the requested amount or more.
     AlreadyApproved {
-        /// Current allowance.
+        /// Current allowance in token units.
         current_allowance: Decimal,
     },
-    /// Approval failed.
+    /// Approval transaction failed.
     Failed {
-        /// Error reason.
+        /// Human-readable error description.
         reason: String,
     },
 }
 
-/// Outcome of a sweep operation.
+/// Outcome of a balance sweep operation.
 #[derive(Debug, Clone)]
 pub enum SweepOutcome {
-    /// No balance to sweep.
-    NoBalance { balance: Decimal },
-    /// Sweep transaction succeeded.
-    Transferred { tx_hash: String, amount: Decimal },
+    /// No balance available to sweep.
+    NoBalance {
+        /// Current balance (should be zero or near-zero).
+        balance: Decimal,
+    },
+    /// Sweep transaction was submitted and confirmed.
+    Transferred {
+        /// Transaction hash on the blockchain.
+        tx_hash: String,
+        /// Amount transferred in token units.
+        amount: Decimal,
+    },
 }
 
 /// Wallet service providing CLI operations.
 ///
 /// Dispatches to the appropriate exchange-specific implementation
-/// based on the configuration.
+/// based on configuration. All methods are async and require a valid
+/// wallet configuration.
 pub struct WalletService;
 
 impl WalletService {
+    /// Build Polymarket runtime configuration from app config.
     #[cfg(feature = "polymarket")]
     fn polymarket_runtime_config(config: &Config) -> Result<PolymarketRuntimeConfig> {
         let private_key =
@@ -132,6 +143,10 @@ impl WalletService {
     }
 
     /// Get the wallet address for the configured exchange.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the wallet is not configured.
     pub fn wallet_address(config: &Config) -> Result<String> {
         match config.exchange {
             Exchange::Polymarket => Self::polymarket_wallet_address(config),
@@ -139,13 +154,25 @@ impl WalletService {
     }
 
     /// Get the USDC balance for the configured exchange.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the wallet is not configured or the balance
+    /// query fails.
     pub async fn usdc_balance(config: &Config) -> Result<Decimal> {
         match config.exchange {
             Exchange::Polymarket => Self::polymarket_usdc_balance(config).await,
         }
     }
 
-    /// Sweep the full USDC balance to the provided address.
+    /// Sweep the full USDC balance to the specified address.
+    ///
+    /// Transfers all available USDC to the destination address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the wallet is not configured, the destination
+    /// address is invalid, or the transfer fails.
     pub async fn sweep_usdc(config: &Config, to: &str) -> Result<SweepOutcome> {
         match config.exchange {
             Exchange::Polymarket => Self::sweep_polymarket(config, to).await,

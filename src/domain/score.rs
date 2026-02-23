@@ -1,7 +1,44 @@
 //! Market scoring types for subscription prioritization.
 //!
-//! These types are used to score and prioritize markets for subscription management.
-//! Markets with higher scores should be prioritized for active subscriptions.
+//! This module provides types for scoring and ranking markets to prioritize
+//! which markets should receive active order book subscriptions.
+//!
+//! # Scoring System
+//!
+//! Markets are scored on multiple factors:
+//! - **Liquidity**: Market depth and available volume
+//! - **Spread**: Tightness of bid-ask spread (tighter is better)
+//! - **Opportunity**: Historical arbitrage opportunity frequency
+//! - **Outcome Count**: Number of outcomes (more outcomes, more complexity)
+//! - **Activity**: Recent trading volume
+//!
+//! Factors are normalized to 0.0-1.0 and combined using configurable weights.
+//!
+//! # Examples
+//!
+//! Scoring a market:
+//!
+//! ```
+//! use edgelord::domain::score::{ScoreFactors, ScoreWeights, MarketScore};
+//! use edgelord::domain::id::MarketId;
+//!
+//! let factors = ScoreFactors::new(
+//!     0.8,  // liquidity
+//!     0.9,  // spread
+//!     0.3,  // opportunity
+//!     0.5,  // outcome_count
+//!     0.7,  // activity
+//! );
+//!
+//! let weights = ScoreWeights::default();
+//! let score = MarketScore::from_factors(
+//!     MarketId::new("market-1"),
+//!     factors,
+//!     &weights,
+//! );
+//!
+//! println!("Composite score: {}", score.composite());
+//! ```
 
 use std::cmp::Ordering;
 
@@ -13,22 +50,22 @@ use super::id::MarketId;
 /// more desirable characteristics for subscription prioritization.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScoreFactors {
-    /// Market depth and available volume (0.0-1.0).
+    /// Market depth and available volume (0.0 to 1.0).
     pub liquidity: f64,
-    /// Tightness of bid-ask spread (0.0-1.0, higher = tighter).
+    /// Tightness of bid-ask spread (0.0 to 1.0, higher means tighter).
     pub spread: f64,
-    /// Historical arbitrage opportunity frequency (0.0-1.0).
+    /// Historical arbitrage opportunity frequency (0.0 to 1.0).
     pub opportunity: f64,
-    /// Normalized outcome count factor (0.0-1.0).
+    /// Normalized outcome count factor (0.0 to 1.0).
     pub outcome_count: f64,
-    /// Recent trading activity level (0.0-1.0).
+    /// Recent trading activity level (0.0 to 1.0).
     pub activity: f64,
 }
 
 impl ScoreFactors {
-    /// Create new score factors.
+    /// Creates new score factors with the given values.
     ///
-    /// All values should be in the 0.0-1.0 range.
+    /// All values should be normalized to the 0.0-1.0 range.
     #[must_use]
     pub const fn new(
         liquidity: f64,
@@ -46,7 +83,9 @@ impl ScoreFactors {
         }
     }
 
-    /// Compute a weighted composite score from these factors.
+    /// Computes a weighted composite score from these factors.
+    ///
+    /// Returns the weighted average of all factors.
     #[must_use]
     pub fn composite(&self, weights: &ScoreWeights) -> f64 {
         let weighted_sum = self.liquidity * weights.liquidity
@@ -82,22 +121,24 @@ impl Default for ScoreFactors {
 }
 
 /// Weights for combining score factors into a composite score.
+///
+/// Higher weights increase the influence of the corresponding factor.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScoreWeights {
-    /// Weight for liquidity factor.
+    /// Weight applied to the liquidity factor.
     pub liquidity: f64,
-    /// Weight for spread factor.
+    /// Weight applied to the spread factor.
     pub spread: f64,
-    /// Weight for opportunity factor.
+    /// Weight applied to the opportunity factor.
     pub opportunity: f64,
-    /// Weight for outcome count factor.
+    /// Weight applied to the outcome count factor.
     pub outcome_count: f64,
-    /// Weight for activity factor.
+    /// Weight applied to the activity factor.
     pub activity: f64,
 }
 
 impl ScoreWeights {
-    /// Create new score weights.
+    /// Creates new score weights.
     #[must_use]
     pub const fn new(
         liquidity: f64,
@@ -129,15 +170,20 @@ impl Default for ScoreWeights {
 }
 
 /// A market's computed score with its contributing factors.
+///
+/// Implements `Ord` for sorting markets by composite score.
 #[derive(Debug, Clone)]
 pub struct MarketScore {
+    /// The scored market's ID.
     market_id: MarketId,
+    /// Individual factor scores.
     factors: ScoreFactors,
+    /// Combined composite score.
     composite: f64,
 }
 
 impl MarketScore {
-    /// Create a new market score with pre-computed composite.
+    /// Creates a new market score with a pre-computed composite.
     #[must_use]
     pub fn new(market_id: MarketId, factors: ScoreFactors, composite: f64) -> Self {
         Self {
@@ -147,7 +193,7 @@ impl MarketScore {
         }
     }
 
-    /// Create a market score by computing the composite from factors and weights.
+    /// Creates a market score by computing the composite from factors and weights.
     #[must_use]
     pub fn from_factors(
         market_id: MarketId,
@@ -162,19 +208,19 @@ impl MarketScore {
         }
     }
 
-    /// Get the market ID.
+    /// Returns the market ID.
     #[must_use]
     pub fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
-    /// Get the score factors.
+    /// Returns the individual score factors.
     #[must_use]
     pub const fn factors(&self) -> &ScoreFactors {
         &self.factors
     }
 
-    /// Get the composite score.
+    /// Returns the composite score.
     #[must_use]
     pub const fn composite(&self) -> f64 {
         self.composite

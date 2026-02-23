@@ -1,11 +1,13 @@
-//! Trait definitions (hexagonal ports). Depend only on domain.
+//! Hexagonal architecture ports for the application core.
 //!
-//! Ports define extension points around the application core. This module is
-//! grouped by direction:
-//! - `inbound`: drivers that call into application capabilities.
-//! - `outbound`: dependencies the application calls out to.
+//! Ports define extension points (interfaces) around the application core,
+//! following the ports-and-adapters (hexagonal) architecture pattern. This
+//! module organizes ports by direction:
 //!
-//! # Architecture
+//! - [`inbound`]: Driving ports consumed by inbound adapters (CLI, Telegram, etc.)
+//! - [`outbound`]: Driven ports implemented by outbound adapters (exchanges, storage, etc.)
+//!
+//! # Architecture Overview
 //!
 //! ```text
 //!                    ┌─────────────────────────┐
@@ -21,6 +23,13 @@
 //! │ Adapter │            │   Adapter   │              │  Adapter  │
 //! └─────────┘            └─────────────┘              └───────────┘
 //! ```
+//!
+//! # Design Principles
+//!
+//! - Ports depend only on domain types, never on infrastructure
+//! - Inbound ports expose application capabilities to drivers
+//! - Outbound ports abstract infrastructure dependencies
+//! - All traits are designed for testability with mock implementations
 //!
 pub mod inbound;
 pub mod outbound;

@@ -1,4 +1,38 @@
 //! Position types for exchange-agnostic position management.
+//!
+//! This module provides types for tracking open and closed arbitrage positions.
+//! A position represents ownership of outcome shares across one or more legs
+//! of an arbitrage trade.
+//!
+//! # Position Lifecycle
+//!
+//! 1. **Open**: All legs filled successfully, waiting for market resolution
+//! 2. **Partial Fill**: Some legs filled, creating risk exposure
+//! 3. **Closed**: Position exited via market settlement or sale
+//!
+//! # Examples
+//!
+//! Creating an arbitrage position:
+//!
+//! ```
+//! use edgelord::domain::position::{Position, PositionLeg, PositionStatus};
+//! use edgelord::domain::id::{PositionId, MarketId, TokenId};
+//! use rust_decimal_macros::dec;
+//! use chrono::Utc;
+//!
+//! let leg = PositionLeg::new(TokenId::new("yes-token"), dec!(100), dec!(0.45));
+//! let position = Position::new(
+//!     PositionId::new(1),
+//!     MarketId::new("market-1"),
+//!     vec![leg],
+//!     dec!(95),   // entry cost
+//!     dec!(100),  // guaranteed payout
+//!     Utc::now(),
+//!     PositionStatus::Open,
+//! );
+//!
+//! assert_eq!(position.expected_profit(), dec!(5));
+//! ```
 
 use std::result::Result;
 
@@ -8,33 +42,35 @@ use super::error::DomainError;
 use super::id::{MarketId, PositionId, TokenId};
 use super::money::{Price, Volume};
 
-/// Status of a position.
+/// Status of a trading position in its lifecycle.
+///
+/// Positions progress through states based on fill status and market events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PositionStatus {
-    /// All legs filled successfully.
+    /// All legs filled successfully, position is active.
     Open,
-    /// Some legs filled, exposure exists.
+    /// Some legs filled but not all, creating directional exposure.
     PartialFill {
-        /// Token IDs of filled legs.
+        /// Token IDs of legs that were successfully filled.
         filled: Vec<TokenId>,
-        /// Token IDs of unfilled legs.
+        /// Token IDs of legs that failed to fill.
         missing: Vec<TokenId>,
     },
-    /// Position closed (market settled or sold).
+    /// Position has been closed (market settled or shares sold).
     Closed {
-        /// Realized profit/loss.
+        /// Realized profit or loss from this position.
         pnl: Price,
     },
 }
 
 impl PositionStatus {
-    /// Returns true if the position is open.
+    /// Returns true if the position is open and active.
     #[must_use]
     pub const fn is_open(&self) -> bool {
         matches!(self, Self::Open)
     }
 
-    /// Returns true if the position is a partial fill.
+    /// Returns true if the position has partial fill exposure.
     #[must_use]
     pub const fn is_partial(&self) -> bool {
         matches!(self, Self::PartialFill { .. })
@@ -47,16 +83,36 @@ impl PositionStatus {
     }
 }
 
-/// A single leg of a position.
+/// A single leg of a multi-leg position.
+///
+/// Each leg represents ownership of shares in one outcome of a market.
+/// For arbitrage positions, multiple legs combine to create a hedged position.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::position::PositionLeg;
+/// use edgelord::domain::id::TokenId;
+/// use rust_decimal_macros::dec;
+///
+/// let leg = PositionLeg::new(TokenId::new("yes-token"), dec!(100), dec!(0.45));
+///
+/// assert_eq!(leg.size(), dec!(100));
+/// assert_eq!(leg.entry_price(), dec!(0.45));
+/// assert_eq!(leg.cost(), dec!(45)); // 100 * 0.45
+/// ```
 #[derive(Debug, Clone)]
 pub struct PositionLeg {
+    /// The token ID for this leg's outcome.
     token_id: TokenId,
+    /// Number of shares held.
     size: Volume,
+    /// Price paid per share.
     entry_price: Price,
 }
 
 impl PositionLeg {
-    /// Create a new position leg.
+    /// Creates a new position leg.
     #[must_use]
     pub const fn new(token_id: TokenId, size: Volume, entry_price: Price) -> Self {
         Self {
@@ -66,47 +122,87 @@ impl PositionLeg {
         }
     }
 
-    /// Get the token ID.
+    /// Returns the token ID for this leg.
     #[must_use]
     pub const fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
-    /// Get the size.
+    /// Returns the number of shares held.
     #[must_use]
     pub const fn size(&self) -> Volume {
         self.size
     }
 
-    /// Get the entry price.
+    /// Returns the entry price per share.
     #[must_use]
     pub const fn entry_price(&self) -> Price {
         self.entry_price
     }
 
-    /// Calculate the cost of this leg (size * `entry_price`).
+    /// Calculates the total cost of this leg (size times entry price).
     #[must_use]
     pub fn cost(&self) -> Price {
         self.size * self.entry_price
     }
 }
 
-/// An arbitrage position (YES + NO tokens held).
+/// An arbitrage position holding shares across multiple outcomes.
+///
+/// A position represents the combined holdings from an arbitrage trade.
+/// For a simple binary arbitrage, this includes both YES and NO shares
+/// that together guarantee a profit regardless of outcome.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::position::{Position, PositionLeg, PositionStatus};
+/// use edgelord::domain::id::{PositionId, MarketId, TokenId};
+/// use rust_decimal_macros::dec;
+/// use chrono::Utc;
+///
+/// let legs = vec![
+///     PositionLeg::new(TokenId::new("yes"), dec!(100), dec!(0.45)),
+///     PositionLeg::new(TokenId::new("no"), dec!(100), dec!(0.50)),
+/// ];
+///
+/// let position = Position::new(
+///     PositionId::new(1),
+///     MarketId::new("market-1"),
+///     legs,
+///     dec!(95),   // paid $95 total
+///     dec!(100),  // will receive $100 on any outcome
+///     Utc::now(),
+///     PositionStatus::Open,
+/// );
+///
+/// assert_eq!(position.expected_profit(), dec!(5));
+/// assert!(position.is_open());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Position {
+    /// Unique identifier for this position.
     id: PositionId,
+    /// The market this position is in.
     market_id: MarketId,
+    /// Individual legs (outcome holdings) of this position.
     legs: Vec<PositionLeg>,
+    /// Total cost paid to open this position.
     entry_cost: Price,
+    /// Guaranteed payout on market resolution.
     guaranteed_payout: Price,
+    /// Timestamp when the position was opened.
     opened_at: DateTime<Utc>,
+    /// Current status of the position.
     status: PositionStatus,
-    /// Associated trade ID for stats tracking.
+    /// Associated trade ID for statistics tracking.
     trade_id: Option<i32>,
 }
 
 impl Position {
-    /// Create a new position.
+    /// Creates a new position without validation.
+    ///
+    /// Use [`Position::try_new`] for validated construction.
     #[must_use]
     pub const fn new(
         id: PositionId,
@@ -129,14 +225,14 @@ impl Position {
         }
     }
 
-    /// Create a new position with an associated trade ID.
+    /// Associates a trade ID with this position for statistics tracking.
     #[must_use]
     pub const fn with_trade_id(mut self, trade_id: i32) -> Self {
         self.trade_id = Some(trade_id);
         self
     }
 
-    /// Create a new position with domain invariant validation.
+    /// Creates a new position with domain invariant validation.
     ///
     /// # Domain Invariants
     ///
@@ -145,7 +241,9 @@ impl Position {
     ///
     /// # Errors
     ///
-    /// Returns `DomainError` if any invariant is violated.
+    /// Returns [`DomainError::EmptyLegs`] if legs is empty.
+    /// Returns [`DomainError::PayoutNotGreaterThanCost`] if the payout
+    /// does not exceed the entry cost.
     pub fn try_new(
         id: PositionId,
         market_id: MarketId,
@@ -157,16 +255,12 @@ impl Position {
     ) -> Result<Self, DomainError> {
         use std::cmp::Ordering;
 
-        // Validate legs is not empty
         if legs.is_empty() {
             return Err(DomainError::EmptyLegs);
         }
 
-        // Validate guaranteed_payout is greater than entry_cost
         match guaranteed_payout.partial_cmp(&entry_cost) {
-            Some(Ordering::Greater) => {
-                // Valid case
-            }
+            Some(Ordering::Greater) => {}
             _ => {
                 return Err(DomainError::PayoutNotGreaterThanCost {
                     payout: guaranteed_payout,
@@ -187,67 +281,67 @@ impl Position {
         })
     }
 
-    /// Get the position ID.
+    /// Returns the position ID.
     #[must_use]
     pub const fn id(&self) -> PositionId {
         self.id
     }
 
-    /// Get the market ID.
+    /// Returns the market ID.
     #[must_use]
     pub const fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
-    /// Get the legs.
+    /// Returns all legs of this position.
     #[must_use]
     pub fn legs(&self) -> &[PositionLeg] {
         &self.legs
     }
 
-    /// Get the entry cost.
+    /// Returns the total entry cost for this position.
     #[must_use]
     pub const fn entry_cost(&self) -> Price {
         self.entry_cost
     }
 
-    /// Get the guaranteed payout.
+    /// Returns the guaranteed payout on resolution.
     #[must_use]
     pub const fn guaranteed_payout(&self) -> Price {
         self.guaranteed_payout
     }
 
-    /// Get when the position was opened.
+    /// Returns when this position was opened.
     #[must_use]
     pub const fn opened_at(&self) -> DateTime<Utc> {
         self.opened_at
     }
 
-    /// Get the current status.
+    /// Returns the current status of this position.
     #[must_use]
     pub const fn status(&self) -> &PositionStatus {
         &self.status
     }
 
-    /// Get the associated trade ID (for stats tracking).
+    /// Returns the associated trade ID if set.
     #[must_use]
     pub const fn trade_id(&self) -> Option<i32> {
         self.trade_id
     }
 
-    /// Calculate the expected profit (`guaranteed_payout` - `entry_cost`).
+    /// Calculates the expected profit (guaranteed payout minus entry cost).
     #[must_use]
     pub fn expected_profit(&self) -> Price {
         self.guaranteed_payout - self.entry_cost
     }
 
-    /// Returns true if the position is open.
+    /// Returns true if this position is open and active.
     #[must_use]
     pub const fn is_open(&self) -> bool {
         self.status.is_open()
     }
 
-    /// Close the position with the given `PnL`.
+    /// Closes this position with the realized profit or loss.
     pub fn close(&mut self, pnl: Price) {
         self.status = PositionStatus::Closed { pnl };
     }

@@ -1,13 +1,20 @@
 //! Slippage calculations for opportunity handling.
+//!
+//! Computes price movement between opportunity detection and execution
+//! to prevent trading on stale signals.
 
 use rust_decimal::Decimal;
 
 use crate::application::cache::book::BookCache;
 use crate::domain::opportunity::Opportunity;
 
-/// Get the maximum slippage across all opportunity legs.
+/// Calculate the maximum slippage across all opportunity legs.
 ///
-/// Returns `None` when current prices cannot be derived from cache/books.
+/// Slippage is computed as the absolute percentage change between the
+/// expected price (from detection) and the current price (from cache).
+///
+/// Returns `None` if any required order book is missing or has no asks,
+/// or if any expected price is zero.
 pub(crate) fn get_max_slippage(opportunity: &Opportunity, cache: &BookCache) -> Option<Decimal> {
     let mut max_slippage = Decimal::ZERO;
 

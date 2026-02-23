@@ -1,4 +1,7 @@
 //! Notifier registry factory.
+//!
+//! Provides factory functions for constructing the notification registry
+//! with configured notifiers (logging, Telegram, etc.).
 
 use std::sync::Arc;
 
@@ -14,10 +17,17 @@ use crate::adapter::outbound::notifier::telegram::control::RuntimeStats;
 #[cfg(feature = "telegram")]
 use crate::adapter::outbound::notifier::telegram::notifier::{TelegramConfig, TelegramNotifier};
 
-/// Build notifier registry from configuration.
+/// Build the notifier registry from configuration.
 ///
-/// When the `telegram` feature is enabled, this also creates a `RuntimeStats`
-/// instance that should be updated by the orchestrator with pool and market info.
+/// Creates a registry containing all configured notifiers. Always includes
+/// the log notifier. When the `telegram` feature is enabled and configured,
+/// also creates a Telegram notifier and returns the associated `RuntimeStats`
+/// instance for the orchestrator to update.
+///
+/// # Returns
+///
+/// A tuple of (registry, runtime_stats) where runtime_stats is `Some` only
+/// when Telegram notifications are enabled.
 #[cfg(feature = "telegram")]
 pub fn build_notifier_registry(
     config: &Config,
@@ -57,7 +67,10 @@ pub fn build_notifier_registry(
     (registry, runtime_stats)
 }
 
-/// Build notifier registry from configuration (non-telegram variant).
+/// Build the notifier registry from configuration (non-Telegram variant).
+///
+/// Creates a registry containing only the log notifier when the `telegram`
+/// feature is not enabled.
 #[cfg(not(feature = "telegram"))]
 pub fn build_notifier_registry(
     _config: &Config,

@@ -1,4 +1,7 @@
-//! Position recording helpers for execution flow.
+//! Position recording helpers for the execution flow.
+//!
+//! Converts executed opportunities into tracked positions for PnL
+//! monitoring and settlement handling.
 
 use rust_decimal::Decimal;
 
@@ -9,6 +12,9 @@ use crate::domain::position::{Position, PositionLeg, PositionStatus};
 use crate::domain::trade::{Failure, Fill};
 
 /// Record a fully executed position in shared state.
+///
+/// Creates a new position from the opportunity with all legs filled,
+/// generating a unique position ID and adding it to the tracker.
 pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade_id: Option<i32>) {
     let position_legs: Vec<PositionLeg> = opportunity
         .legs()
@@ -41,6 +47,10 @@ pub(crate) fn record_position(state: &AppState, opportunity: &Opportunity, trade
 }
 
 /// Record a partial-fill position in shared state.
+///
+/// Creates a position with `PartialFill` status, tracking which legs were
+/// filled successfully and which failed. Used when execution partially
+/// completes and cancellation fails.
 pub(crate) fn record_partial_position(
     state: &AppState,
     opportunity: &Opportunity,

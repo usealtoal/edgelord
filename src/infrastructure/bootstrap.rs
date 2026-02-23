@@ -1,10 +1,13 @@
 //! Infrastructure bootstrap helpers for runtime wiring.
 //!
-//! This module provides a thin composition root that delegates to factory modules
-//! for building individual components.
+//! Provides a thin composition root that re-exports factory functions for
+//! building infrastructure components. This module serves as a convenience
+//! layer for application startup.
+//!
+//! Consumers can use either `bootstrap::build_*` or `factory::*::build_*`
+//! depending on preference.
 
 // Re-export factory functions for backwards compatibility and convenience.
-// Consumers can use either `bootstrap::build_*` or `factory::*::build_*`.
 
 pub use crate::infrastructure::factory::executor::build_executor as init_executor;
 pub use crate::infrastructure::factory::inference::{build_cluster_cache, build_inferrer};

@@ -1,6 +1,7 @@
 //! Polymarket USDC token approval.
 //!
-//! Handles ERC-20 approval for USDC spending on Polymarket's CTF Exchange contract.
+//! Handles ERC-20 approval for USDC spending on Polymarket's CTF Exchange
+//! contract. Supports both Polygon mainnet and Amoy testnet environments.
 
 use std::str::FromStr;
 
@@ -20,19 +21,25 @@ use crate::port::{
     outbound::approval::TokenApproval,
 };
 
-// USDC contract addresses
-const USDC_NATIVE_MAINNET: &str = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"; // Native USDC on Polygon
-const USDC_TESTNET: &str = "0x2E8D98fd126a32362F2Bd8aA427E59a1ec63F780"; // Amoy testnet
+/// Native USDC contract address on Polygon mainnet.
+const USDC_NATIVE_MAINNET: &str = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 
-// Polymarket CTF Exchange contract (spender)
+/// USDC contract address on Amoy testnet.
+const USDC_TESTNET: &str = "0x2E8D98fd126a32362F2Bd8aA427E59a1ec63F780";
+
+/// Polymarket CTF Exchange contract address on mainnet.
 const CTF_EXCHANGE_MAINNET: &str = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
-const CTF_EXCHANGE_TESTNET: &str = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"; // Same on testnet
 
-// RPC endpoints
+/// Polymarket CTF Exchange contract address on testnet.
+const CTF_EXCHANGE_TESTNET: &str = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E";
+
+/// Public Polygon mainnet RPC endpoint.
 const POLYGON_RPC: &str = "https://polygon-rpc.com";
+
+/// Public Amoy testnet RPC endpoint.
 const AMOY_RPC: &str = "https://rpc-amoy.polygon.technology";
 
-// USDC has 6 decimals
+/// Number of decimals for USDC token.
 const USDC_DECIMALS: u32 = 6;
 
 // ERC-20 interface (minimal for approval)
@@ -46,23 +53,41 @@ sol! {
     }
 }
 
-/// Result of a sweep operation.
+/// Result of a USDC sweep operation.
 #[derive(Debug, Clone)]
 pub enum SweepResult {
     /// No balance available to sweep.
-    NoBalance { balance: Decimal },
-    /// Sweep completed successfully.
-    Transferred { tx_hash: String, amount: Decimal },
+    NoBalance {
+        /// Current balance (should be zero or negligible).
+        balance: Decimal,
+    },
+    /// Sweep transfer completed successfully.
+    Transferred {
+        /// Transaction hash of the transfer.
+        tx_hash: String,
+        /// Amount transferred in USD.
+        amount: Decimal,
+    },
 }
 
-/// Polymarket token approval handler.
+/// Token approval handler for Polymarket.
+///
+/// Manages ERC-20 token approvals and balance queries for the trading wallet.
+/// Implements the [`TokenApproval`] trait for integration with the approval
+/// workflow.
 pub struct PolymarketApproval {
+    /// Local signer derived from the wallet private key.
     signer: PrivateKeySigner,
+    /// Current deployment environment (testnet or mainnet).
     environment: Environment,
 }
 
 impl PolymarketApproval {
-    /// Create a new approval handler from config.
+    /// Create a new approval handler from runtime configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the private key is missing or invalid.
     pub fn new(config: &PolymarketRuntimeConfig) -> Result<Self> {
         if config.private_key.trim().is_empty() {
             return Err(ConfigError::MissingField {
@@ -84,7 +109,7 @@ impl PolymarketApproval {
         })
     }
 
-    /// Get the RPC URL for the current environment.
+    /// Return the RPC URL for the current environment.
     fn rpc_url(&self) -> &'static str {
         match self.environment {
             Environment::Mainnet => POLYGON_RPC,
@@ -92,7 +117,7 @@ impl PolymarketApproval {
         }
     }
 
-    /// Get the USDC contract address for the current environment.
+    /// Return the USDC contract address for the current environment.
     fn usdc_address(&self) -> Result<Address> {
         let addr = match self.environment {
             Environment::Mainnet => USDC_NATIVE_MAINNET,
@@ -107,7 +132,7 @@ impl PolymarketApproval {
         })
     }
 
-    /// Get the CTF Exchange (spender) address.
+    /// Return the CTF Exchange (spender) contract address.
     fn spender_address(&self) -> Result<Address> {
         let addr = match self.environment {
             Environment::Mainnet => CTF_EXCHANGE_MAINNET,
@@ -122,25 +147,30 @@ impl PolymarketApproval {
         })
     }
 
-    /// Convert decimal dollars to USDC units (6 decimals).
+    /// Convert decimal dollars to USDC base units (6 decimals).
     fn to_usdc_units(amount: Decimal) -> U256 {
         let scaled = amount * Decimal::from(10u64.pow(USDC_DECIMALS));
         let int_amount = scaled.trunc().to_string().parse::<u128>().unwrap_or(0);
         U256::from(int_amount)
     }
 
-    /// Convert USDC units to decimal dollars.
+    /// Convert USDC base units to decimal dollars.
     fn from_usdc_units(units: U256) -> Decimal {
         let int_val: u128 = units.try_into().unwrap_or(u128::MAX);
         Decimal::from(int_val) / Decimal::from(10u64.pow(USDC_DECIMALS))
     }
 
-    /// Get wallet address.
+    /// Return the wallet address derived from the private key.
+    #[must_use]
     pub fn wallet_address(&self) -> Address {
         self.signer.address()
     }
 
-    /// Get USDC balance for the wallet.
+    /// Query the USDC balance for the wallet.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the RPC call fails.
     pub async fn usdc_balance(&self) -> Result<Decimal> {
         let rpc_url: url::Url =
             self.rpc_url()
@@ -161,7 +191,11 @@ impl PolymarketApproval {
         Ok(Self::from_usdc_units(balance))
     }
 
-    /// Sweep the full USDC balance to the provided address.
+    /// Transfer the full USDC balance to another address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the balance query or transfer transaction fails.
     pub async fn sweep_usdc(&self, to: Address) -> Result<SweepResult> {
         let balance = self.usdc_balance().await?;
         if balance <= Decimal::ZERO {

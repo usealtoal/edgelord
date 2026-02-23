@@ -1,4 +1,7 @@
-//! Event and opportunity handling façade.
+//! Event and opportunity handling facade.
+//!
+//! Provides the public interface for processing market events and opportunities,
+//! delegating to internal modules for the actual implementation.
 
 use std::sync::Arc;
 
@@ -12,32 +15,56 @@ use crate::port::outbound::exchange::{ArbitrageExecutor, MarketEvent};
 use crate::port::outbound::notifier::NotifierRegistry;
 use crate::port::outbound::stats::StatsRecorder;
 
-/// Dependencies required to process one incoming market event.
+/// Context containing all dependencies required to process a market event.
+///
+/// Bundles references to caches, registries, and services needed during
+/// event processing. Created per-event to capture current state.
 pub struct MarketEventHandlingContext<'a> {
+    /// Order book cache for price lookups and updates.
     pub cache: &'a BookCache,
+    /// Market registry for resolving token IDs to markets.
     pub registry: &'a MarketRegistry,
+    /// Strategy engine for opportunity detection.
     pub strategies: &'a dyn StrategyEngine,
+    /// Optional executor for live trading (None in dry-run mode).
     pub executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
+    /// Risk manager for pre-execution validation.
     pub risk_manager: &'a RiskManager,
+    /// Notifier registry for sending events to observers.
     pub notifiers: &'a Arc<NotifierRegistry>,
+    /// Shared application state.
     pub state: &'a Arc<AppState>,
+    /// Statistics recorder for metrics.
     pub stats: &'a Arc<dyn StatsRecorder>,
+    /// Position manager for settlement handling.
     pub position_manager: &'a Arc<PositionManager>,
+    /// Whether to skip actual execution (log only).
     pub dry_run: bool,
 }
 
-/// Dependencies required to process a detected opportunity.
+/// Context containing dependencies required to process a detected opportunity.
+///
+/// A subset of [`MarketEventHandlingContext`] focused on opportunity evaluation
+/// and execution.
 pub(crate) struct OpportunityHandlingContext<'a> {
+    /// Optional executor for live trading.
     pub executor: Option<Arc<dyn ArbitrageExecutor + Send + Sync>>,
+    /// Risk manager for validation.
     pub risk_manager: &'a RiskManager,
+    /// Notifier registry for events.
     pub notifiers: &'a Arc<NotifierRegistry>,
+    /// Shared application state.
     pub state: &'a Arc<AppState>,
+    /// Statistics recorder.
     pub stats: &'a Arc<dyn StatsRecorder>,
+    /// Order book cache for slippage checks.
     pub cache: &'a BookCache,
+    /// Whether to skip actual execution.
     pub dry_run: bool,
 }
 
 impl<'a> MarketEventHandlingContext<'a> {
+    /// Extract an opportunity handling context from this event context.
     pub(crate) fn opportunity_context(&self) -> OpportunityHandlingContext<'a> {
         OpportunityHandlingContext {
             executor: self.executor.clone(),
@@ -51,12 +78,16 @@ impl<'a> MarketEventHandlingContext<'a> {
     }
 }
 
-/// Handle incoming market events from the data stream.
+/// Process an incoming market event from the data stream.
+///
+/// Delegates to the internal event module for actual processing.
 pub(crate) fn handle_market_event(event: MarketEvent, context: MarketEventHandlingContext<'_>) {
     super::event::handle_market_event(event, context);
 }
 
-/// Handle a detected opportunity.
+/// Process a detected opportunity through risk checks and execution.
+///
+/// Delegates to the internal opportunity module for actual processing.
 pub(crate) fn handle_opportunity(opp: Opportunity, context: OpportunityHandlingContext<'_>) {
     super::opportunity::handle_opportunity(opp, context);
 }

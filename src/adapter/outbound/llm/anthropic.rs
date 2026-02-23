@@ -1,4 +1,7 @@
 //! Anthropic Claude LLM client.
+//!
+//! Provides an implementation of the [`Llm`] trait for the Anthropic
+//! Claude API, supporting text completion requests.
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -7,20 +10,32 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::port::outbound::llm::Llm;
 
+/// Anthropic Messages API endpoint.
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
+
+/// API version header value.
 const API_VERSION: &str = "2023-06-01";
 
-/// Anthropic Claude client.
+/// Anthropic Claude API client.
+///
+/// Implements the [`Llm`] trait for making completion requests to the
+/// Anthropic Messages API.
 pub struct Anthropic {
+    /// HTTP client for API requests.
     client: Client,
+    /// API key for authentication.
     api_key: String,
+    /// Model identifier (e.g., "claude-3-sonnet-20240229").
     model: String,
+    /// Maximum tokens to generate in the response.
     max_tokens: usize,
+    /// Sampling temperature (0.0 to 1.0).
     temperature: f64,
 }
 
 impl Anthropic {
-    /// Create a new Anthropic client.
+    /// Create a new Anthropic client with explicit configuration.
+    #[must_use]
     pub fn new(
         api_key: impl Into<String>,
         model: impl Into<String>,
@@ -36,7 +51,11 @@ impl Anthropic {
         }
     }
 
-    /// Create from environment variable.
+    /// Create a client from the `ANTHROPIC_API_KEY` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the environment variable is not set.
     pub fn from_env(model: impl Into<String>) -> Result<Self> {
         let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
             Error::Config(crate::error::ConfigError::MissingField {

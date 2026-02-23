@@ -1,7 +1,10 @@
 //! Market rebalancing arbitrage strategy.
 //!
-//! Detects when the sum of all outcome prices < $1.00 in multi-outcome markets.
-//! This captured 73.1% ($29M) of historical arbitrage profits - the largest share!
+//! Detects when the sum of all outcome ask prices is less than the guaranteed
+//! payout in multi-outcome markets (3+ outcomes).
+//!
+//! Historical data shows this strategy captured 73.1% ($29M) of arbitrage
+//! profits, making it the largest contributor by far.
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -15,18 +18,19 @@ use crate::port::{
     inbound::strategy::Strategy,
 };
 
-/// Configuration for market rebalancing detection.
+/// Configuration for market rebalancing arbitrage detection.
 #[derive(Debug, Clone, Deserialize)]
 pub struct MarketRebalancingConfig {
-    /// Minimum edge (profit per $1) to consider.
+    /// Minimum edge (profit per dollar) required to consider an opportunity.
     #[serde(default = "default_min_edge")]
     pub min_edge: Decimal,
 
-    /// Minimum expected profit in dollars.
+    /// Minimum expected profit in dollars required to execute.
     #[serde(default = "default_min_profit")]
     pub min_profit: Decimal,
 
-    /// Maximum number of outcomes to analyze (skip huge markets).
+    /// Maximum number of outcomes to analyze.
+    /// Markets with more outcomes are skipped to avoid performance issues.
     #[serde(default = "default_max_outcomes")]
     pub max_outcomes: usize,
 }
@@ -53,11 +57,17 @@ impl Default for MarketRebalancingConfig {
     }
 }
 
-/// Market rebalancing arbitrage detector.
+/// Market rebalancing arbitrage detector for multi-outcome markets.
 ///
-/// Finds opportunities where buying all outcomes costs less than $1.00.
-/// Since exactly one outcome must win, guaranteed $1.00 payout.
+/// Identifies opportunities where purchasing all outcomes costs less than
+/// the guaranteed payout. Since exactly one outcome must win, the position
+/// guarantees a profit equal to (payout - total cost).
+///
+/// Binary markets (2 outcomes) are handled by
+/// [`SingleConditionStrategy`](super::single_condition::SingleConditionStrategy)
+/// instead for efficiency.
 pub struct MarketRebalancingStrategy {
+    /// Strategy configuration.
     config: MarketRebalancingConfig,
 }
 
@@ -68,7 +78,7 @@ impl MarketRebalancingStrategy {
         Self { config }
     }
 
-    /// Get the strategy configuration.
+    /// Return the current configuration.
     #[must_use]
     pub const fn config(&self) -> &MarketRebalancingConfig {
         &self.config
@@ -130,11 +140,11 @@ impl Strategy for MarketRebalancingStrategy {
 /// A single leg in a rebalancing opportunity.
 #[derive(Debug, Clone)]
 pub struct RebalancingLeg {
-    /// Token ID for this outcome.
+    /// Token identifier for this outcome.
     pub token_id: TokenId,
-    /// Ask price for this outcome.
+    /// Best ask price for this outcome.
     pub price: Price,
-    /// Available volume at this price.
+    /// Available volume at the ask price.
     pub volume: Volume,
 }
 
@@ -150,37 +160,44 @@ impl RebalancingLeg {
     }
 }
 
-/// A market rebalancing opportunity.
+/// A market rebalancing opportunity with multiple outcome legs.
 ///
-/// Unlike single-condition which only has YES/NO, rebalancing
-/// can have many legs (one per outcome).
+/// Unlike single-condition which has exactly 2 legs (YES/NO), rebalancing
+/// opportunities can have many legs (one per outcome in the market).
 #[derive(Debug, Clone)]
 pub struct RebalancingOpportunity {
-    /// Market ID.
+    /// Identifier of the market.
     pub market_id: MarketId,
-    /// Market question.
+    /// Market question text.
     pub question: String,
-    /// All legs (one per outcome).
+    /// All legs in the opportunity (one per outcome).
     pub legs: Vec<RebalancingLeg>,
-    /// Total cost to buy all outcomes.
+    /// Total cost to purchase all outcomes.
     pub total_cost: Price,
-    /// Edge (profit per $1).
+    /// Edge (profit per dollar of payout).
     pub edge: Price,
-    /// Tradeable volume (limited by smallest leg).
+    /// Tradeable volume, limited by the smallest leg.
     pub volume: Volume,
-    /// Expected profit.
+    /// Expected profit at the tradeable volume.
     pub expected_profit: Price,
 }
 
 impl RebalancingOpportunity {
-    /// Number of outcomes in this opportunity.
+    /// Return the number of outcomes in this opportunity.
     #[must_use]
     pub fn outcome_count(&self) -> usize {
         self.legs.len()
     }
 }
 
-/// Detect rebalancing opportunity across multiple outcomes.
+/// Detect a rebalancing opportunity across multiple outcomes.
+///
+/// Returns `None` if:
+/// - The market has fewer than 3 or more than `max_outcomes` outcomes
+/// - Any required order book is missing or has no asks
+/// - The total cost equals or exceeds the payout
+/// - The edge is below the configured minimum
+/// - The expected profit is below the configured minimum
 pub fn detect_rebalancing(
     ctx: &dyn DetectionContext,
     token_ids: &[TokenId],

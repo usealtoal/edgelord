@@ -1,29 +1,30 @@
-//! Combinatorial arbitrage detection using Frank-Wolfe + ILP.
+//! Combinatorial arbitrage detection using Frank-Wolfe projection.
 //!
-//! This strategy detects arbitrage opportunities across correlated markets
-//! where logical dependencies create exploitable mispricings.
+//! Detects arbitrage opportunities across correlated markets where logical
+//! dependencies create exploitable mispricings. For example, if markets A
+//! and B are mutually exclusive, their combined probability cannot exceed 1.
 //!
 //! # Algorithm
 //!
 //! The Frank-Wolfe algorithm projects market prices onto the arbitrage-free
-//! manifold (marginal polytope) using Bregman divergence. Key steps:
+//! manifold (marginal polytope) using Bregman divergence:
 //!
-//! 1. Start with current market prices θ
+//! 1. Start with current market prices theta
 //! 2. Compute gradient of Bregman divergence
-//! 3. Solve ILP oracle: find vertex minimizing gradient dot product
-//! 4. Update toward that vertex
+//! 3. Solve ILP oracle to find the minimizing vertex
+//! 4. Update toward that vertex with step size
 //! 5. Repeat until convergence or iteration limit
 //!
-//! The gap between θ and the projection μ* indicates arbitrage potential.
+//! The gap between theta and the projection mu* indicates arbitrage potential.
 //!
 //! # Research Background
 //!
-//! This implements techniques from:
+//! Implements techniques from:
 //! - "Arbitrage-Free Combinatorial Market Making via Integer Programming" (2016)
 //! - "Unravelling the Probabilistic Forest: Arbitrage in Prediction Markets" (2025)
 //!
 //! While combinatorial arbitrage captured only 0.24% ($95K) of historical profits,
-//! the mathematical infrastructure enables more sophisticated strategies.
+//! the mathematical infrastructure enables sophisticated cross-market strategies.
 
 use std::sync::Arc;
 
@@ -40,22 +41,25 @@ use crate::port::{
     inbound::strategy::Strategy, outbound::solver::ProjectionSolver,
 };
 
-/// Configuration for combinatorial strategy.
+/// Configuration for the combinatorial arbitrage strategy.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CombinatorialConfig {
-    /// Maximum Frank-Wolfe iterations per detection.
+    /// Maximum Frank-Wolfe iterations per detection cycle.
     #[serde(default = "default_max_iterations")]
     pub max_iterations: usize,
 
-    /// Convergence tolerance (stop when gap < this).
+    /// Convergence tolerance for the duality gap.
+    /// Detection stops early when gap falls below this value.
     #[serde(default = "default_tolerance")]
     pub tolerance: Decimal,
 
-    /// Minimum arbitrage gap to act on.
+    /// Minimum arbitrage gap required to generate an opportunity.
+    /// Filters out small gaps that may not be profitable after fees.
     #[serde(default = "default_gap_threshold")]
     pub gap_threshold: Decimal,
 
-    /// Enable this strategy.
+    /// Whether this strategy is enabled.
+    /// Disabled by default as it requires dependency configuration.
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 }
@@ -87,29 +91,39 @@ impl Default for CombinatorialConfig {
     }
 }
 
-/// Combinatorial arbitrage strategy using Frank-Wolfe + ILP.
+/// Combinatorial arbitrage strategy using Frank-Wolfe projection.
 ///
-/// This strategy requires:
-/// 1. Market dependency information (which markets are correlated)
-/// 2. ILP constraints encoding those dependencies
-/// 3. A solver to run the Frank-Wolfe algorithm
+/// Detects cross-market arbitrage by projecting prices onto the marginal
+/// polytope defined by market relation constraints.
 ///
-/// Without dependency information, this strategy does nothing.
+/// # Requirements
+///
+/// This strategy requires several components to function:
+/// 1. Cluster cache with discovered market relations
+/// 2. Market registry for resolving market metadata
+/// 3. Projection solver for running the Frank-Wolfe algorithm
+///
+/// Without these dependencies configured, the strategy returns no opportunities.
 pub struct CombinatorialStrategy {
+    /// Strategy configuration.
     config: CombinatorialConfig,
+    /// Frank-Wolfe algorithm instance.
     fw: FrankWolfe,
-    /// Cluster cache for relation lookups.
+    /// Cluster cache for relation lookups (injected).
     cluster_cache: Option<Arc<ClusterCache>>,
-    /// Market registry for resolving market IDs.
+    /// Market registry for resolving market IDs (injected).
     registry: Option<Arc<MarketRegistry>>,
     /// Cluster detector for running Frank-Wolfe detection.
     detector: Option<ClusterDetector>,
-    /// Projection solver implementation injected from infrastructure wiring.
+    /// Projection solver implementation (injected from infrastructure).
     projection_solver: Option<Arc<dyn ProjectionSolver>>,
 }
 
 impl CombinatorialStrategy {
     /// Create a new strategy with the given configuration.
+    ///
+    /// The strategy will not detect opportunities until dependencies
+    /// (cluster cache, registry, projection solver) are injected.
     #[must_use]
     pub fn new(config: CombinatorialConfig) -> Self {
         let fw_config = FrankWolfeConfig {
@@ -126,24 +140,24 @@ impl CombinatorialStrategy {
         }
     }
 
-    /// Set the cluster cache for relation lookups.
+    /// Inject the cluster cache for relation lookups.
     pub fn set_cache(&mut self, cache: Arc<ClusterCache>) {
         self.cluster_cache = Some(cache);
         self.update_detector();
     }
 
-    /// Set the market registry for market lookups.
+    /// Inject the market registry for resolving market metadata.
     pub fn set_registry(&mut self, registry: Arc<MarketRegistry>) {
         self.registry = Some(registry);
     }
 
-    /// Inject projection solver from runtime wiring.
+    /// Inject the projection solver from infrastructure wiring.
     pub fn set_projection_solver(&mut self, projection_solver: Arc<dyn ProjectionSolver>) {
         self.projection_solver = Some(projection_solver);
         self.update_detector();
     }
 
-    /// Create strategy with cache already set.
+    /// Create the strategy with the cluster cache already set.
     #[must_use]
     pub fn with_cache(mut self, cache: Arc<ClusterCache>) -> Self {
         self.cluster_cache = Some(cache);
@@ -151,14 +165,14 @@ impl CombinatorialStrategy {
         self
     }
 
-    /// Create strategy with registry already set.
+    /// Create the strategy with the market registry already set.
     #[must_use]
     pub fn with_registry(mut self, registry: Arc<MarketRegistry>) -> Self {
         self.registry = Some(registry);
         self
     }
 
-    /// Update the detector instance based on current config.
+    /// Rebuild the detector instance based on current configuration.
     fn update_detector(&mut self) {
         let Some(projection_solver) = &self.projection_solver else {
             self.detector = None;
@@ -176,7 +190,7 @@ impl CombinatorialStrategy {
         ));
     }
 
-    /// Check if a market has known relations in the cache.
+    /// Check if a market has known relations in the cluster cache.
     fn has_cached_relations(&self, market_id: &crate::domain::id::MarketId) -> bool {
         self.cluster_cache
             .as_ref()
@@ -184,13 +198,13 @@ impl CombinatorialStrategy {
             .unwrap_or(false)
     }
 
-    /// Get the strategy configuration.
+    /// Return the current configuration.
     #[must_use]
     pub const fn config(&self) -> &CombinatorialConfig {
         &self.config
     }
 
-    /// Get the Frank-Wolfe algorithm instance.
+    /// Return the Frank-Wolfe algorithm instance.
     #[must_use]
     pub const fn frank_wolfe(&self) -> &FrankWolfe {
         &self.fw

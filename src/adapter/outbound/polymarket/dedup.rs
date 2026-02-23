@@ -1,7 +1,7 @@
 //! Message deduplication for Polymarket WebSocket messages.
 //!
 //! Implements the [`MessageDeduplicator`] trait to filter duplicate messages
-//! from redundant WebSocket connections.
+//! when using multiple redundant WebSocket connections for reliability.
 
 use std::time::{Duration, Instant};
 
@@ -13,14 +13,15 @@ use crate::port::outbound::exchange::MarketEvent;
 
 /// Thread-safe message deduplicator for Polymarket.
 ///
-/// Uses a concurrent hash map to track seen messages and detect duplicates
-/// across multiple WebSocket connections.
+/// Uses a concurrent hash map to track recently seen messages and detect
+/// duplicates across multiple WebSocket connections. Keys are derived from
+/// message content (token ID, prices, book depth).
 pub struct PolymarketDeduplicator {
-    /// Cache of seen message keys with their insertion time.
+    /// Cache mapping message keys to their insertion timestamps.
     cache: DashMap<String, Instant>,
-    /// Time-to-live for cache entries.
+    /// Time-to-live for cache entries before expiration.
     ttl: Duration,
-    /// Maximum number of entries in the cache.
+    /// Maximum cache entries before garbage collection.
     max_entries: usize,
     /// Whether deduplication is enabled.
     enabled: bool,
@@ -38,10 +39,11 @@ impl PolymarketDeduplicator {
         }
     }
 
-    /// Create a dedup key from a market event.
+    /// Create a deduplication key from a market event.
     ///
-    /// The key combines the token ID with a hash of the order book content
-    /// to uniquely identify each message.
+    /// Returns `None` for events that should not be deduplicated (connection
+    /// events). For book events, combines token ID, best prices, and depth
+    /// to create a unique identifier.
     fn make_key(event: &MarketEvent) -> Option<String> {
         match event {
             MarketEvent::BookSnapshot { token_id, book } => {

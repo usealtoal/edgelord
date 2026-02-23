@@ -1,4 +1,7 @@
-//! Detection context used by orchestration flow.
+//! Detection context used by the orchestration flow.
+//!
+//! Provides concrete implementations of the [`DetectionContext`] trait that
+//! wrap market metadata and order book cache for strategy detection.
 
 use rust_decimal::Decimal;
 
@@ -6,15 +9,25 @@ use crate::application::cache::book::BookCache;
 use crate::domain::{book::Book, id::MarketId, id::TokenId, market::Market};
 use crate::port::{inbound::strategy::DetectionContext, inbound::strategy::MarketContext};
 
-/// Detection context for a single market snapshot.
+/// Detection context combining market metadata with live order book data.
+///
+/// Passed to strategies during the detection phase, providing access to
+/// market properties and current prices without coupling strategies to
+/// specific cache implementations.
 pub struct MarketDetectionContext<'a> {
+    /// Reference to the market being analyzed.
     market: &'a Market,
+    /// Reference to the order book cache for price lookups.
     cache: &'a BookCache,
+    /// Pre-computed market context (binary vs multi-outcome).
     market_ctx: MarketContext,
 }
 
 impl<'a> MarketDetectionContext<'a> {
-    /// Build context from market metadata and current book cache.
+    /// Build a detection context from market metadata and order book cache.
+    ///
+    /// Automatically determines whether the market is binary or multi-outcome
+    /// based on the number of outcomes defined in the market.
     #[must_use]
     pub fn new(market: &'a Market, cache: &'a BookCache) -> Self {
         let market_ctx = if market.is_binary() {

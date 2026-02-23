@@ -1,7 +1,7 @@
 //! Risk management service.
 //!
-//! Provides pre-execution checks for position limits, exposure caps,
-//! and circuit breaker status.
+//! Provides pre-execution validation for opportunities, ensuring trades
+//! comply with configured risk limits before execution.
 
 use std::sync::Arc;
 
@@ -15,25 +15,34 @@ use crate::port::inbound::risk::RiskCheckResult;
 
 /// Risk manager that validates trades before execution.
 ///
-/// Performs various checks including:
-/// - Circuit breaker status
-/// - Profit threshold validation
-/// - Position limits per market
-/// - Total exposure limits
+/// Performs comprehensive pre-trade checks including:
+/// - Circuit breaker status (halts all trading when active)
+/// - Profit threshold validation (filters unprofitable opportunities)
+/// - Position limits per market (prevents concentration risk)
+/// - Total exposure limits (caps overall risk exposure)
+///
+/// On approval, atomically reserves exposure to prevent concurrent
+/// opportunities from exceeding configured limits.
 pub struct RiskManager {
+    /// Shared application state containing risk limits and positions.
     state: Arc<AppState>,
 }
 
 impl RiskManager {
-    /// Create a new risk manager with shared state.
+    /// Create a new risk manager with the given shared state.
     pub const fn new(state: Arc<AppState>) -> Self {
         Self { state }
     }
 
-    /// Check if an opportunity passes all risk checks.
+    /// Validate an opportunity against all risk checks.
     ///
-    /// On approval, atomically reserves exposure to prevent concurrent
-    /// opportunities from exceeding the limit.
+    /// Checks are performed in order: circuit breaker, profit threshold,
+    /// position limit, and exposure limit. On approval, atomically reserves
+    /// the required exposure to prevent concurrent opportunities from
+    /// exceeding limits.
+    ///
+    /// Returns [`RiskCheckResult::Approved`] if all checks pass, or
+    /// [`RiskCheckResult::Rejected`] with the specific error if any check fails.
     #[must_use]
     pub fn check(&self, opportunity: &Opportunity) -> RiskCheckResult {
         // Check circuit breaker first
@@ -74,32 +83,35 @@ impl RiskManager {
         RiskCheckResult::Approved
     }
 
-    /// Release reserved exposure after execution completes or fails.
+    /// Release previously reserved exposure.
+    ///
+    /// Call after execution completes (success or failure) to free the
+    /// reserved exposure for future opportunities.
     pub fn release_exposure(&self, opportunity: &Opportunity) {
         let amount = opportunity.total_cost() * opportunity.volume();
         self.state.release_exposure(amount);
     }
 
-    /// Trigger circuit breaker.
+    /// Activate the circuit breaker, halting all new trades.
     pub fn trigger_circuit_breaker(&self, reason: impl Into<String>) {
         let reason = reason.into();
         warn!(reason = %reason, "Triggering circuit breaker");
         self.state.activate_circuit_breaker(reason);
     }
 
-    /// Reset circuit breaker.
+    /// Deactivate the circuit breaker, resuming normal trading.
     pub fn reset_circuit_breaker(&self) {
         info!("Resetting circuit breaker");
         self.state.reset_circuit_breaker();
     }
 
-    /// Check if the circuit breaker is currently active.
+    /// Return true if the circuit breaker is currently active.
     #[must_use]
     pub fn is_circuit_breaker_active(&self) -> bool {
         self.state.is_circuit_breaker_active()
     }
 
-    /// Record a successful execution (updates state).
+    /// Log a successful execution for monitoring.
     pub fn record_execution(&self, opportunity: &Opportunity) {
         info!(
             market_id = %opportunity.market_id(),
@@ -109,7 +121,7 @@ impl RiskManager {
         );
     }
 
-    /// Check if circuit breaker is active.
+    /// Verify the circuit breaker is not active.
     fn check_circuit_breaker(&self) -> Result<(), RiskError> {
         if self.state.is_circuit_breaker_active() {
             let reason = self
@@ -122,7 +134,7 @@ impl RiskManager {
         Ok(())
     }
 
-    /// Check if expected profit meets threshold.
+    /// Verify expected profit meets the configured minimum threshold.
     fn check_profit_threshold(&self, opportunity: &Opportunity) -> Result<(), RiskError> {
         let threshold = self.state.risk_limits().min_profit_threshold;
         let expected = opportunity.expected_profit();
@@ -136,7 +148,7 @@ impl RiskManager {
         Ok(())
     }
 
-    /// Check if position in this market would exceed limit.
+    /// Verify the position in this market would not exceed the per-market limit.
     fn check_position_limit(&self, opportunity: &Opportunity) -> Result<(), RiskError> {
         let market_id = opportunity.market_id();
         let limit = self.state.risk_limits().max_position_per_market;

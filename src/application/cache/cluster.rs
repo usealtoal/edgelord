@@ -1,4 +1,7 @@
 //! Cluster cache for relation inference results.
+//!
+//! Stores relation clusters discovered by the inference service, with TTL-based
+//! expiration to ensure stale relations are pruned automatically.
 
 use std::collections::HashMap;
 
@@ -8,12 +11,21 @@ use parking_lot::RwLock;
 use crate::domain::{cluster::Cluster, id::ClusterId, id::MarketId, relation::Relation};
 use crate::port::inbound::runtime::RuntimeClusterView;
 
-/// Cache for relation clusters with TTL support.
+/// Cache for relation clusters with TTL-based expiration.
+///
+/// Provides O(1) lookup of clusters by market ID and automatic expiration
+/// of stale entries. Thread-safe for concurrent read/write access.
+///
+/// # TTL Behavior
+///
+/// Clusters older than the configured TTL are considered expired and will
+/// not be returned by lookup methods. Call [`prune_expired`](Self::prune_expired)
+/// periodically to remove expired entries and free memory.
 #[derive(Debug)]
 pub struct ClusterCache {
-    /// Clusters by ID.
+    /// Clusters indexed by their unique ID.
     clusters: RwLock<HashMap<ClusterId, Cluster>>,
-    /// Market to cluster mapping for fast lookup.
+    /// Market ID to cluster ID mapping for O(1) reverse lookup.
     market_index: RwLock<HashMap<MarketId, ClusterId>>,
     /// Time-to-live for cached entries.
     ttl: Duration,
@@ -21,6 +33,10 @@ pub struct ClusterCache {
 
 impl ClusterCache {
     /// Create a new cluster cache with the given TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `ttl` - Duration after which clusters are considered expired.
     pub fn new(ttl: Duration) -> Self {
         Self {
             clusters: RwLock::new(HashMap::new()),
@@ -29,7 +45,9 @@ impl ClusterCache {
         }
     }
 
-    /// Get cluster containing a market.
+    /// Retrieve the cluster containing a specific market.
+    ///
+    /// Returns `None` if no cluster contains the market or if the cluster has expired.
     #[must_use]
     pub fn get_for_market(&self, market_id: &MarketId) -> Option<Cluster> {
         let index = self.market_index.read();
@@ -37,7 +55,9 @@ impl ClusterCache {
         self.get(cluster_id)
     }
 
-    /// Get cluster by ID.
+    /// Retrieve a cluster by its ID.
+    ///
+    /// Returns `None` if the cluster does not exist or has expired.
     #[must_use]
     pub fn get(&self, cluster_id: &ClusterId) -> Option<Cluster> {
         let clusters = self.clusters.read();
@@ -51,13 +71,15 @@ impl ClusterCache {
         Some(cluster.clone())
     }
 
-    /// Check if a market has any relations.
+    /// Check if a market belongs to any non-expired cluster.
     #[must_use]
     pub fn has_relations(&self, market_id: &MarketId) -> bool {
         self.get_for_market(market_id).is_some()
     }
 
     /// Insert or update a cluster.
+    ///
+    /// Updates the market index to enable O(1) lookup by market ID.
     pub fn put(&self, cluster: Cluster) {
         let cluster_id = cluster.id.clone();
 
@@ -73,7 +95,9 @@ impl ClusterCache {
         self.clusters.write().insert(cluster_id, cluster);
     }
 
-    /// Insert relations and build clusters from them.
+    /// Build a cluster from relations and insert it into the cache.
+    ///
+    /// Does nothing if the relations vector is empty.
     pub fn put_relations(&self, relations: Vec<Relation>) {
         if relations.is_empty() {
             return;
@@ -84,7 +108,10 @@ impl ClusterCache {
         self.put(cluster);
     }
 
-    /// Invalidate all clusters containing a market.
+    /// Invalidate and remove any cluster containing a market.
+    ///
+    /// Use when a market's state changes in a way that invalidates
+    /// its existing relations.
     pub fn invalidate(&self, market_id: &MarketId) {
         let cluster_id = {
             let index = self.market_index.read();
@@ -97,6 +124,8 @@ impl ClusterCache {
     }
 
     /// Remove a cluster by ID.
+    ///
+    /// Also removes all market index entries pointing to this cluster.
     pub fn remove(&self, cluster_id: &ClusterId) {
         let cluster = self.clusters.write().remove(cluster_id);
 
@@ -108,7 +137,7 @@ impl ClusterCache {
         }
     }
 
-    /// Get all valid (non-expired) clusters.
+    /// Retrieve all non-expired clusters.
     #[must_use]
     pub fn all_clusters(&self) -> Vec<Cluster> {
         let now = Utc::now();
@@ -120,7 +149,9 @@ impl ClusterCache {
             .collect()
     }
 
-    /// Prune expired clusters. Returns count removed.
+    /// Remove all expired clusters from the cache.
+    ///
+    /// Returns the number of clusters that were removed.
     pub fn prune_expired(&self) -> usize {
         let now = Utc::now();
         let expired: Vec<ClusterId> = {

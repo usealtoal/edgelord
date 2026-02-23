@@ -1,3 +1,8 @@
+//! Connection pool management task.
+//!
+//! Provides the background task that monitors connection health and
+//! performs automatic rotations and restarts.
+
 use std::time::{Duration, Instant};
 
 use tracing::{debug, info, warn};
@@ -8,8 +13,15 @@ use super::MANAGEMENT_CONNECTION_ID_START;
 
 /// Background task that monitors connection health and performs rotations.
 ///
-/// Runs on a fixed interval. Replacements are processed concurrently via
-/// `join_all` so one slow handoff doesn't block others.
+/// Runs on a fixed interval defined by `health_check_interval_secs`. Detects
+/// three conditions requiring replacement:
+///
+/// - **TTL expiry**: Connections approaching their lifetime limit
+/// - **Silent death**: Connections that stopped receiving events
+/// - **Task crash**: Connection tasks that terminated unexpectedly
+///
+/// Replacements are processed concurrently via `join_all` so one slow handoff
+/// does not block others.
 pub(super) async fn management_task(ctx: ManagementContext, exchange_name: &'static str) {
     let check_interval = Duration::from_secs(ctx.config.health_check_interval_secs);
     let ttl_threshold = Duration::from_secs(

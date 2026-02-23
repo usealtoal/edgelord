@@ -1,4 +1,7 @@
 //! Executor factory for trade execution.
+//!
+//! Provides factory functions for constructing trade executors that
+//! submit orders to exchanges.
 
 use std::sync::Arc;
 
@@ -8,7 +11,10 @@ use crate::infrastructure::config::settings::Config;
 use crate::infrastructure::exchange::factory::ExchangeFactory;
 use crate::port::outbound::exchange::ArbitrageExecutor;
 
-/// Initialize the executor if wallet is configured.
+/// Build the trade executor if a wallet is configured.
+///
+/// Returns `None` if no wallet private key is configured (detection-only mode)
+/// or if executor initialization fails.
 pub async fn build_executor(config: &Config) -> Option<Arc<dyn ArbitrageExecutor + Send + Sync>> {
     match ExchangeFactory::create_arbitrage_executor(config).await {
         Ok(Some(exec)) => {

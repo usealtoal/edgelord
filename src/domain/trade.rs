@@ -1,22 +1,62 @@
 //! Trade execution result types.
 //!
-//! - [`TradeResult`] - Outcome of executing a multi-leg trade
+//! This module provides types for representing the outcome of executing
+//! multi-leg arbitrage trades:
+//!
+//! - [`TradeResult`] - Overall outcome of a trade execution
 //! - [`Fill`] - A successfully executed leg
-//! - [`Failure`] - A failed leg with error info
+//! - [`Failure`] - A failed leg with error information
+//!
+//! # Trade Outcomes
+//!
+//! Multi-leg trades can have three outcomes:
+//! - **Success**: All legs filled, arbitrage position established
+//! - **Partial**: Some legs filled, risk exposure exists
+//! - **Failed**: No legs filled, no position opened
+//!
+//! # Examples
+//!
+//! Handling trade results:
+//!
+//! ```
+//! use edgelord::domain::trade::{TradeResult, Fill, Failure};
+//! use edgelord::domain::id::TokenId;
+//!
+//! // Successful trade
+//! let result = TradeResult::Success {
+//!     fills: vec![
+//!         Fill::new(TokenId::new("yes"), "order-1"),
+//!         Fill::new(TokenId::new("no"), "order-2"),
+//!     ],
+//! };
+//!
+//! assert!(result.is_success());
+//! assert_eq!(result.fills().len(), 2);
+//!
+//! // Partial fill (risk exposure)
+//! let partial = TradeResult::Partial {
+//!     fills: vec![Fill::new(TokenId::new("yes"), "order-1")],
+//!     failures: vec![Failure::new(TokenId::new("no"), "insufficient liquidity")],
+//! };
+//!
+//! assert!(partial.is_partial());
+//! ```
 
 use super::id::TokenId;
 
-/// A successfully executed leg in a trade.
+/// A successfully executed leg in a multi-leg trade.
+///
+/// Contains the token ID and exchange-assigned order ID for tracking.
 #[derive(Debug, Clone)]
 pub struct Fill {
-    /// Token ID for this leg.
+    /// Token ID of the filled outcome.
     pub token_id: TokenId,
-    /// Order ID returned by exchange.
+    /// Order ID assigned by the exchange.
     pub order_id: String,
 }
 
 impl Fill {
-    /// Create a new fill.
+    /// Creates a new fill record.
     pub fn new(token_id: TokenId, order_id: impl Into<String>) -> Self {
         Self {
             token_id,
@@ -25,17 +65,19 @@ impl Fill {
     }
 }
 
-/// A failed leg in a trade.
+/// A failed leg in a multi-leg trade.
+///
+/// Contains the token ID and error message describing the failure.
 #[derive(Debug, Clone)]
 pub struct Failure {
-    /// Token ID for this leg.
+    /// Token ID of the outcome that failed to fill.
     pub token_id: TokenId,
-    /// Error message.
+    /// Human-readable error message.
     pub error: String,
 }
 
 impl Failure {
-    /// Create a new failure.
+    /// Creates a new failure record.
     pub fn new(token_id: TokenId, error: impl Into<String>) -> Self {
         Self {
             token_id,
@@ -44,48 +86,51 @@ impl Failure {
     }
 }
 
-/// Result of executing a multi-leg trade.
+/// Result of executing a multi-leg arbitrage trade.
+///
+/// Captures the outcome of attempting to fill all legs of an arbitrage trade.
+/// Partial fills create risk exposure that may need to be hedged or unwound.
 #[derive(Debug, Clone)]
 pub enum TradeResult {
-    /// All legs executed successfully.
+    /// All legs executed successfully, arbitrage position established.
     Success {
-        /// The successfully filled legs.
+        /// All successfully filled legs.
         fills: Vec<Fill>,
     },
-    /// Some legs executed, some failed.
+    /// Some legs executed but not all, creating directional exposure.
     Partial {
-        /// The legs that were successfully filled.
+        /// Legs that were successfully filled.
         fills: Vec<Fill>,
-        /// The legs that failed to execute.
+        /// Legs that failed to execute.
         failures: Vec<Failure>,
     },
-    /// All legs failed.
+    /// All legs failed, no position opened.
     Failed {
-        /// The failure reason.
+        /// Description of why the trade failed.
         reason: String,
     },
 }
 
 impl TradeResult {
-    /// Check if all legs were successful.
+    /// Returns true if all legs were successfully filled.
     #[must_use]
     pub const fn is_success(&self) -> bool {
         matches!(self, Self::Success { .. })
     }
 
-    /// Check if there was a partial fill.
+    /// Returns true if some but not all legs were filled.
     #[must_use]
     pub const fn is_partial(&self) -> bool {
         matches!(self, Self::Partial { .. })
     }
 
-    /// Check if all legs failed.
+    /// Returns true if all legs failed to execute.
     #[must_use]
     pub const fn is_failed(&self) -> bool {
         matches!(self, Self::Failed { .. })
     }
 
-    /// Get fills if any.
+    /// Returns all successful fills, or an empty slice if none.
     #[must_use]
     pub fn fills(&self) -> &[Fill] {
         match self {
@@ -95,7 +140,7 @@ impl TradeResult {
         }
     }
 
-    /// Get failures if any.
+    /// Returns all failures, or an empty slice if none.
     #[must_use]
     pub fn failures(&self) -> &[Failure] {
         match self {

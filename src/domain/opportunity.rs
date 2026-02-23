@@ -3,6 +3,39 @@
 //! An [`Opportunity`] represents a detected arbitrage situation where buying
 //! all outcomes costs less than the guaranteed payout. Each opportunity has
 //! multiple [`OpportunityLeg`]s representing the individual purchases needed.
+//!
+//! # Edge Calculation
+//!
+//! The "edge" is the profit per share: `payout - total_cost`.
+//! For example, if YES costs $0.45 and NO costs $0.50 with a $1.00 payout,
+//! the edge is $1.00 - $0.95 = $0.05 per share.
+//!
+//! # Examples
+//!
+//! Detecting a simple binary arbitrage:
+//!
+//! ```
+//! use edgelord::domain::opportunity::{Opportunity, OpportunityLeg};
+//! use edgelord::domain::id::{MarketId, TokenId};
+//! use rust_decimal_macros::dec;
+//!
+//! let legs = vec![
+//!     OpportunityLeg::new(TokenId::new("yes"), dec!(0.45)),
+//!     OpportunityLeg::new(TokenId::new("no"), dec!(0.50)),
+//! ];
+//!
+//! let opp = Opportunity::new(
+//!     MarketId::new("market-1"),
+//!     "Will it rain tomorrow?",
+//!     legs,
+//!     dec!(100),  // volume: 100 shares
+//!     dec!(1.00), // payout: $1.00 per share
+//! );
+//!
+//! assert_eq!(opp.total_cost(), dec!(0.95));
+//! assert_eq!(opp.edge(), dec!(0.05));
+//! assert_eq!(opp.expected_profit(), dec!(5.00)); // 100 * 0.05
+//! ```
 
 use rust_decimal::Decimal;
 use std::result::Result;
@@ -12,14 +45,30 @@ use super::id::{MarketId, TokenId};
 use super::money::Price;
 
 /// A single leg of an opportunity representing one outcome to purchase.
+///
+/// Each leg captures the token ID and current ask price for one outcome
+/// that must be purchased to complete the arbitrage.
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::opportunity::OpportunityLeg;
+/// use edgelord::domain::id::TokenId;
+/// use rust_decimal_macros::dec;
+///
+/// let leg = OpportunityLeg::new(TokenId::new("yes-token"), dec!(0.45));
+/// assert_eq!(leg.ask_price(), dec!(0.45));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpportunityLeg {
+    /// Token ID of the outcome to purchase.
     token_id: TokenId,
+    /// Current ask price for this outcome.
     ask_price: Price,
 }
 
 impl OpportunityLeg {
-    /// Create a new opportunity leg.
+    /// Creates a new opportunity leg.
     #[must_use]
     pub fn new(token_id: TokenId, ask_price: Price) -> Self {
         Self {
@@ -28,13 +77,13 @@ impl OpportunityLeg {
         }
     }
 
-    /// Get the token ID for this leg.
+    /// Returns the token ID for this leg.
     #[must_use]
     pub fn token_id(&self) -> &TokenId {
         &self.token_id
     }
 
-    /// Get the ask price for this leg.
+    /// Returns the ask price for this leg.
     #[must_use]
     pub fn ask_price(&self) -> Price {
         self.ask_price
@@ -43,24 +92,57 @@ impl OpportunityLeg {
 
 /// An arbitrage opportunity supporting any number of outcomes.
 ///
-/// Uses market-provided payout instead of assuming a hardcoded value.
+/// Represents a detected situation where buying all outcomes costs less
+/// than the guaranteed payout. Uses market-provided payout instead of
+/// assuming a hardcoded value.
 ///
 /// Derived fields are calculated on access:
-/// - `total_cost`: sum of all leg prices
-/// - `edge`: payout - total_cost
-/// - `expected_profit`: edge * volume
+/// - [`total_cost`](Self::total_cost): sum of all leg prices
+/// - [`edge`](Self::edge): payout minus total_cost (profit per share)
+/// - [`expected_profit`](Self::expected_profit): edge times volume
+///
+/// # Examples
+///
+/// ```
+/// use edgelord::domain::opportunity::{Opportunity, OpportunityLeg};
+/// use edgelord::domain::id::{MarketId, TokenId};
+/// use rust_decimal_macros::dec;
+///
+/// let legs = vec![
+///     OpportunityLeg::new(TokenId::new("yes"), dec!(0.40)),
+///     OpportunityLeg::new(TokenId::new("no"), dec!(0.50)),
+/// ];
+///
+/// let opp = Opportunity::new(
+///     MarketId::new("market-1"),
+///     "Test market?",
+///     legs,
+///     dec!(100),
+///     dec!(1.00),
+/// );
+///
+/// assert_eq!(opp.edge(), dec!(0.10)); // 10 cent edge
+/// ```
 #[derive(Debug, Clone)]
 pub struct Opportunity {
+    /// Market ID where the opportunity exists.
     market_id: MarketId,
+    /// Human-readable market question.
     question: String,
+    /// Individual legs to execute.
     legs: Vec<OpportunityLeg>,
+    /// Number of shares to trade.
     volume: Decimal,
+    /// Payout per share on resolution.
     payout: Decimal,
+    /// Strategy that detected this opportunity.
     strategy: String,
 }
 
 impl Opportunity {
-    /// Create a new opportunity.
+    /// Creates a new opportunity without validation.
+    ///
+    /// Use [`Opportunity::try_new`] for validated construction.
     #[must_use]
     pub fn new(
         market_id: MarketId,
@@ -79,7 +161,7 @@ impl Opportunity {
         }
     }
 
-    /// Create a new opportunity with strategy name.
+    /// Creates a new opportunity with a strategy name.
     #[must_use]
     pub fn with_strategy(
         market_id: MarketId,
@@ -99,16 +181,19 @@ impl Opportunity {
         }
     }
 
-    /// Create a new opportunity with domain invariant validation.
+    /// Creates a new opportunity with domain invariant validation.
     ///
     /// # Domain Invariants
     ///
-    /// - `volume` must be positive (> 0)
+    /// - `legs` must not be empty
+    /// - `volume` must be positive (greater than 0)
     /// - `payout` must be greater than the total cost of all legs
     ///
     /// # Errors
     ///
-    /// Returns `DomainError` if any invariant is violated.
+    /// Returns [`DomainError::EmptyLegs`] if legs is empty.
+    /// Returns [`DomainError::NonPositiveVolume`] if volume is zero or negative.
+    /// Returns [`DomainError::PayoutNotGreaterThanCost`] if no edge exists.
     pub fn try_new(
         market_id: MarketId,
         question: impl Into<String>,
@@ -120,15 +205,12 @@ impl Opportunity {
             return Err(DomainError::EmptyLegs);
         }
 
-        // Validate volume is positive
         if volume <= Decimal::ZERO {
             return Err(DomainError::NonPositiveVolume { volume });
         }
 
-        // Calculate total cost
         let total_cost: Decimal = legs.iter().map(|leg| leg.ask_price).sum();
 
-        // Validate payout is greater than cost
         if payout <= total_cost {
             return Err(DomainError::PayoutNotGreaterThanCost {
                 payout,
@@ -146,55 +228,55 @@ impl Opportunity {
         })
     }
 
-    /// Get the strategy name.
+    /// Returns the strategy name that detected this opportunity.
     #[must_use]
     pub fn strategy(&self) -> &str {
         &self.strategy
     }
 
-    /// Get the market ID.
+    /// Returns the market ID.
     #[must_use]
     pub fn market_id(&self) -> &MarketId {
         &self.market_id
     }
 
-    /// Get the market question.
+    /// Returns the market question text.
     #[must_use]
     pub fn question(&self) -> &str {
         &self.question
     }
 
-    /// Get the opportunity legs.
+    /// Returns all legs of this opportunity.
     #[must_use]
     pub fn legs(&self) -> &[OpportunityLeg] {
         &self.legs
     }
 
-    /// Get the volume.
+    /// Returns the target volume in shares.
     #[must_use]
     pub fn volume(&self) -> Decimal {
         self.volume
     }
 
-    /// Get the payout amount.
+    /// Returns the payout per share on resolution.
     #[must_use]
     pub fn payout(&self) -> Decimal {
         self.payout
     }
 
-    /// Calculate the total cost (sum of all leg prices).
+    /// Calculates the total cost (sum of all leg prices).
     #[must_use]
     pub fn total_cost(&self) -> Decimal {
         self.legs.iter().map(|leg| leg.ask_price).sum()
     }
 
-    /// Calculate the edge (payout - total_cost).
+    /// Calculates the edge (payout minus total cost per share).
     #[must_use]
     pub fn edge(&self) -> Decimal {
         self.payout - self.total_cost()
     }
 
-    /// Calculate the expected profit (edge * volume).
+    /// Calculates the expected profit (edge times volume).
     #[must_use]
     pub fn expected_profit(&self) -> Decimal {
         self.edge() * self.volume

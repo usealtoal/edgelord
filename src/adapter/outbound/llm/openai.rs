@@ -1,4 +1,7 @@
 //! OpenAI LLM client.
+//!
+//! Provides an implementation of the [`Llm`] trait for the OpenAI
+//! Chat Completions API.
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -7,19 +10,29 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::port::outbound::llm::Llm;
 
+/// OpenAI Chat Completions API endpoint.
 const API_URL: &str = "https://api.openai.com/v1/chat/completions";
 
-/// OpenAI client.
+/// OpenAI API client.
+///
+/// Implements the [`Llm`] trait for making chat completion requests
+/// to the OpenAI API.
 pub struct OpenAi {
+    /// HTTP client for API requests.
     client: Client,
+    /// API key for authentication.
     api_key: String,
+    /// Model identifier (e.g., "gpt-4", "gpt-3.5-turbo").
     model: String,
+    /// Maximum tokens to generate in the response.
     max_tokens: usize,
+    /// Sampling temperature (0.0 to 2.0).
     temperature: f64,
 }
 
 impl OpenAi {
-    /// Create a new OpenAI client.
+    /// Create a new OpenAI client with explicit configuration.
+    #[must_use]
     pub fn new(
         api_key: impl Into<String>,
         model: impl Into<String>,
@@ -35,7 +48,11 @@ impl OpenAi {
         }
     }
 
-    /// Create from environment variable.
+    /// Create a client from the `OPENAI_API_KEY` environment variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the environment variable is not set.
     pub fn from_env(model: impl Into<String>) -> Result<Self> {
         let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
             Error::Config(crate::error::ConfigError::MissingField {

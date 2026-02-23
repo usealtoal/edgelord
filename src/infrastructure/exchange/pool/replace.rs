@@ -1,3 +1,8 @@
+//! Connection replacement logic.
+//!
+//! Provides the zero-gap handoff mechanism for replacing connections
+//! without losing events.
+
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -14,37 +19,54 @@ use super::{StreamFactory, DRAIN_GRACE_PERIOD, HANDOFF_POLL_INTERVAL};
 
 /// Shared resources passed to the management and replacement tasks.
 ///
-/// Bundles all the dependencies that `replace_connection` needs, avoiding
+/// Bundles all dependencies that [`replace_connection`] needs, avoiding
 /// long parameter lists and making it easy to add new shared state.
 pub(super) struct ManagementContext {
+    /// Shared connection state vector.
     pub(super) connections: Arc<Mutex<Vec<ConnectionState>>>,
+    /// Pool configuration settings.
     pub(super) config: ConnectionPoolConfig,
+    /// Reconnection and backoff settings.
     pub(super) reconnection_config: ReconnectionConfig,
+    /// Factory for creating new data streams.
     pub(super) factory: StreamFactory,
+    /// Sender for the merged event channel.
     pub(super) event_tx: mpsc::Sender<MarketEvent>,
+    /// Shared observability counters.
     pub(super) counters: Arc<SharedCounters>,
 }
 
 /// Descriptor for a connection that needs replacement.
 pub(super) struct ReplacementJob {
+    /// Index in the connections vector.
     pub(super) index: usize,
+    /// Reason for replacement.
     pub(super) reason: ReplacementReason,
 }
 
+/// Reason a connection needs to be replaced.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ReplacementReason {
+    /// Connection is approaching its TTL limit.
     Ttl,
+    /// Connection stopped receiving events (silent death).
     Silent,
+    /// Connection task terminated unexpectedly.
     Crashed,
 }
 
 impl ReplacementReason {
+    /// Return true if this is a planned rotation (TTL) rather than a restart.
     pub(super) fn is_rotation(self) -> bool {
         matches!(self, Self::Ttl)
     }
 }
 
-/// Wait for a connection's first event, returning true on success.
+/// Wait for a connection's first event.
+///
+/// Polls until the connection's `last_event_at` advances past `initial_ts`,
+/// indicating it has received and forwarded at least one event.
+/// Returns true on success, false if the task dies or times out.
 async fn await_handoff(state: &ConnectionState, initial_ts: u64, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
@@ -66,7 +88,16 @@ async fn await_handoff(state: &ConnectionState, initial_ts: u64, timeout: Durati
     }
 }
 
-/// Replace a single connection: spawn, handoff, drain, swap.
+/// Replace a single connection using zero-gap handoff.
+///
+/// The replacement process:
+/// 1. Spawn a new connection with the same tokens
+/// 2. Wait for the new connection to receive its first event
+/// 3. Swap the new connection into the slot
+/// 4. Drain and abort the old connection
+///
+/// If handoff fails (e.g., new connection dies), the replacement is aborted
+/// and the management task will retry on the next cycle.
 pub(super) async fn replace_connection(
     ctx: &ManagementContext,
     index: usize,

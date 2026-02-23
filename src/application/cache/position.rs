@@ -1,18 +1,27 @@
 //! Position tracking repository.
+//!
+//! Maintains an in-memory registry of all positions (open and closed)
+//! with support for ID generation and exposure calculations.
 
 use rust_decimal::Decimal;
 
 use crate::domain::{id::PositionId, money::Price, position::Position};
 
-/// Tracks all open positions.
+/// Tracks all positions across the application lifecycle.
+///
+/// Provides position storage, ID generation, and aggregate calculations
+/// such as total exposure. Positions are never removed, only transitioned
+/// to closed status, enabling historical analysis.
 #[derive(Debug, Default)]
 pub struct PositionTracker {
+    /// All recorded positions (both open and closed).
     positions: Vec<Position>,
+    /// Counter for generating unique position IDs.
     next_id: u64,
 }
 
 impl PositionTracker {
-    /// Create a new position tracker.
+    /// Create a new empty position tracker.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -22,6 +31,8 @@ impl PositionTracker {
     }
 
     /// Generate the next position ID and increment the counter.
+    ///
+    /// IDs are guaranteed to be unique and monotonically increasing.
     pub const fn next_id(&mut self) -> PositionId {
         let id = PositionId::new(self.next_id);
         self.next_id += 1;
@@ -33,12 +44,12 @@ impl PositionTracker {
         self.positions.push(position);
     }
 
-    /// Get an iterator over all open positions.
+    /// Return an iterator over all open positions.
     pub fn open_positions(&self) -> impl Iterator<Item = &Position> {
         self.positions.iter().filter(|p| p.is_open())
     }
 
-    /// Total exposure (sum of entry costs for open positions).
+    /// Calculate total exposure as the sum of entry costs for open positions.
     #[must_use]
     pub fn total_exposure(&self) -> Price {
         self.open_positions()
@@ -46,26 +57,31 @@ impl PositionTracker {
             .fold(Decimal::ZERO, |acc, cost| acc + cost)
     }
 
-    /// Get the count of open positions.
+    /// Return the count of open positions.
     #[must_use]
     pub fn open_count(&self) -> usize {
         self.open_positions().count()
     }
 
-    /// Get a position by ID.
+    /// Retrieve a position by its ID.
+    ///
+    /// Returns `None` if no position exists with the given ID.
     #[must_use]
     pub fn get(&self, id: PositionId) -> Option<&Position> {
         self.positions.iter().find(|p| p.id() == id)
     }
 
-    /// Get a mutable reference to a position by ID.
+    /// Retrieve a mutable reference to a position by its ID.
+    ///
+    /// Returns `None` if no position exists with the given ID.
     pub fn get_mut(&mut self, id: PositionId) -> Option<&mut Position> {
         self.positions.iter_mut().find(|p| p.id() == id)
     }
 
-    /// Close a position and return the realized PnL.
+    /// Close a position with the given realized PnL.
     ///
-    /// Returns None if position not found or already closed.
+    /// Returns the PnL on success, or `None` if the position was not found
+    /// or is already closed.
     pub fn close(&mut self, id: PositionId, pnl: Price) -> Option<Price> {
         let position = self.get_mut(id)?;
         if position.status().is_closed() {
@@ -75,12 +91,12 @@ impl PositionTracker {
         Some(pnl)
     }
 
-    /// Get all positions (open and closed).
+    /// Return an iterator over all positions (open and closed).
     pub fn all(&self) -> impl Iterator<Item = &Position> {
         self.positions.iter()
     }
 
-    /// Get all closed positions.
+    /// Return an iterator over all closed positions.
     pub fn closed_positions(&self) -> impl Iterator<Item = &Position> {
         self.positions.iter().filter(|p| p.status().is_closed())
     }

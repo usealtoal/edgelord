@@ -1,19 +1,19 @@
 //! Cluster detection service for combinatorial arbitrage.
 //!
-//! This service monitors order book updates and runs Frank-Wolfe detection
-//! on clusters of related markets. It operates independently of per-market
-//! detection for better scalability.
+//! Background service that monitors order book updates and runs Frank-Wolfe
+//! detection on clusters of related markets. Operates independently of
+//! per-market detection for better scalability.
 //!
 //! # Architecture
 //!
 //! ```text
-//! BookCache ──(broadcast)──► ClusterDetectionService
-//!                                        │
-//!                                        ├─ tracks dirty clusters
-//!                                        ├─ debounces detection
-//!                                        └─ ClusterDetector::detect()
-//!                                                   │
-//!                                                   ▼
+//! BookCache --(broadcast)--> ClusterDetectionService
+//!                                        |
+//!                                        +-- tracks dirty clusters
+//!                                        +-- debounces detection
+//!                                        +-- ClusterDetector::detect()
+//!                                                   |
+//!                                                   v
 //!                                           ClusterOpportunity
 //! ```
 
@@ -36,11 +36,11 @@ use crate::port::outbound::solver::ProjectionSolver;
 /// Configuration for the cluster detection service.
 #[derive(Debug, Clone)]
 pub struct ClusterDetectionConfig {
-    /// Debounce interval in milliseconds.
+    /// Debounce interval in milliseconds between detection cycles.
     pub debounce_ms: u64,
-    /// Minimum arbitrage gap to report an opportunity.
+    /// Minimum arbitrage gap required to report an opportunity.
     pub min_gap: Decimal,
-    /// Maximum clusters to process per detection cycle.
+    /// Maximum number of clusters to process per detection cycle.
     pub max_clusters_per_cycle: usize,
 }
 
@@ -57,18 +57,19 @@ impl Default for ClusterDetectionConfig {
 /// Opportunity discovered by cluster detection.
 #[derive(Debug, Clone)]
 pub struct ClusterOpportunity {
-    /// The cluster where the opportunity was found.
+    /// ID of the cluster where the opportunity was found.
     pub cluster_id: String,
-    /// Markets involved.
+    /// Market IDs involved in the opportunity.
     pub markets: Vec<MarketId>,
-    /// Arbitrage gap (divergence from fair prices).
+    /// Arbitrage gap (Bregman divergence from fair prices).
     pub gap: Decimal,
-    /// The full opportunity details.
+    /// Full opportunity details for execution.
     pub opportunity: Opportunity,
 }
 
-/// Handle for controlling the cluster detection service.
+/// Handle for controlling the cluster detection service lifecycle.
 pub struct ClusterDetectionHandle {
+    /// Channel for sending shutdown signal.
     shutdown_tx: mpsc::Sender<()>,
 }
 
@@ -79,24 +80,30 @@ impl ClusterDetectionHandle {
     }
 }
 
-/// Cluster detection service.
+/// Background service for cluster-based arbitrage detection.
 ///
-/// Monitors order book updates and runs Frank-Wolfe detection on clusters.
-/// Uses [`ClusterDetector`] for the actual detection logic.
+/// Monitors order book updates via broadcast channel, tracks which clusters
+/// have pending updates, and periodically runs detection on dirty clusters.
+/// Uses [`ClusterDetector`] for the actual Frank-Wolfe projection logic.
 pub struct ClusterDetectionService {
+    /// Service configuration.
     config: ClusterDetectionConfig,
+    /// Order book cache for price lookups.
     order_book_cache: Arc<BookCache>,
+    /// Cluster cache for relation lookups.
     cluster_cache: Arc<ClusterCache>,
+    /// Market registry for resolving metadata.
     registry: Arc<MarketRegistry>,
+    /// Detector instance for running Frank-Wolfe.
     detector: ClusterDetector,
-    /// Maps token ID to market ID for reverse lookup.
+    /// Mapping from token ID to market ID for efficient reverse lookup.
     token_to_market: HashMap<TokenId, MarketId>,
-    /// Clusters that have pending updates.
+    /// Set of cluster IDs with pending updates.
     dirty_clusters: Arc<RwLock<HashSet<String>>>,
 }
 
 impl ClusterDetectionService {
-    /// Create a new cluster detection service.
+    /// Create a new cluster detection service with the given dependencies.
     pub fn new(
         config: ClusterDetectionConfig,
         order_book_cache: Arc<BookCache>,
@@ -128,9 +135,11 @@ impl ClusterDetectionService {
         }
     }
 
-    /// Start the service, returning a handle and opportunity receiver.
+    /// Start the background detection service.
     ///
-    /// The service runs in a background task until shutdown is signaled.
+    /// Spawns an async task that monitors order book updates and runs
+    /// detection periodically. Returns a handle for lifecycle control
+    /// and a channel for receiving discovered opportunities.
     pub fn start(
         self,
         mut update_rx: broadcast::Receiver<BookUpdate>,
@@ -183,7 +192,7 @@ impl ClusterDetectionService {
         (ClusterDetectionHandle { shutdown_tx }, opportunity_rx)
     }
 
-    /// Handle an order book update by marking affected clusters as dirty.
+    /// Process an order book update by marking affected clusters as dirty.
     fn handle_update(&self, update: &BookUpdate) {
         let Some(market_id) = self.token_to_market.get(&update.token_id) else {
             return;
@@ -195,7 +204,7 @@ impl ClusterDetectionService {
         }
     }
 
-    /// Run detection on all dirty clusters.
+    /// Run detection on all dirty clusters and return discovered opportunities.
     fn run_detection(&self) -> Vec<ClusterOpportunity> {
         // Atomically grab and clear dirty clusters
         let dirty: Vec<String> = {
@@ -238,7 +247,7 @@ impl ClusterDetectionService {
         opportunities
     }
 
-    /// Detect arbitrage in a single cluster.
+    /// Run detection on a single cluster by ID.
     fn detect_cluster(&self, cluster_id: &str) -> crate::error::Result<Option<ClusterOpportunity>> {
         let cluster = self
             .cluster_cache
@@ -253,7 +262,9 @@ impl ClusterDetectionService {
         self.detector.detect(&cluster, &book_lookup, &self.registry)
     }
 
-    /// Get the number of currently dirty clusters (for testing/monitoring).
+    /// Return the number of clusters with pending updates.
+    ///
+    /// Useful for monitoring and testing.
     #[must_use]
     pub fn dirty_count(&self) -> usize {
         self.dirty_clusters.read().len()

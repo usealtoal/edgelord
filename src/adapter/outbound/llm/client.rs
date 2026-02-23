@@ -1,4 +1,7 @@
-//! LLM client abstraction for inference.
+//! LLM client utilities and test helpers.
+//!
+//! Provides shared utilities for LLM clients and mock implementations
+//! for testing.
 
 /// Mock LLM for testing.
 #[cfg(test)]
@@ -8,11 +11,16 @@ pub mod tests {
     use crate::error::Result;
     use crate::port::outbound::llm::Llm;
 
+    /// Mock LLM client that returns a predefined response.
+    ///
+    /// Useful for testing code that depends on LLM completions without
+    /// making actual API calls.
     pub struct MockLlm {
         response: String,
     }
 
     impl MockLlm {
+        /// Create a new mock LLM with the given response.
         pub fn new(response: impl Into<String>) -> Self {
             Self {
                 response: response.into(),

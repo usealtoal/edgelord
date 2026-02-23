@@ -1,4 +1,7 @@
 //! Risk management configuration.
+//!
+//! Provides configuration for position sizing, exposure limits, and trade
+//! execution parameters.
 
 use rust_decimal::Decimal;
 use serde::Deserialize;
@@ -6,21 +9,41 @@ use serde::Deserialize;
 use crate::application::state::RiskLimits;
 
 /// Risk management configuration.
+///
+/// Controls position sizing limits, exposure caps, and execution parameters
+/// to manage trading risk.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RiskConfig {
     /// Maximum position size per market in dollars.
+    ///
+    /// Limits exposure to any single market. Defaults to $1000.
     #[serde(default = "default_max_position_per_market")]
     pub max_position_per_market: Decimal,
-    /// Maximum total exposure across all positions.
+
+    /// Maximum total exposure across all positions in dollars.
+    ///
+    /// Caps aggregate exposure across all markets. Defaults to $10000.
     #[serde(default = "default_max_total_exposure")]
     pub max_total_exposure: Decimal,
-    /// Minimum profit threshold to execute.
+
+    /// Minimum profit threshold to execute a trade in dollars.
+    ///
+    /// Opportunities with profit below this threshold are ignored.
+    /// Defaults to $0.05.
     #[serde(default = "default_min_profit_threshold")]
     pub min_profit_threshold: Decimal,
-    /// Maximum slippage tolerance (e.g., 0.02 = 2%).
+
+    /// Maximum slippage tolerance as a decimal fraction.
+    ///
+    /// E.g., 0.02 means 2% maximum slippage. Trades exceeding this
+    /// slippage are rejected. Defaults to 0.02 (2%).
     #[serde(default = "default_max_slippage")]
     pub max_slippage: Decimal,
-    /// Execution timeout in seconds (default: 30).
+
+    /// Execution timeout in seconds.
+    ///
+    /// Maximum time to wait for trade execution before timing out.
+    /// Defaults to 30.
     #[serde(default = "default_execution_timeout_secs")]
     pub execution_timeout_secs: u64,
 }

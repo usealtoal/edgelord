@@ -1,7 +1,41 @@
 //! Relation types for market dependency inference.
 //!
-//! - [`Relation`] - A logical relation between prediction markets
+//! This module provides types for representing logical relationships between
+//! prediction markets:
+//!
+//! - [`Relation`] - A logical relation with confidence and expiration
 //! - [`RelationKind`] - The type of relationship (implies, exclusive, etc.)
+//!
+//! # Relation Types
+//!
+//! - **Implies**: If market A resolves YES, market B must resolve YES
+//! - **MutuallyExclusive**: At most one of the markets can resolve YES
+//! - **ExactlyOne**: Exactly one of the markets must resolve YES
+//! - **Linear**: Custom linear constraint on market probabilities
+//!
+//! # Examples
+//!
+//! Creating a mutual exclusion relation:
+//!
+//! ```
+//! use edgelord::domain::relation::{Relation, RelationKind};
+//! use edgelord::domain::id::MarketId;
+//!
+//! let relation = Relation::new(
+//!     RelationKind::MutuallyExclusive {
+//!         markets: vec![
+//!             MarketId::new("trump-wins"),
+//!             MarketId::new("biden-wins"),
+//!             MarketId::new("other-wins"),
+//!         ],
+//!     },
+//!     0.95,  // 95% confidence
+//!     "Only one candidate can win the election",
+//! );
+//!
+//! assert!(!relation.is_expired());
+//! assert_eq!(relation.market_ids().len(), 3);
+//! ```
 
 use std::collections::HashMap;
 
@@ -12,7 +46,7 @@ use serde::{Deserialize, Serialize};
 use super::constraint::{Constraint, ConstraintSense};
 use super::id::{MarketId, RelationId};
 
-/// A logical relation between prediction markets.
+/// A logical relation between prediction markets with confidence and expiration.
 ///
 /// Relations are inferred by the LLM inference system and represent
 /// logical dependencies like "A implies B" or "exactly one of A, B, C".
@@ -22,18 +56,21 @@ pub struct Relation {
     pub id: RelationId,
     /// The type and semantics of the relation.
     pub kind: RelationKind,
-    /// Confidence score (0.0 - 1.0) from the inferrer.
+    /// Confidence score (0.0 to 1.0) from the inferrer.
     pub confidence: f64,
-    /// Human-readable reasoning (for debugging/audit).
+    /// Human-readable reasoning for debugging and audit.
     pub reasoning: String,
-    /// When this relation was inferred.
+    /// Timestamp when this relation was inferred.
     pub inferred_at: DateTime<Utc>,
-    /// When this relation expires (needs re-validation).
+    /// Timestamp when this relation expires and needs re-validation.
     pub expires_at: DateTime<Utc>,
 }
 
 impl Relation {
-    /// Create a new relation with the given kind and confidence.
+    /// Creates a new relation with the given kind and confidence.
+    ///
+    /// The relation is assigned a default TTL of 1 hour. Use [`with_ttl`](Self::with_ttl)
+    /// to customize the expiration.
     pub fn new(kind: RelationKind, confidence: f64, reasoning: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
@@ -42,67 +79,75 @@ impl Relation {
             confidence,
             reasoning: reasoning.into(),
             inferred_at: now,
-            expires_at: now + chrono::Duration::hours(1), // Default 1 hour TTL
+            expires_at: now + chrono::Duration::hours(1),
         }
     }
 
-    /// Create a relation with a custom TTL.
+    /// Sets a custom time-to-live for this relation.
     pub fn with_ttl(mut self, ttl: chrono::Duration) -> Self {
         self.expires_at = self.inferred_at + ttl;
         self
     }
 
-    /// Check if this relation has expired.
+    /// Returns true if this relation has expired.
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
 
-    /// Get all market IDs referenced by this relation.
+    /// Returns all market IDs referenced by this relation.
     pub fn market_ids(&self) -> Vec<&MarketId> {
         self.kind.market_ids()
     }
 }
 
 /// The type of logical relationship between markets.
+///
+/// Each variant encodes a different logical constraint that can be converted
+/// to linear constraints for optimization.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RelationKind {
     /// If market A resolves YES, market B must resolve YES.
-    /// Constraint: P(A) ≤ P(B), encoded as μ_A - μ_B ≤ 0
+    ///
+    /// Constraint: P(A) <= P(B), encoded as A - B <= 0
     Implies {
-        /// Market that implies the other.
+        /// Market that implies the other (the "if" market).
         if_yes: MarketId,
-        /// Market that must be true if `if_yes` is true.
+        /// Market that must be true when `if_yes` is true (the "then" market).
         then_yes: MarketId,
     },
 
     /// At most one of these markets can resolve YES.
-    /// Constraint: Σ μ_i ≤ 1
+    ///
+    /// Constraint: sum of all market probabilities <= 1
     MutuallyExclusive {
         /// Markets in the mutually exclusive set.
         markets: Vec<MarketId>,
     },
 
     /// Exactly one of these markets must resolve YES.
-    /// Constraint: Σ μ_i = 1
+    ///
+    /// Constraint: sum of all market probabilities = 1
     ExactlyOne {
-        /// Markets where exactly one must be true.
+        /// Markets where exactly one must resolve YES.
         markets: Vec<MarketId>,
     },
 
-    /// Custom linear constraint: Σ (coeff_i × μ_i) {≤, =, ≥} rhs
+    /// Custom linear constraint on market probabilities.
+    ///
+    /// Constraint: sum(coeff_i * P(market_i)) {<=, =, >=} rhs
     Linear {
-        /// Coefficient terms (market, coefficient) pairs.
+        /// Coefficient terms as (market, coefficient) pairs.
         terms: Vec<(MarketId, Decimal)>,
-        /// Constraint sense (<=, =, >=).
+        /// Comparison operator (<=, =, >=).
         sense: ConstraintSense,
-        /// Right-hand side value.
+        /// Right-hand side constant.
         rhs: Decimal,
     },
 }
 
 impl RelationKind {
-    /// Get all market IDs referenced by this relation kind.
+    /// Returns all market IDs referenced by this relation kind.
     pub fn market_ids(&self) -> Vec<&MarketId> {
         match self {
             Self::Implies { if_yes, then_yes } => vec![if_yes, then_yes],
@@ -113,7 +158,7 @@ impl RelationKind {
         }
     }
 
-    /// Get the type name of this relation kind.
+    /// Returns the type name as a static string.
     #[must_use]
     pub const fn type_name(&self) -> &'static str {
         match self {
@@ -124,13 +169,15 @@ impl RelationKind {
         }
     }
 
-    /// Convert this relation to solver constraints.
+    /// Converts this relation to solver constraints.
     ///
     /// # Arguments
-    /// * `market_indices` - Mapping from MarketId to variable index in the ILP
+    ///
+    /// * `market_indices` - Mapping from market ID to variable index in the ILP
     ///
     /// # Returns
-    /// Vector of solver constraints representing this relation.
+    ///
+    /// A vector of linear constraints encoding this relation.
     pub fn to_solver_constraints(
         &self,
         market_indices: &HashMap<MarketId, usize>,

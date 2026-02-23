@@ -1,4 +1,7 @@
 //! Shared application state.
+//!
+//! Provides centralized, thread-safe state management for the application
+//! including position tracking, risk limits, and circuit breaker status.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,17 +17,20 @@ use crate::port::inbound::runtime::{
 };
 
 /// Risk limits configuration.
+///
+/// Controls trading behavior by setting thresholds for position sizes,
+/// exposure limits, and profit requirements.
 #[derive(Debug, Clone)]
 pub struct RiskLimits {
     /// Maximum position size per market in dollars.
     pub max_position_per_market: Decimal,
-    /// Maximum total exposure across all positions.
+    /// Maximum total exposure across all open positions.
     pub max_total_exposure: Decimal,
-    /// Minimum profit threshold to execute.
+    /// Minimum expected profit required to execute a trade.
     pub min_profit_threshold: Decimal,
-    /// Maximum slippage tolerance (e.g., 0.02 = 2%).
+    /// Maximum allowed slippage between detection and execution (e.g., 0.02 = 2%).
     pub max_slippage: Decimal,
-    /// Execution timeout in seconds.
+    /// Timeout in seconds before cancelling an execution attempt.
     pub execution_timeout_secs: u64,
 }
 
@@ -40,17 +46,21 @@ impl Default for RiskLimits {
     }
 }
 
-/// Risk limit fields that may be changed at runtime.
+/// Risk limit fields that can be changed at runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RiskLimitKind {
+    /// Maximum position size per market.
     MaxPositionPerMarket,
+    /// Maximum total exposure across all positions.
     MaxTotalExposure,
+    /// Minimum profit threshold for execution.
     MinProfitThreshold,
+    /// Maximum slippage tolerance.
     MaxSlippage,
 }
 
 impl RiskLimitKind {
-    /// Stable field name used in logs and command output.
+    /// Return a stable field name for logs and command output.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -65,15 +75,18 @@ impl RiskLimitKind {
 /// Error returned when a runtime risk limit update is invalid.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RiskLimitUpdateError {
+    /// Description of why the update was rejected.
     reason: &'static str,
 }
 
 impl RiskLimitUpdateError {
+    /// Create a new error with the given reason.
     #[must_use]
     pub const fn new(reason: &'static str) -> Self {
         Self { reason }
     }
 
+    /// Return the reason for the rejection.
     #[must_use]
     pub const fn reason(&self) -> &'static str {
         self.reason
@@ -107,23 +120,27 @@ fn runtime_kind_to_app(kind: RuntimeRiskLimitKind) -> RiskLimitKind {
 }
 
 /// Shared application state accessible by all services.
+///
+/// Provides thread-safe access to positions, risk limits, circuit breaker
+/// status, and exposure tracking. All operations are safe for concurrent
+/// access from multiple tasks.
 pub struct AppState {
-    /// Position tracker for all open/closed positions.
+    /// Position tracker for all open and closed positions.
     positions: RwLock<PositionTracker>,
-    /// Risk limits configuration.
+    /// Current risk limits configuration.
     risk_limits: RwLock<RiskLimits>,
-    /// Circuit breaker - when true, no new trades.
+    /// Circuit breaker flag. When true, no new trades are allowed.
     circuit_breaker: AtomicBool,
-    /// Reason for circuit breaker activation.
+    /// Reason for circuit breaker activation, if any.
     circuit_breaker_reason: RwLock<Option<String>>,
     /// Markets with in-flight executions (prevents duplicate trades).
     pending_executions: Mutex<HashSet<String>>,
-    /// Pending exposure from approved opportunities not yet executed.
+    /// Reserved exposure from approved but not yet executed opportunities.
     pending_exposure: Mutex<Decimal>,
 }
 
 impl AppState {
-    /// Create new app state with given risk limits.
+    /// Create new application state with the given risk limits.
     #[must_use]
     pub fn new(risk_limits: RiskLimits) -> Self {
         Self {
@@ -136,24 +153,29 @@ impl AppState {
         }
     }
 
-    /// Get read access to positions.
+    /// Acquire read access to the position tracker.
     pub fn positions(&self) -> parking_lot::RwLockReadGuard<'_, PositionTracker> {
         self.positions.read()
     }
 
-    /// Get write access to positions.
+    /// Acquire write access to the position tracker.
     pub fn positions_mut(&self) -> parking_lot::RwLockWriteGuard<'_, PositionTracker> {
         self.positions.write()
     }
 
-    /// Get risk limits.
+    /// Return a clone of the current risk limits.
     pub fn risk_limits(&self) -> RiskLimits {
         self.risk_limits.read().clone()
     }
 
-    /// Set one risk limit at runtime with validation.
+    /// Update a single risk limit at runtime with validation.
     ///
-    /// Returns a full snapshot of limits after the update.
+    /// # Errors
+    ///
+    /// Returns an error if the value is invalid for the given limit kind:
+    /// - `MaxPositionPerMarket` and `MaxTotalExposure` must be greater than 0
+    /// - `MinProfitThreshold` must be 0 or greater
+    /// - `MaxSlippage` must be between 0 and 1
     pub fn set_risk_limit(
         &self,
         kind: RiskLimitKind,
@@ -188,61 +210,65 @@ impl AppState {
         Ok(limits.clone())
     }
 
-    /// Check if circuit breaker is active.
+    /// Return true if the circuit breaker is currently active.
     pub fn is_circuit_breaker_active(&self) -> bool {
         self.circuit_breaker.load(Ordering::SeqCst)
     }
 
-    /// Activate circuit breaker with reason.
+    /// Activate the circuit breaker, halting all new trades.
     pub fn activate_circuit_breaker(&self, reason: impl Into<String>) {
         self.circuit_breaker.store(true, Ordering::SeqCst);
         *self.circuit_breaker_reason.write() = Some(reason.into());
     }
 
-    /// Reset circuit breaker.
+    /// Deactivate the circuit breaker, resuming normal trading.
     pub fn reset_circuit_breaker(&self) {
         self.circuit_breaker.store(false, Ordering::SeqCst);
         *self.circuit_breaker_reason.write() = None;
     }
 
-    /// Get circuit breaker reason if active.
+    /// Return the circuit breaker activation reason, if active.
     pub fn circuit_breaker_reason(&self) -> Option<String> {
         self.circuit_breaker_reason.read().clone()
     }
 
-    /// Get current total exposure.
+    /// Return the total exposure across all open positions.
     pub fn total_exposure(&self) -> Price {
         self.positions.read().total_exposure()
     }
 
-    /// Count open positions.
+    /// Return the count of currently open positions.
     pub fn open_position_count(&self) -> usize {
         self.positions.read().open_count()
     }
 
-    /// Try to acquire execution lock for a market.
-    /// Returns `true` if lock acquired, `false` if already locked.
+    /// Attempt to acquire an execution lock for a market.
+    ///
+    /// Returns `true` if the lock was acquired, `false` if the market
+    /// already has an execution in progress.
     pub fn try_lock_execution(&self, market_id: &str) -> bool {
         self.pending_executions.lock().insert(market_id.to_string())
     }
 
-    /// Release execution lock for a market.
+    /// Release the execution lock for a market.
     pub fn release_execution(&self, market_id: &str) {
         self.pending_executions.lock().remove(market_id);
     }
 
-    /// Count markets with in-flight executions.
+    /// Return the count of markets with in-flight executions.
     pub fn pending_execution_count(&self) -> usize {
         self.pending_executions.lock().len()
     }
 
-    /// Get current pending exposure.
+    /// Return the current pending (reserved but not yet committed) exposure.
     pub fn pending_exposure(&self) -> Price {
         *self.pending_exposure.lock()
     }
 
-    /// Try to reserve exposure atomically.
-    /// Returns `true` if reservation succeeded, `false` if it would exceed limit.
+    /// Attempt to reserve exposure for an opportunity.
+    ///
+    /// Returns `true` if the reservation succeeded (within limits),
+    /// `false` if it would exceed the maximum total exposure.
     pub fn try_reserve_exposure(&self, amount: Price) -> bool {
         let positions = self.positions.read();
         let mut pending = self.pending_exposure.lock();
@@ -257,11 +283,11 @@ impl AppState {
         true
     }
 
-    /// Release reserved exposure.
+    /// Release previously reserved exposure.
     pub fn release_exposure(&self, amount: Price) {
         let mut pending = self.pending_exposure.lock();
         *pending -= amount;
-        // Ensure we don't go negative (shouldn't happen, but safety check)
+        // Ensure we don't go negative (safety check)
         if *pending < Decimal::ZERO {
             *pending = Decimal::ZERO;
         }

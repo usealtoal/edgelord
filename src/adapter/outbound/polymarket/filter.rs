@@ -1,6 +1,8 @@
 //! Market filter for Polymarket exchange.
 //!
-//! Implements [`MarketFilter`] to filter Polymarket markets for subscription eligibility.
+//! Implements the [`MarketFilter`] trait to determine which Polymarket
+//! markets are eligible for subscription based on configurable criteria
+//! such as volume, liquidity, and outcome count.
 
 use super::settings::PolymarketFilterConfig;
 use crate::port::{
@@ -8,18 +10,18 @@ use crate::port::{
     outbound::filter::MarketFilterConfig,
 };
 
-/// Filter for Polymarket markets.
+/// Market eligibility filter for Polymarket.
 ///
-/// Determines which markets are eligible for subscription based on
-/// configurable criteria like outcome count and market type.
+/// Evaluates markets against configurable criteria including activity status,
+/// outcome count, volume, and liquidity thresholds.
 #[derive(Debug, Clone)]
 pub struct PolymarketFilter {
-    /// Filter configuration converted to domain model.
+    /// Domain-level filter configuration.
     config: MarketFilterConfig,
 }
 
 impl PolymarketFilter {
-    /// Create a new Polymarket filter from configuration.
+    /// Create a new Polymarket filter from exchange configuration.
     #[must_use]
     pub fn new(config: &PolymarketFilterConfig) -> Self {
         Self {
