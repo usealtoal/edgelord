@@ -283,6 +283,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
 
+    use crate::error::Error;
     use crate::testkit;
     use crate::testkit::stream::ScriptedStream;
 
@@ -294,6 +295,17 @@ mod tests {
             backoff_multiplier: 2.0,
             max_consecutive_failures: 3,
             circuit_breaker_cooldown_ms: 50,
+        }
+    }
+
+    /// Config with minimal delays for faster tests.
+    fn fast_config() -> ReconnectionConfig {
+        ReconnectionConfig {
+            initial_delay_ms: 1,
+            max_delay_ms: 10,
+            backoff_multiplier: 2.0,
+            max_consecutive_failures: 3,
+            circuit_breaker_cooldown_ms: 10,
         }
     }
 
@@ -374,5 +386,280 @@ mod tests {
         assert_eq!(stream.consecutive_failures, 0);
         assert_eq!(stream.current_delay_ms, 10);
         assert!(matches!(stream.circuit_state, CircuitState::Closed));
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional Circuit Breaker Tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_circuit_breaker_cooldown_expires() {
+        let config = ReconnectionConfig {
+            initial_delay_ms: 1,
+            max_delay_ms: 10,
+            backoff_multiplier: 1.0,
+            max_consecutive_failures: 2,
+            circuit_breaker_cooldown_ms: 10, // 10ms cooldown
+        };
+
+        let mut stream = ReconnectingDataStream::new(ScriptedStream::new(), config);
+
+        // Trip the circuit breaker
+        stream.record_failure();
+        stream.record_failure();
+
+        assert!(matches!(stream.circuit_state, CircuitState::Open { .. }));
+        assert!(!stream.circuit_allows_connection());
+
+        // Wait for cooldown to expire
+        tokio::time::sleep(Duration::from_millis(15)).await;
+
+        // Now connection should be allowed and circuit reset
+        assert!(stream.circuit_allows_connection());
+        assert!(matches!(stream.circuit_state, CircuitState::Closed));
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_does_not_trip_below_threshold() {
+        let mut stream = ReconnectingDataStream::new(ScriptedStream::new(), backoff_config());
+
+        // Record failures below threshold
+        stream.record_failure();
+        stream.record_failure();
+
+        // Should still be closed
+        assert!(matches!(stream.circuit_state, CircuitState::Closed));
+        assert!(stream.circuit_allows_connection());
+    }
+
+    #[tokio::test]
+    async fn test_failure_count_increments() {
+        let mut stream = ReconnectingDataStream::new(ScriptedStream::new(), backoff_config());
+
+        assert_eq!(stream.consecutive_failures, 0);
+
+        stream.record_failure();
+        assert_eq!(stream.consecutive_failures, 1);
+
+        stream.record_failure();
+        assert_eq!(stream.consecutive_failures, 2);
+    }
+
+    #[tokio::test]
+    async fn test_connected_flag_set_on_connect() {
+        let mock = ScriptedStream::new();
+        let mut stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        assert!(!stream.connected);
+
+        stream.connect().await.unwrap();
+
+        assert!(stream.connected);
+    }
+
+    #[tokio::test]
+    async fn test_connected_flag_cleared_on_failure() {
+        let mock = ScriptedStream::new();
+        let mut stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        stream.connected = true;
+        stream.record_failure();
+
+        assert!(!stream.connected);
+    }
+
+    // -----------------------------------------------------------------------
+    // Backoff Tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_backoff_caps_at_max_delay() {
+        let config = ReconnectionConfig {
+            initial_delay_ms: 50,
+            max_delay_ms: 100,
+            backoff_multiplier: 10.0, // Large multiplier
+            max_consecutive_failures: 10,
+            circuit_breaker_cooldown_ms: 1000,
+        };
+
+        let mut stream = ReconnectingDataStream::new(ScriptedStream::new(), config);
+
+        // First delay should be ~50ms (plus jitter)
+        let delay1 = stream.next_delay();
+        assert!(delay1.as_millis() <= 60); // 50 + 20% jitter
+
+        // Second delay would be 500ms but capped at 100ms
+        let delay2 = stream.next_delay();
+        assert!(delay2.as_millis() <= 120); // 100 + 20% jitter
+    }
+
+    #[tokio::test]
+    async fn test_jitter_is_bounded() {
+        let config = ReconnectionConfig {
+            initial_delay_ms: 100,
+            max_delay_ms: 1000,
+            backoff_multiplier: 1.0, // No increase to isolate jitter testing
+            max_consecutive_failures: 10,
+            circuit_breaker_cooldown_ms: 1000,
+        };
+
+        let mut stream = ReconnectingDataStream::new(ScriptedStream::new(), config);
+
+        // Collect several delays to verify jitter bounds
+        for _ in 0..10 {
+            let delay = stream.next_delay();
+            let delay_ms = delay.as_millis() as u64;
+            // Should be between 100 and 120 (base + up to 20% jitter)
+            assert!(delay_ms >= 100 && delay_ms <= 120, "delay was {delay_ms}ms");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_zero_base_delay_zero_jitter() {
+        // When base delay is 0, jitter should also be 0
+        let config = ReconnectionConfig {
+            initial_delay_ms: 0,
+            max_delay_ms: 0,
+            backoff_multiplier: 2.0,
+            max_consecutive_failures: 10,
+            circuit_breaker_cooldown_ms: 1000,
+        };
+
+        let stream = ReconnectingDataStream::new(ScriptedStream::new(), config);
+        let jitter = stream.jitter_ms(Duration::from_millis(0));
+        assert_eq!(jitter, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Subscribe Token Tracking Tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_subscribe_stores_tokens() {
+        let mock = ScriptedStream::new();
+        let mut stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        let tokens = vec![
+            testkit::domain::token("token1"),
+            testkit::domain::token("token2"),
+        ];
+
+        stream.subscribe(&tokens).await.unwrap();
+
+        assert_eq!(stream.subscribed_tokens.len(), 2);
+        assert_eq!(stream.subscribed_tokens[0].as_str(), "token1");
+        assert_eq!(stream.subscribed_tokens[1].as_str(), "token2");
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_replaces_previous_tokens() {
+        let mock = ScriptedStream::new();
+        let mut stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        stream
+            .subscribe(&[testkit::domain::token("old_token")])
+            .await
+            .unwrap();
+        stream
+            .subscribe(&[testkit::domain::token("new_token")])
+            .await
+            .unwrap();
+
+        assert_eq!(stream.subscribed_tokens.len(), 1);
+        assert_eq!(stream.subscribed_tokens[0].as_str(), "new_token");
+    }
+
+    // -----------------------------------------------------------------------
+    // Connection Error Handling Tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_connect_failure_does_not_set_connected() {
+        let mock = ScriptedStream::new()
+            .with_connect_results(vec![Err(Error::Connection("test failure".to_string()))]);
+
+        let mut stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        let result = stream.connect().await;
+        assert!(result.is_err());
+        assert!(!stream.connected);
+    }
+
+    #[tokio::test]
+    async fn test_exchange_name_delegates_to_inner() {
+        let mock = ScriptedStream::new();
+        let stream = ReconnectingDataStream::new(mock, backoff_config());
+
+        assert_eq!(stream.exchange_name(), "mock");
+    }
+
+    // -----------------------------------------------------------------------
+    // Initial State Tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_new_stream_initial_state() {
+        let config = backoff_config();
+        let stream = ReconnectingDataStream::new(ScriptedStream::new(), config.clone());
+
+        assert!(!stream.connected);
+        assert_eq!(stream.consecutive_failures, 0);
+        assert_eq!(stream.current_delay_ms, config.initial_delay_ms);
+        assert!(stream.subscribed_tokens.is_empty());
+        assert!(matches!(stream.circuit_state, CircuitState::Closed));
+    }
+
+    // -----------------------------------------------------------------------
+    // Reconnection Behavior Tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_reconnect_resubscribes_tokens() {
+        // Setup: disconnect then reconnect with events
+        let mock = ScriptedStream::new().with_events(vec![
+            Some(testkit::domain::disconnect_event("connection lost")),
+            Some(testkit::domain::snapshot_event("token1")),
+        ]);
+        let (_, subscribe_count) = mock.counts();
+
+        let mut stream = ReconnectingDataStream::new(mock, fast_config());
+        stream.connect().await.unwrap();
+
+        // Subscribe to tokens before disconnect
+        stream
+            .subscribe(&[
+                testkit::domain::token("token1"),
+                testkit::domain::token("token2"),
+            ])
+            .await
+            .unwrap();
+
+        // This should trigger reconnect and resubscribe
+        let event = stream.next_event().await;
+        assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
+
+        // Should have subscribed at least twice (initial + resubscribe)
+        assert!(subscribe_count.load(Ordering::SeqCst) >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_success_after_reconnect_resets_failures() {
+        let mock = ScriptedStream::new().with_events(vec![
+            Some(testkit::domain::disconnect_event("test")),
+            Some(testkit::domain::snapshot_event("token1")),
+        ]);
+
+        let mut stream = ReconnectingDataStream::new(mock, fast_config());
+        stream.connect().await.unwrap();
+
+        // Simulate some previous failures
+        stream.consecutive_failures = 2;
+
+        // Get event (triggers reconnect)
+        let event = stream.next_event().await;
+        assert!(matches!(event, Some(MarketEvent::BookSnapshot { .. })));
+
+        // Failures should be reset after successful event
+        assert_eq!(stream.consecutive_failures, 0);
     }
 }

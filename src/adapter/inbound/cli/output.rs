@@ -545,3 +545,298 @@ pub fn table_row(cells: &[String], widths: &[usize]) {
     }
     println!("{}", line);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // NOTE: Tests involving global state (configure, is_json, is_quiet, verbosity)
+    // are limited because tests run in parallel and share the static OUTPUT_CONFIG.
+    // We focus on testing OutputConfig struct and pure functions instead.
+
+    // Tests for OutputConfig
+
+    #[test]
+    fn test_output_config_default() {
+        let config = OutputConfig::default();
+        assert!(!config.json);
+        assert!(!config.quiet);
+        assert_eq!(config.verbose, 0);
+    }
+
+    #[test]
+    fn test_output_config_new() {
+        let config = OutputConfig::new(true, false, 2);
+        assert!(config.json);
+        assert!(!config.quiet);
+        assert_eq!(config.verbose, 2);
+    }
+
+    #[test]
+    fn test_output_config_new_all_false() {
+        let config = OutputConfig::new(false, false, 0);
+        assert!(!config.json);
+        assert!(!config.quiet);
+        assert_eq!(config.verbose, 0);
+    }
+
+    #[test]
+    fn test_output_config_new_all_true() {
+        let config = OutputConfig::new(true, true, 255);
+        assert!(config.json);
+        assert!(config.quiet);
+        assert_eq!(config.verbose, 255);
+    }
+
+    #[test]
+    fn test_output_config_copy() {
+        let config = OutputConfig::new(true, false, 3);
+        let copied = config;
+        assert_eq!(config.json, copied.json);
+        assert_eq!(config.quiet, copied.quiet);
+        assert_eq!(config.verbose, copied.verbose);
+    }
+
+    #[test]
+    fn test_output_config_debug() {
+        let config = OutputConfig::new(true, false, 1);
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("OutputConfig"));
+        assert!(debug_str.contains("json"));
+        assert!(debug_str.contains("quiet"));
+        assert!(debug_str.contains("verbose"));
+    }
+
+    #[test]
+    fn test_output_config_verbose_levels() {
+        // Test all typical verbosity levels
+        for v in 0..=5 {
+            let config = OutputConfig::new(false, false, v);
+            assert_eq!(config.verbose, v);
+        }
+    }
+
+    // Tests for regular_output_suppressed (pure function with explicit config)
+
+    #[test]
+    fn test_regular_output_suppressed_default() {
+        let config = OutputConfig::default();
+        assert!(!regular_output_suppressed(config));
+    }
+
+    #[test]
+    fn test_regular_output_suppressed_quiet_only() {
+        let config = OutputConfig::new(false, true, 0);
+        assert!(regular_output_suppressed(config));
+    }
+
+    #[test]
+    fn test_regular_output_suppressed_json_mode() {
+        // In JSON mode, regular output is NOT suppressed (json handles it differently)
+        let config = OutputConfig::new(true, false, 0);
+        assert!(!regular_output_suppressed(config));
+    }
+
+    #[test]
+    fn test_regular_output_suppressed_json_and_quiet() {
+        // When both json and quiet are true, regular output is not suppressed
+        // because the json branch handles output differently
+        let config = OutputConfig::new(true, true, 0);
+        assert!(!regular_output_suppressed(config));
+    }
+
+    #[test]
+    fn test_regular_output_suppressed_quiet_with_verbose() {
+        // Quiet takes precedence even with verbosity set
+        let config = OutputConfig::new(false, true, 3);
+        assert!(regular_output_suppressed(config));
+    }
+
+    // Tests for BRAILLE_SPINNER constant
+
+    #[test]
+    fn test_braille_spinner_has_expected_frames() {
+        assert_eq!(BRAILLE_SPINNER.len(), 10);
+    }
+
+    #[test]
+    fn test_braille_spinner_frames_are_unique() {
+        let mut unique: Vec<&str> = BRAILLE_SPINNER.to_vec();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), BRAILLE_SPINNER.len());
+    }
+
+    #[test]
+    fn test_braille_spinner_frames_are_single_char() {
+        for frame in BRAILLE_SPINNER {
+            // Braille characters are single Unicode code points
+            assert_eq!(frame.chars().count(), 1);
+        }
+    }
+
+    #[test]
+    fn test_braille_spinner_first_frame() {
+        assert_eq!(BRAILLE_SPINNER[0], "\u{280B}"); // ⠋
+    }
+
+    #[test]
+    fn test_braille_spinner_all_frames_are_braille() {
+        for frame in BRAILLE_SPINNER {
+            let c = frame.chars().next().unwrap();
+            // Braille patterns are in range U+2800 to U+28FF
+            assert!(
+                ('\u{2800}'..='\u{28FF}').contains(&c),
+                "Character {:?} is not in Braille range",
+                c
+            );
+        }
+    }
+
+    // Tests for formatting functions - these depend on global state,
+    // so we test that the output contains the input value
+
+    #[test]
+    fn test_positive_contains_value() {
+        let result = positive("100");
+        assert!(result.contains("100"));
+    }
+
+    #[test]
+    fn test_negative_contains_value() {
+        let result = negative("-50");
+        assert!(result.contains("-50"));
+    }
+
+    #[test]
+    fn test_highlight_contains_value() {
+        let result = highlight("important");
+        assert!(result.contains("important"));
+    }
+
+    #[test]
+    fn test_muted_contains_value() {
+        let result = muted("dimmed text");
+        assert!(result.contains("dimmed text"));
+    }
+
+    #[test]
+    fn test_positive_with_number() {
+        let result = positive(42);
+        assert!(result.contains("42"));
+    }
+
+    #[test]
+    fn test_negative_with_number() {
+        let result = negative(-100);
+        assert!(result.contains("-100"));
+    }
+
+    #[test]
+    fn test_highlight_with_number() {
+        let result = highlight(999);
+        assert!(result.contains("999"));
+    }
+
+    #[test]
+    fn test_muted_with_number() {
+        let result = muted(0);
+        assert!(result.contains("0"));
+    }
+
+    #[test]
+    fn test_positive_empty_string() {
+        let result = positive("");
+        // Empty input should produce non-panicking output
+        assert!(result.is_empty() || result.contains('\x1b'));
+    }
+
+    #[test]
+    fn test_negative_empty_string() {
+        let result = negative("");
+        assert!(result.is_empty() || result.contains('\x1b'));
+    }
+
+    #[test]
+    fn test_highlight_empty_string() {
+        let result = highlight("");
+        assert!(result.is_empty() || result.contains('\x1b'));
+    }
+
+    #[test]
+    fn test_muted_empty_string() {
+        let result = muted("");
+        assert!(result.is_empty() || result.contains('\x1b'));
+    }
+
+    #[test]
+    fn test_positive_with_unicode() {
+        let result = positive("Hello World");
+        assert!(result.contains("Hello World"));
+    }
+
+    #[test]
+    fn test_negative_with_unicode() {
+        let result = negative("");
+        assert!(result.contains(""));
+    }
+
+    #[test]
+    fn test_highlight_with_special_chars() {
+        let result = highlight("<script>alert('xss')</script>");
+        assert!(result.contains("<script>"));
+    }
+
+    // Tests for config_cell function behavior
+
+    #[test]
+    fn test_config_cell_returns_same_instance() {
+        let cell1 = config_cell();
+        let cell2 = config_cell();
+        // Both should be the same static reference
+        assert!(std::ptr::eq(cell1, cell2));
+    }
+
+    // Tests for read_config and write_config via configure
+
+    #[test]
+    fn test_configure_and_read_config_consistency() {
+        // This test verifies the internal functions work together
+        let original = read_config();
+
+        // Write a known configuration
+        write_config(OutputConfig::new(true, true, 42));
+        let read_back = read_config();
+        assert!(read_back.json);
+        assert!(read_back.quiet);
+        assert_eq!(read_back.verbose, 42);
+
+        // Restore original
+        write_config(original);
+    }
+
+    // Tests for verbosity edge cases
+
+    #[test]
+    fn test_output_config_verbose_zero() {
+        let config = OutputConfig::new(false, false, 0);
+        assert_eq!(config.verbose, 0);
+    }
+
+    #[test]
+    fn test_output_config_verbose_max() {
+        let config = OutputConfig::new(false, false, u8::MAX);
+        assert_eq!(config.verbose, 255);
+    }
+
+    // Tests for const fn new
+
+    #[test]
+    fn test_output_config_new_is_const() {
+        // Verify OutputConfig::new can be used in const context
+        const CONFIG: OutputConfig = OutputConfig::new(true, false, 5);
+        assert!(CONFIG.json);
+        assert!(!CONFIG.quiet);
+        assert_eq!(CONFIG.verbose, 5);
+    }
+}

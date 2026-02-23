@@ -1989,6 +1989,7 @@ dependencies = [
  "serde_json",
  "tabled",
  "teloxide",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",

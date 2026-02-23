@@ -21,3 +21,6 @@ pub mod notifier;
 pub mod persistence;
 pub mod solver;
 pub mod strategy;
+
+#[cfg(test)]
+mod tests;

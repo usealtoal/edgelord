@@ -139,6 +139,10 @@ mod tests {
         state
     }
 
+    // -------------------------------------------------------------------------
+    // Authorization tests
+    // -------------------------------------------------------------------------
+
     #[test]
     fn test_command_response_for_authorized_command() {
         let state = Arc::new(MockRuntimeState::default());
@@ -159,6 +163,45 @@ mod tests {
     }
 
     #[test]
+    fn test_authorization_with_various_chat_ids() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let allowed = ChatId(12345);
+
+        // Same chat ID should be authorized
+        assert!(command_response_for_message("/status", allowed, allowed, &control).is_some());
+
+        // Different chat IDs should be rejected
+        assert!(command_response_for_message("/status", ChatId(1), allowed, &control).is_none());
+        assert!(command_response_for_message("/status", ChatId(0), allowed, &control).is_none());
+        assert!(command_response_for_message("/status", ChatId(-100), allowed, &control).is_none());
+        assert!(
+            command_response_for_message("/status", ChatId(99999), allowed, &control).is_none()
+        );
+    }
+
+    #[test]
+    fn test_authorization_with_negative_chat_ids() {
+        // Telegram groups have negative chat IDs
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let allowed = ChatId(-123456789);
+
+        // Same negative chat ID should be authorized
+        assert!(command_response_for_message("/status", allowed, allowed, &control).is_some());
+
+        // Different negative chat ID should be rejected
+        assert!(
+            command_response_for_message("/status", ChatId(-987654321), allowed, &control)
+                .is_none()
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Command parsing error handling
+    // -------------------------------------------------------------------------
+
+    #[test]
     fn test_command_response_for_invalid_command() {
         let state = Arc::new(MockRuntimeState::default());
         let control = TelegramControl::new(as_runtime(state));
@@ -177,5 +220,191 @@ mod tests {
 
         let response = command_response_for_message("hello", chat, chat, &control);
         assert!(response.is_none());
+    }
+
+    #[test]
+    fn test_command_response_ignores_empty_text() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response = command_response_for_message("", chat, chat, &control);
+        assert!(response.is_none());
+    }
+
+    #[test]
+    fn test_command_response_ignores_whitespace() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response = command_response_for_message("   ", chat, chat, &control);
+        assert!(response.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // All commands execute correctly when authorized
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_all_commands_execute_when_authorized() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        // Basic info commands
+        assert!(command_response_for_message("/start", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/help", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/status", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/health", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/positions", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/version", chat, chat, &control).is_some());
+
+        // Stats commands (may show "not available" without recorder)
+        assert!(command_response_for_message("/stats", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/pool", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/markets", chat, chat, &control).is_some());
+
+        // Control commands
+        assert!(command_response_for_message("/pause", chat, chat, &control).is_some());
+        assert!(command_response_for_message("/resume", chat, chat, &control).is_some());
+
+        // Set risk command
+        assert!(
+            command_response_for_message("/set_risk min_profit 0.5", chat, chat, &control)
+                .is_some()
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Invalid command error messages
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_unknown_command_shows_error_and_help() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response = command_response_for_message("/unknown", chat, chat, &control).unwrap();
+        assert!(response.contains("Invalid command"));
+        assert!(response.contains("unknown command"));
+        assert!(response.contains("/status")); // Help should be included
+    }
+
+    #[test]
+    fn test_set_risk_missing_args_shows_error() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response = command_response_for_message("/set_risk", chat, chat, &control).unwrap();
+        assert!(response.contains("Invalid command"));
+        assert!(response.contains("missing argument"));
+    }
+
+    #[test]
+    fn test_set_risk_invalid_field_shows_error() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response =
+            command_response_for_message("/set_risk bad_field 1.0", chat, chat, &control).unwrap();
+        assert!(response.contains("Invalid command"));
+        assert!(response.contains("invalid risk field"));
+    }
+
+    #[test]
+    fn test_set_risk_invalid_value_shows_error() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response =
+            command_response_for_message("/set_risk min_profit abc", chat, chat, &control).unwrap();
+        assert!(response.contains("Invalid command"));
+        assert!(response.contains("invalid decimal"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Command with bot mention
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_command_with_bot_mention_authorized() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        let response =
+            command_response_for_message("/status@my_bot", chat, chat, &control).unwrap();
+        assert!(response.contains("Status"));
+    }
+
+    #[test]
+    fn test_command_with_bot_mention_unauthorized() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+
+        let response =
+            command_response_for_message("/status@my_bot", ChatId(7), ChatId(42), &control);
+        assert!(response.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // Edge cases
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_message_starting_with_slash_but_not_command() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        // Just a slash
+        let response = command_response_for_message("/", chat, chat, &control);
+        assert!(response.is_some()); // Should be "unknown command"
+        assert!(response.unwrap().contains("Invalid command"));
+    }
+
+    #[test]
+    fn test_command_with_extra_whitespace() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        // Leading/trailing whitespace
+        let response = command_response_for_message("  /status  ", chat, chat, &control).unwrap();
+        assert!(response.contains("Status"));
+    }
+
+    #[test]
+    fn test_commands_are_case_sensitive() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(state));
+        let chat = ChatId(42);
+
+        // Uppercase should be treated as unknown command
+        let response = command_response_for_message("/STATUS", chat, chat, &control).unwrap();
+        assert!(response.contains("Invalid command"));
+        assert!(response.contains("unknown command"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Concurrent access safety (basic test)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_multiple_commands_same_state() {
+        let state = Arc::new(MockRuntimeState::default());
+        let control = TelegramControl::new(as_runtime(Arc::clone(&state)));
+        let chat = ChatId(42);
+
+        // Execute multiple commands - they should all work
+        for _ in 0..10 {
+            assert!(command_response_for_message("/status", chat, chat, &control).is_some());
+            assert!(command_response_for_message("/health", chat, chat, &control).is_some());
+        }
     }
 }

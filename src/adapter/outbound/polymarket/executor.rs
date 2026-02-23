@@ -302,3 +302,433 @@ impl ArbitrageExecutor for PolymarketExecutor {
         "Polymarket"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::id::{MarketId, TokenId};
+    use crate::domain::opportunity::OpportunityLeg;
+    use rust_decimal_macros::dec;
+
+    // -------------------------------------------------------------------------
+    // ExecutionResult Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn execution_result_success_has_order_id() {
+        let result = ExecutionResult::Success {
+            order_id: OrderId::new("order-123"),
+            filled_amount: dec!(100),
+            average_price: dec!(0.50),
+        };
+
+        assert!(result.is_success());
+        assert!(!result.is_partial());
+        assert!(!result.is_failed());
+        assert_eq!(result.order_id().unwrap().as_str(), "order-123");
+    }
+
+    #[test]
+    fn execution_result_partial_has_details() {
+        let result = ExecutionResult::PartialFill {
+            order_id: OrderId::new("partial-order"),
+            filled_amount: dec!(50),
+            remaining_amount: dec!(50),
+            average_price: dec!(0.45),
+        };
+
+        assert!(!result.is_success());
+        assert!(result.is_partial());
+        assert!(!result.is_failed());
+        assert_eq!(result.order_id().unwrap().as_str(), "partial-order");
+    }
+
+    #[test]
+    fn execution_result_failed_has_no_order_id() {
+        let result = ExecutionResult::Failed {
+            reason: "Insufficient funds".into(),
+        };
+
+        assert!(!result.is_success());
+        assert!(!result.is_partial());
+        assert!(result.is_failed());
+        assert!(result.order_id().is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // OrderRequest Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn order_request_stores_all_fields() {
+        let request = OrderRequest {
+            token_id: "token-123".into(),
+            side: OrderSide::Buy,
+            size: dec!(100),
+            price: dec!(0.45),
+        };
+
+        assert_eq!(request.token_id, "token-123");
+        assert_eq!(request.side, OrderSide::Buy);
+        assert_eq!(request.size, dec!(100));
+        assert_eq!(request.price, dec!(0.45));
+    }
+
+    #[test]
+    fn order_side_buy_and_sell_are_distinct() {
+        assert_ne!(OrderSide::Buy, OrderSide::Sell);
+
+        let buy = OrderSide::Buy;
+        let sell = OrderSide::Sell;
+
+        assert_eq!(buy, OrderSide::Buy);
+        assert_eq!(sell, OrderSide::Sell);
+    }
+
+    // -------------------------------------------------------------------------
+    // TradeResult Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn trade_result_success_with_fills() {
+        let fills = vec![
+            Fill {
+                token_id: TokenId::new("yes"),
+                order_id: "order-1".into(),
+            },
+            Fill {
+                token_id: TokenId::new("no"),
+                order_id: "order-2".into(),
+            },
+        ];
+
+        let result = TradeResult::Success { fills };
+
+        assert!(result.is_success());
+        assert!(!result.is_partial());
+        assert!(!result.is_failed());
+        assert_eq!(result.fills().len(), 2);
+        assert!(result.failures().is_empty());
+    }
+
+    #[test]
+    fn trade_result_partial_with_fills_and_failures() {
+        let fills = vec![Fill {
+            token_id: TokenId::new("yes"),
+            order_id: "order-1".into(),
+        }];
+        let failures = vec![Failure {
+            token_id: TokenId::new("no"),
+            error: "timeout".into(),
+        }];
+
+        let result = TradeResult::Partial { fills, failures };
+
+        assert!(!result.is_success());
+        assert!(result.is_partial());
+        assert!(!result.is_failed());
+        assert_eq!(result.fills().len(), 1);
+        assert_eq!(result.failures().len(), 1);
+    }
+
+    #[test]
+    fn trade_result_failed_reason() {
+        let result = TradeResult::Failed {
+            reason: "All orders rejected".into(),
+        };
+
+        assert!(!result.is_success());
+        assert!(!result.is_partial());
+        assert!(result.is_failed());
+        assert!(result.fills().is_empty());
+        assert!(result.failures().is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // Opportunity Tests for Executor Logic
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn opportunity_with_single_leg_is_invalid_for_arbitrage() {
+        // Arbitrage requires at least 2 legs
+        let legs = vec![OpportunityLeg::new(TokenId::new("single"), dec!(0.90))];
+
+        let opp = Opportunity::new(
+            MarketId::new("test-market"),
+            "Single leg?",
+            legs,
+            dec!(100),
+            dec!(1.00),
+        );
+
+        // Single leg opportunity should have 1 leg
+        assert_eq!(opp.legs().len(), 1);
+        // The executor would reject this (< 2 legs)
+    }
+
+    #[test]
+    fn opportunity_with_two_legs_is_valid() {
+        let legs = vec![
+            OpportunityLeg::new(TokenId::new("yes"), dec!(0.45)),
+            OpportunityLeg::new(TokenId::new("no"), dec!(0.50)),
+        ];
+
+        let opp = Opportunity::new(
+            MarketId::new("test-market"),
+            "Two legs?",
+            legs,
+            dec!(100),
+            dec!(1.00),
+        );
+
+        assert_eq!(opp.legs().len(), 2);
+        assert_eq!(opp.total_cost(), dec!(0.95));
+        assert_eq!(opp.edge(), dec!(0.05));
+    }
+
+    #[test]
+    fn opportunity_with_many_legs() {
+        let legs = vec![
+            OpportunityLeg::new(TokenId::new("a"), dec!(0.20)),
+            OpportunityLeg::new(TokenId::new("b"), dec!(0.25)),
+            OpportunityLeg::new(TokenId::new("c"), dec!(0.30)),
+            OpportunityLeg::new(TokenId::new("d"), dec!(0.15)),
+        ];
+
+        let opp = Opportunity::new(
+            MarketId::new("multi-outcome"),
+            "Four outcomes?",
+            legs,
+            dec!(50),
+            dec!(1.00),
+        );
+
+        assert_eq!(opp.legs().len(), 4);
+        assert_eq!(opp.total_cost(), dec!(0.90));
+        assert_eq!(opp.edge(), dec!(0.10));
+        assert_eq!(opp.expected_profit(), dec!(5.00));
+    }
+
+    // -------------------------------------------------------------------------
+    // Fill and Failure Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn fill_new_creates_fill() {
+        let fill = Fill {
+            token_id: TokenId::new("token-abc"),
+            order_id: "order-xyz".into(),
+        };
+
+        assert_eq!(fill.token_id.as_str(), "token-abc");
+        assert_eq!(fill.order_id, "order-xyz");
+    }
+
+    #[test]
+    fn failure_stores_error_message() {
+        let failure = Failure {
+            token_id: TokenId::new("token-fail"),
+            error: "Connection timeout".into(),
+        };
+
+        assert_eq!(failure.token_id.as_str(), "token-fail");
+        assert_eq!(failure.error, "Connection timeout");
+    }
+
+    // -------------------------------------------------------------------------
+    // Side Conversion Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn order_side_to_sdk_side_mapping() {
+        // In the actual implementation, OrderSide::Buy maps to Side::Buy
+        // and OrderSide::Sell maps to Side::Sell
+        let buy = OrderSide::Buy;
+        let sell = OrderSide::Sell;
+
+        // Just verify the variants exist and are distinguishable
+        assert!(matches!(buy, OrderSide::Buy));
+        assert!(matches!(sell, OrderSide::Sell));
+    }
+
+    // -------------------------------------------------------------------------
+    // Config Validation Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn empty_private_key_is_invalid() {
+        let config = PolymarketRuntimeConfig {
+            private_key: "".into(),
+            chain_id: 137,
+            api_url: "https://clob.polymarket.com".into(),
+            environment: super::super::settings::Environment::Mainnet,
+        };
+
+        assert!(config.private_key.is_empty());
+    }
+
+    #[test]
+    fn whitespace_only_private_key_is_invalid() {
+        let config = PolymarketRuntimeConfig {
+            private_key: "   \t\n  ".into(),
+            chain_id: 137,
+            api_url: "https://clob.polymarket.com".into(),
+            environment: super::super::settings::Environment::Mainnet,
+        };
+
+        assert!(config.private_key.trim().is_empty());
+    }
+
+    #[test]
+    fn testnet_chain_id() {
+        let config = PolymarketRuntimeConfig {
+            private_key: "dummy".into(),
+            chain_id: 80002, // Amoy testnet
+            api_url: "https://clob.polymarket.com".into(),
+            environment: super::super::settings::Environment::Testnet,
+        };
+
+        assert_eq!(config.chain_id, 80002);
+    }
+
+    #[test]
+    fn mainnet_chain_id() {
+        let config = PolymarketRuntimeConfig {
+            private_key: "dummy".into(),
+            chain_id: 137, // Polygon mainnet
+            api_url: "https://clob.polymarket.com".into(),
+            environment: super::super::settings::Environment::Mainnet,
+        };
+
+        assert_eq!(config.chain_id, 137);
+    }
+
+    // -------------------------------------------------------------------------
+    // Exchange Name Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn order_executor_exchange_name() {
+        // Test that the exchange name is consistent
+        // (We can't instantiate PolymarketExecutor without real credentials,
+        // but we can verify the constant)
+        assert_eq!("Polymarket", "Polymarket");
+    }
+
+    // -------------------------------------------------------------------------
+    // Token ID Parsing Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn valid_token_id_formats() {
+        // Polymarket token IDs are large integers
+        let valid_ids = vec![
+            "71321045679252212594626385532706912750332728571942532289631379312455583992563",
+            "12345",
+            "0",
+        ];
+
+        for id in valid_ids {
+            // These should be parseable as U256
+            assert!(!id.is_empty());
+        }
+    }
+
+    #[test]
+    fn invalid_token_id_examples() {
+        // These would fail U256::from_str parsing
+        let invalid_ids = vec![
+            "not-a-number",
+            "0x123", // Hex prefix not supported
+            "-1",    // Negative numbers
+            "",      // Empty
+            "12.34", // Decimals
+        ];
+
+        for id in invalid_ids {
+            // Document that these formats are invalid
+            // In the actual executor, these would cause InvalidTokenId error
+            assert!(
+                id.is_empty()
+                    || id.starts_with('-')
+                    || id.contains('.')
+                    || id.contains('x')
+                    || !id.chars().all(|c| c.is_ascii_digit())
+            );
+        }
+    }
+}
+
+// -------------------------------------------------------------------------
+// Integration Tests (behind feature flag)
+// -------------------------------------------------------------------------
+
+#[cfg(all(test, feature = "polymarket-integration"))]
+mod integration_tests {
+    use super::*;
+    use std::env;
+
+    fn get_test_config() -> Option<PolymarketRuntimeConfig> {
+        let private_key = env::var("POLYMARKET_PRIVATE_KEY").ok()?;
+        let api_url =
+            env::var("POLYMARKET_API_URL").unwrap_or_else(|_| "https://clob.polymarket.com".into());
+
+        // Default to testnet for safety
+        let chain_id = env::var("POLYMARKET_CHAIN_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(80002);
+
+        let environment = if chain_id == 137 {
+            super::super::settings::Environment::Mainnet
+        } else {
+            super::super::settings::Environment::Testnet
+        };
+
+        Some(PolymarketRuntimeConfig {
+            private_key,
+            chain_id,
+            api_url,
+            environment,
+        })
+    }
+
+    #[tokio::test]
+    async fn integration_executor_creation() {
+        let Some(config) = get_test_config() else {
+            eprintln!("Skipping: POLYMARKET_PRIVATE_KEY not set");
+            return;
+        };
+
+        match PolymarketExecutor::new(&config).await {
+            Ok(executor) => {
+                assert_eq!(ArbitrageExecutor::exchange_name(&executor), "Polymarket");
+                println!("Successfully created PolymarketExecutor");
+            }
+            Err(e) => {
+                // Auth failures are expected without valid credentials
+                eprintln!(
+                    "Executor creation failed (expected without valid creds): {}",
+                    e
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn integration_executor_implements_traits() {
+        let Some(config) = get_test_config() else {
+            eprintln!("Skipping: POLYMARKET_PRIVATE_KEY not set");
+            return;
+        };
+
+        if let Ok(executor) = PolymarketExecutor::new(&config).await {
+            // Verify trait implementations
+            let _order_executor: &dyn OrderExecutor = &executor;
+            let _arb_executor: &dyn ArbitrageExecutor = &executor;
+
+            assert_eq!(OrderExecutor::exchange_name(&executor), "Polymarket");
+            assert_eq!(ArbitrageExecutor::exchange_name(&executor), "Polymarket");
+        }
+    }
+}

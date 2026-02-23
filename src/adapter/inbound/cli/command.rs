@@ -429,3 +429,603 @@ pub struct WalletSweepArgs {
     #[arg(long)]
     pub yes: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    // Tests for CLI structure validation
+
+    #[test]
+    fn test_cli_command_factory_builds() {
+        // Verifies that the CLI definition is valid
+        let _ = Cli::command();
+    }
+
+    #[test]
+    fn test_cli_has_version() {
+        let cmd = Cli::command();
+        assert!(cmd.get_version().is_some());
+    }
+
+    #[test]
+    fn test_cli_has_about() {
+        let cmd = Cli::command();
+        assert!(cmd.get_about().is_some());
+    }
+
+    #[test]
+    fn test_cli_name() {
+        let cmd = Cli::command();
+        assert_eq!(cmd.get_name(), "edgelord");
+    }
+
+    // Tests for ColorChoice enum
+
+    #[test]
+    fn test_color_choice_default_is_auto() {
+        let choice = ColorChoice::default();
+        assert!(matches!(choice, ColorChoice::Auto));
+    }
+
+    #[test]
+    fn test_color_choice_clone() {
+        let choice = ColorChoice::Always;
+        let cloned = choice.clone();
+        assert!(matches!(cloned, ColorChoice::Always));
+    }
+
+    #[test]
+    fn test_color_choice_debug() {
+        let choice = ColorChoice::Never;
+        let debug_str = format!("{:?}", choice);
+        assert!(debug_str.contains("Never"));
+    }
+
+    // Tests for parsing basic CLI options
+
+    #[test]
+    fn test_parse_run_command() {
+        let cli = Cli::try_parse_from(["edgelord", "run"]).unwrap();
+        assert!(matches!(cli.command, Commands::Run(_)));
+        assert!(!cli.json);
+        assert!(!cli.quiet);
+        assert_eq!(cli.verbose, 0);
+    }
+
+    #[test]
+    fn test_parse_json_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "--json", "run"]).unwrap();
+        assert!(cli.json);
+    }
+
+    #[test]
+    fn test_parse_quiet_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "--quiet", "run"]).unwrap();
+        assert!(cli.quiet);
+    }
+
+    #[test]
+    fn test_parse_short_quiet_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "-q", "run"]).unwrap();
+        assert!(cli.quiet);
+    }
+
+    #[test]
+    fn test_parse_verbose_single() {
+        let cli = Cli::try_parse_from(["edgelord", "-v", "run"]).unwrap();
+        assert_eq!(cli.verbose, 1);
+    }
+
+    #[test]
+    fn test_parse_verbose_double() {
+        let cli = Cli::try_parse_from(["edgelord", "-vv", "run"]).unwrap();
+        assert_eq!(cli.verbose, 2);
+    }
+
+    #[test]
+    fn test_parse_verbose_triple() {
+        let cli = Cli::try_parse_from(["edgelord", "-vvv", "run"]).unwrap();
+        assert_eq!(cli.verbose, 3);
+    }
+
+    #[test]
+    fn test_parse_verbose_long_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "--verbose", "--verbose", "run"]).unwrap();
+        assert_eq!(cli.verbose, 2);
+    }
+
+    #[test]
+    fn test_parse_color_auto() {
+        let cli = Cli::try_parse_from(["edgelord", "--color", "auto", "run"]).unwrap();
+        assert!(matches!(cli.color, ColorChoice::Auto));
+    }
+
+    #[test]
+    fn test_parse_color_always() {
+        let cli = Cli::try_parse_from(["edgelord", "--color", "always", "run"]).unwrap();
+        assert!(matches!(cli.color, ColorChoice::Always));
+    }
+
+    #[test]
+    fn test_parse_color_never() {
+        let cli = Cli::try_parse_from(["edgelord", "--color", "never", "run"]).unwrap();
+        assert!(matches!(cli.color, ColorChoice::Never));
+    }
+
+    // Tests for RunArgs parsing
+
+    #[test]
+    fn test_run_args_defaults() {
+        let cli = Cli::try_parse_from(["edgelord", "run"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert!(!args.dry_run);
+            assert!(!args.no_banner);
+            assert!(!args.json_logs);
+            assert!(!args.telegram_enabled);
+            assert!(!args.mainnet);
+            assert!(!args.testnet);
+            assert!(args.chain_id.is_none());
+            assert!(args.log_level.is_none());
+            assert!(args.strategies.is_none());
+            assert!(args.min_edge.is_none());
+            assert!(args.min_profit.is_none());
+            assert!(args.max_exposure.is_none());
+            assert!(args.max_position.is_none());
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_dry_run() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--dry-run"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert!(args.dry_run);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_no_banner() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--no-banner"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert!(args.no_banner);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_chain_id() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--chain-id", "137"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert_eq!(args.chain_id, Some(137));
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_mainnet_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--mainnet"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert!(args.mainnet);
+            assert!(!args.testnet);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_testnet_flag() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--testnet"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert!(args.testnet);
+            assert!(!args.mainnet);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn test_run_args_mainnet_testnet_conflict() {
+        // mainnet and testnet are mutually exclusive
+        let result = Cli::try_parse_from(["edgelord", "run", "--mainnet", "--testnet"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_run_args_strategies() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--strategies", "binary,multi"]).unwrap();
+        if let Commands::Run(args) = cli.command {
+            assert_eq!(args.strategies, Some("binary,multi".to_string()));
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    // Tests for Statistics subcommands
+
+    #[test]
+    fn test_statistics_today_command() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "today"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Statistics(StatsCommand::Today(_))
+        ));
+    }
+
+    #[test]
+    fn test_statistics_week_command() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "week"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Statistics(StatsCommand::Week(_))
+        ));
+    }
+
+    #[test]
+    fn test_statistics_history_command() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "history"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Statistics(StatsCommand::History(_))
+        ));
+    }
+
+    #[test]
+    fn test_statistics_history_with_days() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "history", "60"]).unwrap();
+        if let Commands::Statistics(StatsCommand::History(args)) = cli.command {
+            assert_eq!(args.days, 60);
+        } else {
+            panic!("Expected History command");
+        }
+    }
+
+    #[test]
+    fn test_statistics_history_default_days() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "history"]).unwrap();
+        if let Commands::Statistics(StatsCommand::History(args)) = cli.command {
+            assert_eq!(args.days, 30);
+        } else {
+            panic!("Expected History command");
+        }
+    }
+
+    #[test]
+    fn test_statistics_export_command() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "export"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Statistics(StatsCommand::Export(_))
+        ));
+    }
+
+    #[test]
+    fn test_statistics_export_with_output() {
+        let cli =
+            Cli::try_parse_from(["edgelord", "statistics", "export", "-o", "stats.csv"]).unwrap();
+        if let Commands::Statistics(StatsCommand::Export(args)) = cli.command {
+            assert_eq!(args.output, Some(PathBuf::from("stats.csv")));
+        } else {
+            panic!("Expected Export command");
+        }
+    }
+
+    #[test]
+    fn test_statistics_prune_command() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "prune"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Statistics(StatsCommand::Prune(_))
+        ));
+    }
+
+    #[test]
+    fn test_statistics_prune_default_days() {
+        let cli = Cli::try_parse_from(["edgelord", "statistics", "prune"]).unwrap();
+        if let Commands::Statistics(StatsCommand::Prune(args)) = cli.command {
+            assert_eq!(args.days, 30);
+        } else {
+            panic!("Expected Prune command");
+        }
+    }
+
+    // Tests for Config subcommands
+
+    #[test]
+    fn test_config_init_command() {
+        let cli = Cli::try_parse_from(["edgelord", "config", "init"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Config(ConfigCommand::Init(_))
+        ));
+    }
+
+    #[test]
+    fn test_config_init_with_force() {
+        let cli = Cli::try_parse_from(["edgelord", "config", "init", "--force"]).unwrap();
+        if let Commands::Config(ConfigCommand::Init(args)) = cli.command {
+            assert!(args.force);
+        } else {
+            panic!("Expected Config Init command");
+        }
+    }
+
+    #[test]
+    fn test_config_show_command() {
+        let cli = Cli::try_parse_from(["edgelord", "config", "show"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Config(ConfigCommand::Show(_))
+        ));
+    }
+
+    #[test]
+    fn test_config_validate_command() {
+        let cli = Cli::try_parse_from(["edgelord", "config", "validate"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Config(ConfigCommand::Validate(_))
+        ));
+    }
+
+    // Tests for Check subcommands
+
+    #[test]
+    fn test_check_config_command() {
+        let cli = Cli::try_parse_from(["edgelord", "check", "config"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Check(CheckCommand::Config(_))
+        ));
+    }
+
+    #[test]
+    fn test_check_live_command() {
+        let cli = Cli::try_parse_from(["edgelord", "check", "live"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Check(CheckCommand::Live(_))
+        ));
+    }
+
+    #[test]
+    fn test_check_health_command() {
+        let cli = Cli::try_parse_from(["edgelord", "check", "health"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Check(CheckCommand::Health(_))
+        ));
+    }
+
+    #[test]
+    fn test_check_connection_command() {
+        let cli = Cli::try_parse_from(["edgelord", "check", "connection"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Check(CheckCommand::Connection(_))
+        ));
+    }
+
+    #[test]
+    fn test_check_telegram_command() {
+        let cli = Cli::try_parse_from(["edgelord", "check", "telegram"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Check(CheckCommand::Telegram(_))
+        ));
+    }
+
+    // Tests for Wallet subcommands
+
+    #[test]
+    fn test_wallet_approve_command() {
+        let cli = Cli::try_parse_from(["edgelord", "wallet", "approve"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Wallet(WalletCommand::Approve(_))
+        ));
+    }
+
+    #[test]
+    fn test_wallet_approve_with_amount() {
+        let cli =
+            Cli::try_parse_from(["edgelord", "wallet", "approve", "--amount", "5000"]).unwrap();
+        if let Commands::Wallet(WalletCommand::Approve(args)) = cli.command {
+            assert_eq!(args.amount, Decimal::from(5000));
+        } else {
+            panic!("Expected Wallet Approve command");
+        }
+    }
+
+    #[test]
+    fn test_wallet_approve_default_amount() {
+        let cli = Cli::try_parse_from(["edgelord", "wallet", "approve"]).unwrap();
+        if let Commands::Wallet(WalletCommand::Approve(args)) = cli.command {
+            assert_eq!(args.amount, Decimal::from(10000));
+        } else {
+            panic!("Expected Wallet Approve command");
+        }
+    }
+
+    #[test]
+    fn test_wallet_approve_with_yes() {
+        let cli = Cli::try_parse_from(["edgelord", "wallet", "approve", "--yes"]).unwrap();
+        if let Commands::Wallet(WalletCommand::Approve(args)) = cli.command {
+            assert!(args.yes);
+        } else {
+            panic!("Expected Wallet Approve command");
+        }
+    }
+
+    #[test]
+    fn test_wallet_status_command() {
+        let cli = Cli::try_parse_from(["edgelord", "wallet", "status"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Wallet(WalletCommand::Status(_))
+        ));
+    }
+
+    #[test]
+    fn test_wallet_address_command() {
+        let cli = Cli::try_parse_from(["edgelord", "wallet", "address"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Wallet(WalletCommand::Address(_))
+        ));
+    }
+
+    #[test]
+    fn test_wallet_sweep_command() {
+        let cli = Cli::try_parse_from([
+            "edgelord",
+            "wallet",
+            "sweep",
+            "--to",
+            "0x1234567890123456789012345678901234567890",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Wallet(WalletCommand::Sweep(_))
+        ));
+    }
+
+    #[test]
+    fn test_wallet_sweep_defaults() {
+        let cli = Cli::try_parse_from([
+            "edgelord",
+            "wallet",
+            "sweep",
+            "--to",
+            "0x1234567890123456789012345678901234567890",
+        ])
+        .unwrap();
+        if let Commands::Wallet(WalletCommand::Sweep(args)) = cli.command {
+            assert_eq!(args.asset, "usdc");
+            assert_eq!(args.network, "polygon");
+            assert!(!args.yes);
+        } else {
+            panic!("Expected Wallet Sweep command");
+        }
+    }
+
+    #[test]
+    fn test_wallet_sweep_requires_to() {
+        let result = Cli::try_parse_from(["edgelord", "wallet", "sweep"]);
+        assert!(result.is_err());
+    }
+
+    // Tests for Strategy subcommands
+
+    #[test]
+    fn test_strategies_list_command() {
+        let cli = Cli::try_parse_from(["edgelord", "strategies", "list"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Strategies(StrategyCommand::List)
+        ));
+    }
+
+    #[test]
+    fn test_strategies_explain_command() {
+        let cli = Cli::try_parse_from(["edgelord", "strategies", "explain", "binary"]).unwrap();
+        if let Commands::Strategies(StrategyCommand::Explain { name }) = cli.command {
+            assert_eq!(name, "binary");
+        } else {
+            panic!("Expected Strategies Explain command");
+        }
+    }
+
+    #[test]
+    fn test_strategies_explain_requires_name() {
+        let result = Cli::try_parse_from(["edgelord", "strategies", "explain"]);
+        assert!(result.is_err());
+    }
+
+    // Tests for other commands
+
+    #[test]
+    fn test_status_command() {
+        let cli = Cli::try_parse_from(["edgelord", "status"]).unwrap();
+        assert!(matches!(cli.command, Commands::Status(_)));
+    }
+
+    #[test]
+    fn test_init_command() {
+        let cli = Cli::try_parse_from(["edgelord", "init"]).unwrap();
+        assert!(matches!(cli.command, Commands::Init(_)));
+    }
+
+    #[test]
+    fn test_init_with_force() {
+        let cli = Cli::try_parse_from(["edgelord", "init", "--force"]).unwrap();
+        if let Commands::Init(args) = cli.command {
+            assert!(args.force);
+        } else {
+            panic!("Expected Init command");
+        }
+    }
+
+    // Tests for error cases
+
+    #[test]
+    fn test_unknown_command_fails() {
+        let result = Cli::try_parse_from(["edgelord", "unknown"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_color_value() {
+        let result = Cli::try_parse_from(["edgelord", "--color", "invalid", "run"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_chain_id_type() {
+        let result = Cli::try_parse_from(["edgelord", "run", "--chain-id", "not_a_number"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_subcommand() {
+        let result = Cli::try_parse_from(["edgelord"]);
+        assert!(result.is_err());
+    }
+
+    // Tests for global flag placement
+
+    #[test]
+    fn test_global_flags_before_command() {
+        let cli = Cli::try_parse_from(["edgelord", "--json", "--quiet", "-vv", "run"]).unwrap();
+        assert!(cli.json);
+        assert!(cli.quiet);
+        assert_eq!(cli.verbose, 2);
+    }
+
+    #[test]
+    fn test_global_flags_after_command() {
+        let cli = Cli::try_parse_from(["edgelord", "run", "--json", "--quiet", "-vv"]).unwrap();
+        assert!(cli.json);
+        assert!(cli.quiet);
+        assert_eq!(cli.verbose, 2);
+    }
+
+    #[test]
+    fn test_global_flags_mixed_position() {
+        let cli = Cli::try_parse_from(["edgelord", "--json", "run", "--dry-run", "-v"]).unwrap();
+        assert!(cli.json);
+        assert_eq!(cli.verbose, 1);
+        if let Commands::Run(args) = cli.command {
+            assert!(args.dry_run);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+}

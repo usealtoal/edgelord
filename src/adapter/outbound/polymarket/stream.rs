@@ -345,3 +345,334 @@ impl MarketDataStream for PolymarketDataStream {
         "Polymarket"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapter::outbound::polymarket::dto::message::PolymarketWsPriceLevel;
+    use crate::domain::book::Book;
+    use rust_decimal_macros::dec;
+
+    // -------------------------------------------------------------------------
+    // PolymarketWebSocketHandler Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn websocket_handler_stores_url() {
+        let url = "wss://example.com/ws".to_string();
+        let handler = PolymarketWebSocketHandler::new(url.clone());
+        // We can't directly access the private field, but we test construction doesn't panic
+        assert_eq!(
+            std::mem::size_of_val(&handler),
+            std::mem::size_of::<String>()
+        );
+    }
+
+    #[test]
+    fn websocket_handler_is_const_constructible() {
+        // Test that new() is const fn
+        const _HANDLER: PolymarketWebSocketHandler = PolymarketWebSocketHandler::new(String::new());
+    }
+
+    // -------------------------------------------------------------------------
+    // PolymarketDataStream Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn data_stream_new_creates_disconnected_stream() {
+        let stream = PolymarketDataStream::new("wss://test.com/ws".into());
+        // Stream should start with no connection
+        assert_eq!(stream.exchange_name(), "Polymarket");
+    }
+
+    #[test]
+    fn data_stream_exchange_name_returns_polymarket() {
+        let stream = PolymarketDataStream::new("wss://test.com".into());
+        assert_eq!(stream.exchange_name(), "Polymarket");
+    }
+
+    // -------------------------------------------------------------------------
+    // PolymarketSubscribeMessage Serialization Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn subscribe_message_serializes_correctly() {
+        let msg = PolymarketSubscribeMessage::new(vec!["token1".into(), "token2".into()]);
+        let json = serde_json::to_string(&msg).unwrap();
+
+        // Should contain the assets_ids array
+        assert!(json.contains("assets_ids"));
+        assert!(json.contains("token1"));
+        assert!(json.contains("token2"));
+
+        // Should have type field renamed to "type"
+        assert!(json.contains(r#""type":"market""#));
+    }
+
+    #[test]
+    fn subscribe_message_with_single_asset() {
+        let msg = PolymarketSubscribeMessage::new(vec!["single-token".into()]);
+        let json = serde_json::to_string(&msg).unwrap();
+
+        assert!(json.contains("single-token"));
+        assert!(json.contains(r#""type":"market""#));
+    }
+
+    #[test]
+    fn subscribe_message_with_empty_assets() {
+        let msg = PolymarketSubscribeMessage::new(vec![]);
+        let json = serde_json::to_string(&msg).unwrap();
+
+        assert!(json.contains(r#""assets_ids":[]"#));
+        assert!(json.contains(r#""type":"market""#));
+    }
+
+    // -------------------------------------------------------------------------
+    // Message Parsing Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn parses_book_message_array() {
+        let json = r#"[{
+            "asset_id": "test-token",
+            "bids": [{"price": "0.45", "size": "100"}],
+            "asks": [{"price": "0.55", "size": "200"}]
+        }]"#;
+
+        let msg: PolymarketWsMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            PolymarketWsMessage::Books(books) => {
+                assert_eq!(books.len(), 1);
+                assert_eq!(books[0].asset_id, "test-token");
+            }
+            _ => panic!("Expected Books variant"),
+        }
+    }
+
+    #[test]
+    fn parses_empty_book_array() {
+        let json = "[]";
+        let msg: PolymarketWsMessage = serde_json::from_str(json).unwrap();
+
+        match msg {
+            PolymarketWsMessage::Books(books) => {
+                assert!(books.is_empty());
+            }
+            _ => panic!("Expected Books variant"),
+        }
+    }
+
+    #[test]
+    fn unknown_message_type_parses_as_unknown() {
+        let json = r#"{"type": "heartbeat", "timestamp": 12345}"#;
+        let msg: PolymarketWsMessage = serde_json::from_str(json).unwrap();
+
+        match msg {
+            PolymarketWsMessage::Unknown(value) => {
+                assert!(value.get("type").is_some());
+            }
+            _ => panic!("Expected Unknown variant"),
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Order Book Conversion Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn book_message_converts_to_domain_book() {
+        let book_msg = PolymarketBookMessage {
+            asset_id: "token-123".to_string(),
+            market: Some("0xmarket".to_string()),
+            bids: vec![
+                PolymarketWsPriceLevel {
+                    price: "0.45".to_string(),
+                    size: "1000".to_string(),
+                },
+                PolymarketWsPriceLevel {
+                    price: "0.44".to_string(),
+                    size: "2000".to_string(),
+                },
+            ],
+            asks: vec![PolymarketWsPriceLevel {
+                price: "0.55".to_string(),
+                size: "1500".to_string(),
+            }],
+            timestamp: Some("1234567890".to_string()),
+            hash: Some("abcdef".to_string()),
+        };
+
+        let book = book_msg.to_orderbook();
+
+        assert_eq!(book.token_id().as_str(), "token-123");
+        assert_eq!(book.bids().len(), 2);
+        assert_eq!(book.asks().len(), 1);
+
+        // Check best prices
+        assert_eq!(book.best_bid().unwrap().price(), dec!(0.45));
+        assert_eq!(book.best_ask().unwrap().price(), dec!(0.55));
+    }
+
+    #[test]
+    fn book_message_filters_invalid_entries() {
+        let book_msg = PolymarketBookMessage {
+            asset_id: "token-456".to_string(),
+            market: None,
+            bids: vec![
+                PolymarketWsPriceLevel {
+                    price: "0.45".to_string(),
+                    size: "100".to_string(),
+                },
+                PolymarketWsPriceLevel {
+                    price: "invalid".to_string(),
+                    size: "200".to_string(),
+                },
+            ],
+            asks: vec![PolymarketWsPriceLevel {
+                price: "0.55".to_string(),
+                size: "not-a-number".to_string(),
+            }],
+            timestamp: None,
+            hash: None,
+        };
+
+        let book = book_msg.to_orderbook();
+
+        // Only valid entries should be included
+        assert_eq!(book.bids().len(), 1);
+        assert_eq!(book.asks().len(), 0);
+    }
+
+    #[test]
+    fn empty_book_message_produces_empty_book() {
+        let book_msg = PolymarketBookMessage {
+            asset_id: "empty-token".to_string(),
+            market: None,
+            bids: vec![],
+            asks: vec![],
+            timestamp: None,
+            hash: None,
+        };
+
+        let book = book_msg.to_orderbook();
+
+        assert_eq!(book.token_id().as_str(), "empty-token");
+        assert!(book.bids().is_empty());
+        assert!(book.asks().is_empty());
+        assert!(book.best_bid().is_none());
+        assert!(book.best_ask().is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // MarketEvent Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn market_event_book_snapshot_has_token_id() {
+        let token_id = TokenId::new("test-token");
+        let book = Book::new(token_id.clone());
+        let event = MarketEvent::BookSnapshot {
+            token_id: token_id.clone(),
+            book,
+        };
+
+        assert_eq!(event.token_id(), Some(&token_id));
+    }
+
+    #[test]
+    fn market_event_disconnected_has_reason() {
+        let event = MarketEvent::Disconnected {
+            reason: "Connection lost".into(),
+        };
+
+        match event {
+            MarketEvent::Disconnected { reason } => {
+                assert_eq!(reason, "Connection lost");
+            }
+            _ => panic!("Expected Disconnected variant"),
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Pending Books Buffer Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn data_stream_starts_with_empty_pending_books() {
+        let stream = PolymarketDataStream::new("wss://test.com".into());
+        // The pending_books field is private, but we verify the behavior through
+        // the fact that construction succeeds and exchange_name works
+        assert_eq!(stream.exchange_name(), "Polymarket");
+    }
+
+    // -------------------------------------------------------------------------
+    // Message Log Truncation Tests (verify logging doesn't overflow)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn many_assets_does_not_panic() {
+        let assets: Vec<String> = (0..100).map(|i| format!("asset-{}", i)).collect();
+        let msg = PolymarketSubscribeMessage::new(assets);
+
+        // Should not panic with many assets
+        assert_eq!(msg.assets_ids.len(), 100);
+        assert_eq!(msg.msg_type, "market");
+    }
+
+    // -------------------------------------------------------------------------
+    // Large Order Book Tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn handles_large_order_book() {
+        let bids: Vec<PolymarketWsPriceLevel> = (0..100)
+            .map(|i| PolymarketWsPriceLevel {
+                price: format!("0.{:02}", 50 - i.min(49)),
+                size: format!("{}", (i + 1) * 100),
+            })
+            .collect();
+
+        let asks: Vec<PolymarketWsPriceLevel> = (0..100)
+            .map(|i| PolymarketWsPriceLevel {
+                price: format!("0.{:02}", 51 + i.min(48)),
+                size: format!("{}", (i + 1) * 100),
+            })
+            .collect();
+
+        let book_msg = PolymarketBookMessage {
+            asset_id: "large-book-token".to_string(),
+            market: None,
+            bids,
+            asks,
+            timestamp: None,
+            hash: None,
+        };
+
+        let book = book_msg.to_orderbook();
+
+        // Should handle many levels
+        assert!(book.bids().len() > 0);
+        assert!(book.asks().len() > 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // Integration-style Tests (without network)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn subscribe_message_round_trips() {
+        let original = PolymarketSubscribeMessage::new(vec![
+            "token-a".into(),
+            "token-b".into(),
+            "token-c".into(),
+        ]);
+
+        // Serialize
+        let json = serde_json::to_string(&original).unwrap();
+
+        // We can verify the JSON structure matches expectations
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["assets_ids"].as_array().unwrap().len(), 3);
+        assert_eq!(parsed["type"], "market");
+    }
+}

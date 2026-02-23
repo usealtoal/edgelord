@@ -296,3 +296,310 @@ impl WalletService {
         .into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::config::settings::Config;
+
+    fn minimal_config() -> Config {
+        let toml = r#"
+            [logging]
+            level = "info"
+            format = "pretty"
+        "#;
+        Config::parse_toml(toml).expect("minimal config should parse")
+    }
+
+    // -----------------------------------------------------------------------
+    // Type Tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn wallet_approval_status_fields() {
+        let status = WalletApprovalStatus {
+            exchange: "TestExchange".to_string(),
+            wallet_address: "0x1234".to_string(),
+            token: "USDC".to_string(),
+            allowance: Decimal::new(1000, 2), // 10.00
+            spender: "0x5678".to_string(),
+            needs_approval: false,
+        };
+
+        assert_eq!(status.exchange, "TestExchange");
+        assert_eq!(status.wallet_address, "0x1234");
+        assert_eq!(status.token, "USDC");
+        assert_eq!(status.allowance, Decimal::new(1000, 2));
+        assert_eq!(status.spender, "0x5678");
+        assert!(!status.needs_approval);
+    }
+
+    #[test]
+    fn approval_outcome_approved_variant() {
+        let outcome = ApprovalOutcome::Approved {
+            tx_hash: "0xabc".to_string(),
+            amount: Decimal::new(5000, 2), // 50.00
+        };
+
+        match outcome {
+            ApprovalOutcome::Approved { tx_hash, amount } => {
+                assert_eq!(tx_hash, "0xabc");
+                assert_eq!(amount, Decimal::new(5000, 2));
+            }
+            _ => panic!("Expected Approved variant"),
+        }
+    }
+
+    #[test]
+    fn approval_outcome_already_approved_variant() {
+        let outcome = ApprovalOutcome::AlreadyApproved {
+            current_allowance: Decimal::new(10000, 2), // 100.00
+        };
+
+        match outcome {
+            ApprovalOutcome::AlreadyApproved { current_allowance } => {
+                assert_eq!(current_allowance, Decimal::new(10000, 2));
+            }
+            _ => panic!("Expected AlreadyApproved variant"),
+        }
+    }
+
+    #[test]
+    fn approval_outcome_failed_variant() {
+        let outcome = ApprovalOutcome::Failed {
+            reason: "Insufficient gas".to_string(),
+        };
+
+        match outcome {
+            ApprovalOutcome::Failed { reason } => {
+                assert_eq!(reason, "Insufficient gas");
+            }
+            _ => panic!("Expected Failed variant"),
+        }
+    }
+
+    #[test]
+    fn sweep_outcome_no_balance_variant() {
+        let outcome = SweepOutcome::NoBalance {
+            balance: Decimal::ZERO,
+        };
+
+        match outcome {
+            SweepOutcome::NoBalance { balance } => {
+                assert_eq!(balance, Decimal::ZERO);
+            }
+            _ => panic!("Expected NoBalance variant"),
+        }
+    }
+
+    #[test]
+    fn sweep_outcome_transferred_variant() {
+        let outcome = SweepOutcome::Transferred {
+            tx_hash: "0xdef".to_string(),
+            amount: Decimal::new(25000, 2), // 250.00
+        };
+
+        match outcome {
+            SweepOutcome::Transferred { tx_hash, amount } => {
+                assert_eq!(tx_hash, "0xdef");
+                assert_eq!(amount, Decimal::new(25000, 2));
+            }
+            _ => panic!("Expected Transferred variant"),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Error Path Tests (without polymarket feature)
+    // -----------------------------------------------------------------------
+
+    #[cfg(not(feature = "polymarket"))]
+    mod without_polymarket {
+        use super::*;
+
+        #[tokio::test]
+        async fn wallet_address_errors_without_polymarket() {
+            let config = minimal_config();
+            let result = WalletService::wallet_address(&config);
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("polymarket"));
+        }
+
+        #[tokio::test]
+        async fn get_approval_status_errors_without_polymarket() {
+            let config = minimal_config();
+            let result = WalletService::get_approval_status(&config).await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("polymarket"));
+        }
+
+        #[tokio::test]
+        async fn approve_errors_without_polymarket() {
+            let config = minimal_config();
+            let result = WalletService::approve(&config, Decimal::new(100, 0)).await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("polymarket"));
+        }
+
+        #[tokio::test]
+        async fn usdc_balance_errors_without_polymarket() {
+            let config = minimal_config();
+            let result = WalletService::usdc_balance(&config).await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("polymarket"));
+        }
+
+        #[tokio::test]
+        async fn sweep_usdc_errors_without_polymarket() {
+            let config = minimal_config();
+            let result =
+                WalletService::sweep_usdc(&config, "0x1234567890123456789012345678901234567890")
+                    .await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(err.to_string().contains("polymarket"));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Configuration Validation Tests (with polymarket feature)
+    // -----------------------------------------------------------------------
+
+    #[cfg(feature = "polymarket")]
+    mod with_polymarket {
+        use super::*;
+        use crate::error::ConfigError;
+
+        #[test]
+        fn polymarket_runtime_config_requires_private_key() {
+            let config = minimal_config();
+            // Config has no private key set
+
+            let result = WalletService::polymarket_runtime_config(&config);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                crate::error::Error::Config(ConfigError::MissingField { field }) => {
+                    assert_eq!(field, "WALLET_PRIVATE_KEY");
+                }
+                e => panic!("Expected MissingField error, got: {e:?}"),
+            }
+        }
+
+        #[test]
+        fn polymarket_runtime_config_builds_with_valid_key() {
+            let mut config = minimal_config();
+            // Set a valid-format private key (64 hex chars)
+            config.wallet.private_key = Some(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            );
+
+            let result = WalletService::polymarket_runtime_config(&config);
+            assert!(result.is_ok());
+
+            let runtime = result.unwrap();
+            assert!(!runtime.private_key.is_empty());
+        }
+
+        #[tokio::test]
+        async fn sweep_usdc_validates_address_format() {
+            let mut config = minimal_config();
+            config.wallet.private_key = Some(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            );
+
+            // Invalid address format
+            let result = WalletService::sweep_usdc(&config, "invalid-address").await;
+
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            // Should fail on address parsing, not on the sweep itself
+            assert!(err.to_string().contains("to"));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Clone/Debug Tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn wallet_approval_status_is_clone() {
+        let status = WalletApprovalStatus {
+            exchange: "Test".to_string(),
+            wallet_address: "0x123".to_string(),
+            token: "USDC".to_string(),
+            allowance: Decimal::ONE,
+            spender: "0x456".to_string(),
+            needs_approval: true,
+        };
+
+        let cloned = status.clone();
+        assert_eq!(cloned.exchange, status.exchange);
+        assert_eq!(cloned.needs_approval, status.needs_approval);
+    }
+
+    #[test]
+    fn approval_outcome_is_clone() {
+        let outcome = ApprovalOutcome::Approved {
+            tx_hash: "0xabc".to_string(),
+            amount: Decimal::TEN,
+        };
+
+        let cloned = outcome.clone();
+        match cloned {
+            ApprovalOutcome::Approved { tx_hash, amount } => {
+                assert_eq!(tx_hash, "0xabc");
+                assert_eq!(amount, Decimal::TEN);
+            }
+            _ => panic!("Clone should preserve variant"),
+        }
+    }
+
+    #[test]
+    fn sweep_outcome_is_clone() {
+        let outcome = SweepOutcome::Transferred {
+            tx_hash: "0xdef".to_string(),
+            amount: Decimal::new(100, 0),
+        };
+
+        let cloned = outcome.clone();
+        match cloned {
+            SweepOutcome::Transferred { tx_hash, amount } => {
+                assert_eq!(tx_hash, "0xdef");
+                assert_eq!(amount, Decimal::new(100, 0));
+            }
+            _ => panic!("Clone should preserve variant"),
+        }
+    }
+
+    #[test]
+    fn types_implement_debug() {
+        let status = WalletApprovalStatus {
+            exchange: "Test".to_string(),
+            wallet_address: "0x123".to_string(),
+            token: "USDC".to_string(),
+            allowance: Decimal::ONE,
+            spender: "0x456".to_string(),
+            needs_approval: false,
+        };
+        let _ = format!("{status:?}");
+
+        let outcome = ApprovalOutcome::Failed {
+            reason: "test".to_string(),
+        };
+        let _ = format!("{outcome:?}");
+
+        let sweep = SweepOutcome::NoBalance {
+            balance: Decimal::ZERO,
+        };
+        let _ = format!("{sweep:?}");
+    }
+}

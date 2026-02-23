@@ -30,6 +30,12 @@ polymarket = [
 ]
 telegram = ["dep:teloxide"]
 testkit = []
+# Enable integration tests that require real API keys and network access
+integration-tests = []
+# Polymarket-specific integration tests requiring network access and credentials
+polymarket-integration = ["polymarket"]
+# Telegram integration tests requiring real bot token and chat ID
+telegram-integration = ["telegram"]
 
 [dependencies]
 # Async runtime
@@ -119,3 +125,4 @@ edgelord = { path = ".", features = ["testkit"] }
 tokio-test = "0.4"
 assert_cmd = "2"
 predicates = "3"
+tempfile = "3"

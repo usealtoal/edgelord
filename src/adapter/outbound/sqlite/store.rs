@@ -189,8 +189,11 @@ impl SqliteRelationStore {
 mod tests {
     use super::*;
     use crate::adapter::outbound::sqlite::database::connection::create_pool;
+    use crate::domain::constraint::ConstraintSense;
     use crate::domain::id::MarketId;
     use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+    use rust_decimal_macros::dec;
+    use std::sync::Arc;
 
     pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -201,6 +204,14 @@ mod tests {
             .expect("Failed to run migrations");
         pool
     }
+
+    fn market(s: &str) -> MarketId {
+        MarketId::new(s)
+    }
+
+    // -------------------------------------------------------------------------
+    // Basic CRUD operations
+    // -------------------------------------------------------------------------
 
     #[tokio::test]
     async fn sqlite_relation_roundtrip() {
@@ -326,5 +337,356 @@ mod tests {
             matches!(result, Err(Error::Parse(_))),
             "Expected parse error when market_ids serialization fails"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // All RelationKind variants
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn roundtrip_implies_relation() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::Implies {
+                if_yes: market("state-pa"),
+                then_yes: market("national"),
+            },
+            0.95,
+            "PA win implies national win".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        match &loaded.kind {
+            RelationKind::Implies { if_yes, then_yes } => {
+                assert_eq!(if_yes.as_str(), "state-pa");
+                assert_eq!(then_yes.as_str(), "national");
+            }
+            _ => panic!("Expected Implies variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn roundtrip_exactly_one_relation() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::ExactlyOne {
+                markets: vec![
+                    market("candidate-a"),
+                    market("candidate-b"),
+                    market("other"),
+                ],
+            },
+            0.99,
+            "Exactly one candidate wins".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        match &loaded.kind {
+            RelationKind::ExactlyOne { markets } => {
+                assert_eq!(markets.len(), 3);
+            }
+            _ => panic!("Expected ExactlyOne variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn roundtrip_linear_relation() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::Linear {
+                terms: vec![(market("m1"), dec!(0.5)), (market("m2"), dec!(0.5))],
+                sense: ConstraintSense::LessEqual,
+                rhs: dec!(1.0),
+            },
+            0.80,
+            "Custom linear constraint".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        match &loaded.kind {
+            RelationKind::Linear { terms, sense, rhs } => {
+                assert_eq!(terms.len(), 2);
+                assert_eq!(*sense, ConstraintSense::LessEqual);
+                assert_eq!(*rhs, dec!(1.0));
+            }
+            _ => panic!("Expected Linear variant"),
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Replace/upsert behavior
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn save_replaces_existing_relation() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let mut relation = Relation::new(
+            RelationKind::MutuallyExclusive {
+                markets: vec![market("m1"), market("m2")],
+            },
+            0.80,
+            "Original reasoning".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+
+        // Update confidence and reasoning
+        relation.confidence = 0.95;
+        relation.reasoning = "Updated reasoning".to_string();
+        store.save(&relation).await.unwrap();
+
+        let loaded = store.get(&id).await.unwrap().unwrap();
+        assert!((loaded.confidence - 0.95).abs() < 0.001);
+        assert_eq!(loaded.reasoning, "Updated reasoning");
+
+        // Verify only one relation exists
+        let all = store.list(true).await.unwrap();
+        assert_eq!(all.len(), 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Edge cases
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn get_nonexistent_returns_none() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let id = RelationId::new();
+        let result = store.get(&id).await.unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn list_empty_database_returns_empty() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let active = store.list(false).await.unwrap();
+        let all = store.list(true).await.unwrap();
+
+        assert!(active.is_empty());
+        assert!(all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn prune_empty_database_returns_zero() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let pruned = store.prune_expired().await.unwrap();
+
+        assert_eq!(pruned, 0);
+    }
+
+    #[tokio::test]
+    async fn save_relation_with_empty_market_list() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::MutuallyExclusive { markets: vec![] },
+            0.5,
+            "Empty markets".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        match &loaded.kind {
+            RelationKind::MutuallyExclusive { markets } => {
+                assert!(markets.is_empty());
+            }
+            _ => panic!("Expected MutuallyExclusive variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn save_relation_with_special_characters_in_reasoning() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::MutuallyExclusive {
+                markets: vec![market("m1")],
+            },
+            0.9,
+            "Reasoning with 'quotes', \"double quotes\", and émojis! 🎉".to_string(),
+        );
+        let id = relation.id.clone();
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        assert!(loaded.reasoning.contains("émojis"));
+        assert!(loaded.reasoning.contains("🎉"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Concurrent access
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn concurrent_saves_do_not_corrupt_data() {
+        let pool = setup_test_db();
+        let store = Arc::new(SqliteRelationStore::new(pool));
+
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let store_clone = Arc::clone(&store);
+            let handle = tokio::spawn(async move {
+                let relation = Relation::new(
+                    RelationKind::MutuallyExclusive {
+                        markets: vec![market(&format!("m{}", i))],
+                    },
+                    0.9,
+                    format!("Relation {}", i),
+                );
+                store_clone.save(&relation).await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        let all = store.list(true).await.unwrap();
+        assert_eq!(all.len(), 10);
+    }
+
+    #[tokio::test]
+    async fn concurrent_reads_and_writes() {
+        let pool = setup_test_db();
+        let store = Arc::new(SqliteRelationStore::new(pool));
+
+        // Pre-populate with some relations
+        for i in 0..5 {
+            let relation = Relation::new(
+                RelationKind::MutuallyExclusive {
+                    markets: vec![market(&format!("initial{}", i))],
+                },
+                0.9,
+                format!("Initial {}", i),
+            );
+            store.save(&relation).await.unwrap();
+        }
+
+        let mut handles = vec![];
+
+        // Mix of reads and writes
+        for i in 0..20 {
+            let store_clone = Arc::clone(&store);
+            let handle = tokio::spawn(async move {
+                if i % 2 == 0 {
+                    // Write
+                    let relation = Relation::new(
+                        RelationKind::MutuallyExclusive {
+                            markets: vec![market(&format!("new{}", i))],
+                        },
+                        0.9,
+                        format!("New {}", i),
+                    );
+                    store_clone.save(&relation).await.unwrap();
+                } else {
+                    // Read
+                    let _ = store_clone.list(true).await.unwrap();
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Should have initial 5 + 10 new ones (evens from 0..20)
+        let all = store.list(true).await.unwrap();
+        assert_eq!(all.len(), 15);
+    }
+
+    // -------------------------------------------------------------------------
+    // Datetime serialization/deserialization
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn relation_timestamps_roundtrip_correctly() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        let relation = Relation::new(
+            RelationKind::MutuallyExclusive {
+                markets: vec![market("m1")],
+            },
+            0.9,
+            "test".to_string(),
+        )
+        .with_ttl(chrono::Duration::hours(24));
+
+        let id = relation.id.clone();
+        let original_inferred = relation.inferred_at;
+        let original_expires = relation.expires_at;
+
+        store.save(&relation).await.unwrap();
+        let loaded = store.get(&id).await.unwrap().unwrap();
+
+        // Timestamps should be within 1 second of original
+        assert!((loaded.inferred_at - original_inferred).num_seconds().abs() < 1);
+        assert!((loaded.expires_at - original_expires).num_seconds().abs() < 1);
+    }
+
+    #[tokio::test]
+    async fn prune_respects_exact_expiration_boundary() {
+        let pool = setup_test_db();
+        let store = SqliteRelationStore::new(pool);
+
+        // Create relation that expires exactly now
+        let mut just_expired = Relation::new(
+            RelationKind::MutuallyExclusive {
+                markets: vec![market("m1")],
+            },
+            0.9,
+            "just expired".to_string(),
+        );
+        just_expired.expires_at = Utc::now();
+        store.save(&just_expired).await.unwrap();
+
+        // Create relation that expires in the future
+        let not_expired = Relation::new(
+            RelationKind::MutuallyExclusive {
+                markets: vec![market("m2")],
+            },
+            0.9,
+            "not expired".to_string(),
+        );
+        store.save(&not_expired).await.unwrap();
+
+        // Wait a tiny bit to ensure the first one is definitely expired
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let pruned = store.prune_expired().await.unwrap();
+        assert_eq!(pruned, 1);
     }
 }
