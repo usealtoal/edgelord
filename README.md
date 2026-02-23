@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/usealtoal/edgelord/actions"><img src="https://github.com/usealtoal/edgelord/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://crates.io/crates/edgelord"><img src="https://img.shields.io/crates/v/edgelord.svg" alt="Crates.io"></a>
   <a href="https://github.com/usealtoal/edgelord/blob/main/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="License"></a>
 </p>
@@ -24,8 +25,22 @@
 
 ## Installation
 
-```console
-$ cargo install edgelord
+With the standalone installer:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/usealtoal/edgelord/main/scripts/install.sh | sh
+```
+
+With [Homebrew](https://brew.sh):
+
+```bash
+brew install usealtoal/tap/edgelord
+```
+
+With [cargo](https://doc.rust-lang.org/cargo/):
+
+```bash
+cargo install edgelord
 ```
 
 ## Quick Start
