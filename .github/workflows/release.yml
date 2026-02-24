@@ -17,8 +17,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Run integration tests
+      - name: Run unit tests
         run: cargo test --all-features
+
+      - name: Run integration tests
+        run: cargo test --all-features -- --ignored
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
