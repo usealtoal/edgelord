@@ -148,7 +148,7 @@ If the inference engine incorrectly believes A → B, and you trade on this assu
 
 **Confidence thresholds** filter out uncertain relationships:
 
-$$\text{confidence}(R) \geq \text{min\_confidence}$$
+$$\text{confidence}(R) \geq \text{min-confidence}$$
 
 Only relationships meeting this threshold generate trading signals.
 
@@ -156,7 +156,7 @@ Only relationships meeting this threshold generate trading signals.
 
 Inferred relationships may become stale:
 
-$$\text{effective\_confidence}(t) = \text{initial\_confidence} \times e^{-\lambda(t - t_0)}$$
+$$\text{effective-confidence}(t) = \text{initial-confidence} \times e^{-\lambda(t - t_0)}$$
 
 Relationships are periodically re-evaluated and may expire if not refreshed.
 
