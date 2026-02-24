@@ -64,9 +64,9 @@ mod anthropic_integration {
     use super::*;
 
     /// Create a test client using environment variables.
-    /// Uses claude-3-haiku for cost efficiency.
+    /// Uses claude-haiku-4-5 for cost efficiency.
     fn create_client() -> Option<Anthropic> {
-        match Anthropic::from_env("claude-3-haiku-20240307") {
+        match Anthropic::from_env("claude-haiku-4-5") {
             Ok(client) => Some(client),
             Err(e) => {
                 eprintln!("Skipping Anthropic test: {}", e);
@@ -371,7 +371,7 @@ mod cross_provider {
     #[tokio::test]
     #[ignore = "requires both API keys and network access"]
     async fn test_same_prompt_both_providers() {
-        let anthropic = Anthropic::from_env("claude-3-haiku-20240307").ok();
+        let anthropic = Anthropic::from_env("claude-haiku-4-5").ok();
         let openai = OpenAi::from_env("gpt-4o-mini").ok();
 
         let prompt = "What is 2 + 2? Reply with just the number.";
@@ -402,7 +402,7 @@ mod cross_provider {
     #[ignore = "requires at least one API key and network access"]
     async fn test_trait_polymorphism() {
         let clients: Vec<Box<dyn Llm>> = vec![
-            Anthropic::from_env("claude-3-haiku-20240307")
+            Anthropic::from_env("claude-haiku-4-5")
                 .ok()
                 .map(|c| Box::new(c) as Box<dyn Llm>),
             OpenAi::from_env("gpt-4o-mini")
@@ -443,7 +443,7 @@ mod error_handling {
     #[tokio::test]
     #[ignore = "tests error handling with invalid credentials"]
     async fn test_anthropic_invalid_key() {
-        let client = Anthropic::new("sk-invalid-key-12345", "claude-3-haiku-20240307", 100, 0.1);
+        let client = Anthropic::new("sk-invalid-key-12345", "claude-haiku-4-5", 100, 0.1);
 
         let result = client.complete("test").await;
         assert!(result.is_err(), "Expected error with invalid API key");
@@ -501,7 +501,7 @@ mod performance {
     #[tokio::test]
     #[ignore = "requires API keys and measures latency"]
     async fn test_response_latency() {
-        let anthropic = Anthropic::from_env("claude-3-haiku-20240307").ok();
+        let anthropic = Anthropic::from_env("claude-haiku-4-5").ok();
         let openai = OpenAi::from_env("gpt-4o-mini").ok();
 
         let prompt = "Reply with OK";
