@@ -15,11 +15,18 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```no_run
+//! use edgelord::adapter::outbound::polymarket::stream::PolymarketWebSocketHandler;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let url = "wss://ws-subscriptions-clob.polymarket.com/ws/market".to_string();
+//! let asset_ids = vec!["asset_1".to_string(), "asset_2".to_string()];
 //! let handler = PolymarketWebSocketHandler::new(url);
 //! handler.run(asset_ids, |msg| {
 //!     // Process each incoming message
 //! }).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use async_trait::async_trait;

@@ -188,9 +188,12 @@ impl Default for LatencyMetrics {
 /// configured targets, and produce scaling recommendations. The governor operates
 /// synchronously - it records metrics and produces recommendations without blocking.
 ///
-/// # Example
+/// # Implementation Pattern
 ///
-/// ```ignore
+/// Implementors track latency via a sliding window and compare against
+/// configured thresholds to produce scaling recommendations:
+///
+/// ```text
 /// struct MyGovernor {
 ///     config: GovernorConfig,
 ///     metrics: Mutex<LatencyWindow>,
@@ -200,37 +203,11 @@ impl Default for LatencyMetrics {
 ///     fn record_latency(&self, latency: Duration) {
 ///         self.metrics.lock().unwrap().record(latency);
 ///     }
-///
-///     fn record_throughput(&self, messages_per_sec: f64) {
-///         // Track throughput
-///     }
-///
-///     fn latency_metrics(&self) -> LatencyMetrics {
-///         self.metrics.lock().unwrap().compute_percentiles()
-///     }
-///
-///     fn recommendation(&self) -> ScalingRecommendation {
-///         let metrics = self.latency_metrics();
-///         if metrics.p99 > self.config.latency.max_p99 {
-///             ScalingRecommendation::contract(self.config.scaling.contract_step)
-///         } else {
-///             ScalingRecommendation::Hold
-///         }
-///     }
-///
-///     fn notify_scaled(&self) {
-///         // Reset cooldown timer
-///     }
-///
-///     fn set_resource_budget(&self, budget: ResourceBudget) {
-///         // Update resource constraints
-///     }
-///
-///     fn config(&self) -> &GovernorConfig {
-///         &self.config
-///     }
+///     // ... other trait methods
 /// }
 /// ```
+///
+/// See [`RuntimeGovernor`] for the production implementation.
 pub trait AdaptiveGovernor: Send + Sync {
     /// Record a latency observation.
     ///

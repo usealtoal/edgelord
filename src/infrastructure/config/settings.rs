@@ -6,11 +6,14 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```no_run
 //! use edgelord::infrastructure::config::settings::Config;
 //!
-//! let config = Config::load("config.toml")?;
-//! config.init_logging();
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = Config::load("config.toml")?;
+//!     config.init_logging();
+//!     Ok(())
+//! }
 //! ```
 
 use rust_decimal::Decimal;

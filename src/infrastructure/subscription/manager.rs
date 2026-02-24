@@ -73,60 +73,24 @@ pub enum ConnectionEvent {
 ///
 /// Implementations must be `Send + Sync` to allow sharing across async tasks.
 ///
-/// # Example
+/// # Implementation Pattern
 ///
-/// ```ignore
-/// use edgelord::infrastructure::subscription::manager::{ConnectionEvent, SubscriptionManager};
-/// use edgelord::domain::{id::MarketId, id::TokenId};
-/// use edgelord::infrastructure::MarketScore;
+/// Implementors maintain a priority queue of markets and manage active subscriptions:
 ///
+/// ```text
 /// struct MySubscriptionManager {
-///     // ... internal state
+///     queue: PriorityQueue<MarketScore>,
+///     active: HashSet<TokenId>,
 /// }
 ///
-/// #[async_trait]
 /// impl SubscriptionManager for MySubscriptionManager {
-///     fn enqueue(&self, markets: Vec<MarketScore>) {
-///         // Add markets to priority queue
-///     }
-///
-///     fn active_subscriptions(&self) -> Vec<TokenId> {
-///         // Return currently subscribed tokens
-///         vec![]
-///     }
-///
-///     fn active_count(&self) -> usize {
-///         0
-///     }
-///
-///     fn pending_count(&self) -> usize {
-///         0
-///     }
-///
-///     async fn expand(&self, count: usize) -> Result<Vec<TokenId>> {
-///         // Subscribe to `count` more markets from queue
-///         Ok(vec![])
-///     }
-///
-///     async fn contract(&self, count: usize) -> Result<Vec<TokenId>> {
-///         // Unsubscribe from `count` lowest-priority markets
-///         Ok(vec![])
-///     }
-///
-///     async fn on_connection_event(&self, event: ConnectionEvent) -> Result<()> {
-///         // Handle connection state changes
-///         Ok(())
-///     }
-///
-///     fn is_subscribed(&self, market_id: &MarketId) -> bool {
-///         false
-///     }
-///
-///     fn max_subscriptions(&self) -> usize {
-///         1000
-///     }
+///     fn enqueue(&self, markets: Vec<MarketScore>) { /* ... */ }
+///     async fn expand(&self, count: usize) -> Result<Vec<TokenId>> { /* ... */ }
+///     // ... other methods
 /// }
 /// ```
+///
+/// See [`PrioritySubscriptionManager`] for the production implementation.
 #[async_trait]
 pub trait SubscriptionManager: Send + Sync {
     /// Add markets to the priority queue for subscription.

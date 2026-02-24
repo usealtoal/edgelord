@@ -24,7 +24,7 @@
 //!
 //! Creating a binary market:
 //!
-//! ```ignore
+//! ```
 //! use edgelord::domain::{market::{Market, Outcome}, id::{MarketId, TokenId}};
 //! use rust_decimal_macros::dec;
 //!
@@ -41,7 +41,7 @@
 //!
 //! Detecting an arbitrage opportunity:
 //!
-//! ```ignore
+//! ```
 //! use edgelord::domain::{opportunity::{Opportunity, OpportunityLeg}, id::{MarketId, TokenId}};
 //! use rust_decimal_macros::dec;
 //!

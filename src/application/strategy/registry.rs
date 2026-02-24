@@ -24,10 +24,14 @@ use super::single_condition::{SingleConditionConfig, SingleConditionStrategy};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use edgelord::application::strategy::registry::StrategyRegistry;
+/// use edgelord::application::strategy::single_condition::SingleConditionConfig;
+/// use edgelord::application::strategy::market_rebalancing::MarketRebalancingConfig;
+///
 /// let registry = StrategyRegistry::builder()
-///     .single_condition(config.single_condition)
-///     .market_rebalancing(config.market_rebalancing)
+///     .single_condition(SingleConditionConfig::default())
+///     .market_rebalancing(MarketRebalancingConfig::default())
 ///     .build();
 /// ```
 #[derive(Default)]
@@ -140,12 +144,14 @@ impl StrategyEngine for StrategyRegistry {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use edgelord::application::strategy::registry::StrategyRegistry;
+/// use edgelord::application::strategy::single_condition::SingleConditionConfig;
+/// use edgelord::application::strategy::market_rebalancing::MarketRebalancingConfig;
+///
 /// let registry = StrategyRegistry::builder()
-///     .cluster_cache(cache)
-///     .single_condition(config.single_condition.clone())
-///     .market_rebalancing(config.market_rebalancing.clone())
-///     .combinatorial(config.combinatorial.clone())
+///     .single_condition(SingleConditionConfig::default())
+///     .market_rebalancing(MarketRebalancingConfig::default())
 ///     .build();
 /// ```
 #[derive(Default)]
