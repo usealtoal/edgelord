@@ -393,8 +393,17 @@ mod integration_tests {
             .expect("Request timed out")
             .expect("API call failed");
 
+        // Strip markdown code blocks if present
+        let json_str = result
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| result.trim().strip_prefix("```"))
+            .and_then(|s| s.strip_suffix("```"))
+            .map(|s| s.trim())
+            .unwrap_or(result.trim());
+
         // Try to parse as JSON
-        let parsed: std::result::Result<serde_json::Value, _> = serde_json::from_str(&result);
+        let parsed: std::result::Result<serde_json::Value, _> = serde_json::from_str(json_str);
         assert!(parsed.is_ok(), "Expected valid JSON response: {}", result);
 
         let json = parsed.unwrap();
