@@ -26,7 +26,7 @@ pub struct Anthropic {
     client: Client,
     /// API key for authentication.
     api_key: String,
-    /// Model identifier (e.g., "claude-3-sonnet-20240229").
+    /// Model identifier (e.g., "claude-sonnet-4-6").
     model: String,
     /// Maximum tokens to generate in the response.
     max_tokens: usize,
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn test_request_serialization() {
         let request = Request {
-            model: "claude-3-sonnet-20240229".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
             max_tokens: 4096,
             temperature: 0.2,
             messages: vec![Message {
@@ -151,7 +151,7 @@ mod tests {
 
         let json = serde_json::to_value(&request).unwrap();
 
-        assert_eq!(json["model"], "claude-3-sonnet-20240229");
+        assert_eq!(json["model"], "claude-sonnet-4-6");
         assert_eq!(json["max_tokens"], 4096);
         assert_eq!(json["temperature"], 0.2);
         assert_eq!(json["messages"].as_array().unwrap().len(), 1);
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn test_request_serialization_with_special_characters() {
         let request = Request {
-            model: "claude-3-sonnet-20240229".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
             max_tokens: 1024,
             temperature: 0.5,
             messages: vec![Message {
@@ -189,7 +189,7 @@ mod tests {
                 {"type": "text", "text": "Hello, I'm Claude!"}
             ],
             "id": "msg_123",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-6",
             "role": "assistant",
             "stop_reason": "end_turn",
             "stop_sequence": null,
@@ -210,7 +210,7 @@ mod tests {
                 {"type": "text", "text": "Second part."}
             ],
             "id": "msg_456",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-6",
             "role": "assistant",
             "stop_reason": "end_turn",
             "stop_sequence": null,
@@ -230,7 +230,7 @@ mod tests {
         let json = r#"{
             "content": [],
             "id": "msg_789",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-6",
             "role": "assistant",
             "stop_reason": "end_turn",
             "stop_sequence": null,
@@ -249,7 +249,7 @@ mod tests {
                 {"type": "text", "text": "Here's some Unicode: 你好世界 🌍 émojis"}
             ],
             "id": "msg_unicode",
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-sonnet-4-6",
             "role": "assistant",
             "stop_reason": "end_turn",
             "stop_sequence": null,
@@ -266,10 +266,10 @@ mod tests {
 
     #[test]
     fn test_client_construction() {
-        let client = Anthropic::new("test-api-key", "claude-3-sonnet-20240229", 4096, 0.5);
+        let client = Anthropic::new("test-api-key", "claude-sonnet-4-6", 4096, 0.5);
 
         assert_eq!(client.api_key, "test-api-key");
-        assert_eq!(client.model, "claude-3-sonnet-20240229");
+        assert_eq!(client.model, "claude-sonnet-4-6");
         assert_eq!(client.max_tokens, 4096);
         assert_eq!(client.temperature, 0.5);
     }
@@ -285,7 +285,7 @@ mod tests {
         // Ensure the env var is not set for this test
         std::env::remove_var("ANTHROPIC_API_KEY");
 
-        let result = Anthropic::from_env("claude-3-sonnet-20240229");
+        let result = Anthropic::from_env("claude-sonnet-4-6");
         assert!(result.is_err());
 
         let err = result.unwrap_err();
@@ -303,7 +303,7 @@ mod tests {
     fn test_malformed_response_missing_content() {
         let json = r#"{
             "id": "msg_123",
-            "model": "claude-3-sonnet-20240229"
+            "model": "claude-sonnet-4-6"
         }"#;
 
         let result: std::result::Result<Response, _> = serde_json::from_str(json);
@@ -347,7 +347,7 @@ mod integration_tests {
     /// Helper to create a client from environment.
     /// Requires ANTHROPIC_API_KEY to be set.
     fn create_test_client() -> Option<Anthropic> {
-        match Anthropic::from_env("claude-3-haiku-20240307") {
+        match Anthropic::from_env("claude-haiku-4-5") {
             Ok(client) => Some(client),
             Err(e) => {
                 eprintln!("Skipping Anthropic integration test: {}", e);
@@ -429,7 +429,7 @@ mod integration_tests {
     #[tokio::test]
     #[ignore = "requires invalid API key test"]
     async fn test_invalid_api_key_error() {
-        let client = Anthropic::new("invalid-key-12345", "claude-3-haiku-20240307", 100, 0.1);
+        let client = Anthropic::new("invalid-key-12345", "claude-haiku-4-5", 100, 0.1);
 
         let result = client.complete("test").await;
         assert!(result.is_err(), "Expected error with invalid API key");
