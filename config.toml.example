@@ -247,7 +247,7 @@ provider = "anthropic"
 
 # Anthropic-specific settings
 [llm.anthropic]
-model = "claude-3-5-sonnet-20241022"  # Model to use
+model = "claude-sonnet-4-6"  # Model to use
 temperature = 0.2                      # Low for consistent JSON output
 max_tokens = 4096                      # Max response tokens
 

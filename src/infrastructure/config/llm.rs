@@ -52,7 +52,7 @@ pub enum LlmProvider {
 pub struct AnthropicConfig {
     /// Model identifier.
     ///
-    /// Defaults to "claude-3-5-sonnet-20241022".
+    /// Defaults to "claude-sonnet-4-6".
     #[serde(default = "default_anthropic_model")]
     pub model: String,
 
@@ -116,7 +116,7 @@ impl Default for OpenAiConfig {
 }
 
 fn default_anthropic_model() -> String {
-    "claude-3-5-sonnet-20241022".into()
+    "claude-sonnet-4-6".into()
 }
 
 fn default_openai_model() -> String {
