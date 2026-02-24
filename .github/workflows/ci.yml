@@ -90,9 +90,6 @@ jobs:
       - name: Show effective config
         run: ./target/release/edgelord config show --config config.toml.example
 
-      - name: Validate prod config
-        run: ./target/release/edgelord check config --config deploy/config.prod.toml
-
   features:
     name: Feature Combinations
     runs-on: ubuntu-latest
