@@ -14,7 +14,7 @@
 
 ---
 
-> I built this to test arbitrage conditions on Polymarket, but it doubled as an experiment in pure hexagonal architecture. The three strategies *do* work—arbitrage is hard (latency, liquidity, market selection all matter), but the math is sound. Run this against 10,000+ markets concurrently and you'll find opportunities. If you're curious about the mechanics, I wrote up [how each strategy works](docs/strategies/overview.md).
+> I built this to test arbitrage conditions on Polymarket, but it doubled as an experiment in pure hexagonal architecture. The three strategies *do* work. Arbitrage is hard (latency, liquidity, market selection all matter), but the math is sound. Run this against 1,000+ markets concurrently and you'll find opportunities. If you're curious about the mechanics, I wrote up [how each strategy works](docs/strategies/overview.md).
 
 ---
 

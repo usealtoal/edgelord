@@ -2,18 +2,11 @@
 
 This section covers production deployment and operations for edgelord.
 
-## Deployment Tracks
+## Guides
 
-- [DigitalOcean Manual Runbook](digitalocean-manual.md)
-  - End-to-end setup and click-driven GitHub Actions deployment.
-- [Wallet Setup](wallet.md)
-  - Prepare a dedicated Polygon wallet and funding model.
-- [Infrastructure](infrastructure.md)
-  - Provision a VPS, install runtime dependencies, and run under systemd.
-- [Telegram Integration](telegram.md)
-  - Configure alerting and runtime bot control commands.
-- [Operations](operations.md)
-  - Monitoring, incident response, and hardening checklist.
+- [Wallet Setup](wallet.md) — Prepare a dedicated Polygon wallet and funding model.
+- [Telegram Integration](telegram.md) — Configure alerting and runtime bot control commands.
+- [Operations](operations.md) — Monitoring, incident response, and hardening checklist.
 
 ## Live Trading Prerequisites
 

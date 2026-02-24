@@ -90,7 +90,7 @@ impl Strategy for DeepBookStrategy {
 
 ### Fits Architecture
 
-- New strategy module: `src/core/strategy/deep_book/`
+- New strategy module: `src/application/strategy/deep_book/`
 - Uses existing `OrderBookCache` (already has full depth)
 - Config: target volumes, min edge per volume tier
 
@@ -154,10 +154,10 @@ pub struct CrossExchangeOpportunity {
 ### Architecture Extension
 
 New exchange implementations:
-- `src/core/exchange/kalshi/`
-- `src/core/exchange/predictit/`
+- `src/adapter/outbound/kalshi/`
+- `src/adapter/outbound/predictit/`
 
-Cross-exchange coordinator in `app/`:
+Cross-exchange coordinator in `src/application/`:
 ```rust
 pub struct CrossExchangeOrchestrator {
     exchanges: Vec<Box<dyn ExchangeClient>>,
@@ -396,7 +396,7 @@ impl MarketMaker {
 
 ### Architecture
 
-New service: `src/core/service/market_maker/`
+New service: `src/application/service/market_maker/`
 - Quote manager
 - Inventory tracker
 - Risk controls
@@ -432,10 +432,10 @@ Dependencies (LLM discovered):
 
 ### Implementation
 
-The infrastructure exists in `src/core/strategy/combinatorial/`. What's needed:
+The infrastructure exists in `src/application/strategy/combinatorial/`. What's needed:
 
 ```rust
-// New module: src/core/strategy/combinatorial/discovery.rs
+// New module: src/application/strategy/combinatorial/discovery.rs
 
 pub struct DependencyDiscovery {
     llm: LlmClient,

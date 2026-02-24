@@ -57,7 +57,7 @@ $ edgelord run --config config.toml
 
 | Flag | Description |
 |------|-------------|
-| `--testnet` | Run on Mumbai testnet |
+| `--testnet` | Run on Amoy testnet |
 | `--mainnet` | Run on Polygon mainnet |
 | `--dry-run` | Detect opportunities without executing |
 | `--no-banner` | Suppress startup banner |

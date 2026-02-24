@@ -98,7 +98,7 @@ High-value dependencies could be flagged for review before use. LLM might halluc
 ## Implementation Sketch
 
 ```rust
-// New module: src/core/strategy/combinatorial/discovery.rs
+// New module: src/application/strategy/combinatorial/discovery.rs
 
 pub struct DependencyDiscovery {
     llm_client: LlmClient,
