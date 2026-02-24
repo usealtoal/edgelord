@@ -112,8 +112,17 @@ mod anthropic_integration {
             .expect("Request timed out")
             .expect("API call failed");
 
+        // Strip markdown code blocks if present
+        let json_str = result
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| result.trim().strip_prefix("```"))
+            .and_then(|s| s.strip_suffix("```"))
+            .map(|s| s.trim())
+            .unwrap_or(result.trim());
+
         // Parse the JSON
-        let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
+        let parsed: Result<serde_json::Value, _> = serde_json::from_str(json_str);
         assert!(parsed.is_ok(), "Expected valid JSON, got: {}", result);
 
         let json = parsed.unwrap();
@@ -264,8 +273,17 @@ mod openai_integration {
             .expect("Request timed out")
             .expect("API call failed");
 
+        // Strip markdown code blocks if present
+        let json_str = result
+            .trim()
+            .strip_prefix("```json")
+            .or_else(|| result.trim().strip_prefix("```"))
+            .and_then(|s| s.strip_suffix("```"))
+            .map(|s| s.trim())
+            .unwrap_or(result.trim());
+
         // Parse the JSON
-        let parsed: Result<serde_json::Value, _> = serde_json::from_str(&result);
+        let parsed: Result<serde_json::Value, _> = serde_json::from_str(json_str);
         assert!(parsed.is_ok(), "Expected valid JSON, got: {}", result);
 
         let json = parsed.unwrap();
