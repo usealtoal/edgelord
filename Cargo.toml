@@ -24,6 +24,7 @@ polymarket = [
     "dep:polymarket-client-sdk",
     "dep:alloy-signer-local",
     "dep:alloy-provider",
+    "dep:alloy-transport-http",
     "dep:alloy-contract",
     "dep:alloy-primitives",
     "dep:alloy-sol-types",
@@ -53,13 +54,14 @@ polymarket-client-sdk = { version = "0.4", features = ["clob"], optional = true 
 
 # Alloy for wallet operations (optional, must match polymarket-client-sdk's version)
 alloy-signer-local = { version = "1", optional = true, features = ["keystore"] }
-alloy-provider = { version = "1", optional = true }
+alloy-provider = { version = "1", optional = true, default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-transport-http = { version = "1", optional = true, default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 alloy-contract = { version = "1", optional = true }
 alloy-primitives = { version = "1", optional = true }
 alloy-sol-types = { version = "1", optional = true }
 
 # Telegram bot (optional)
-teloxide = { version = "0.13", features = ["macros"], optional = true }
+teloxide = { version = "0.13", default-features = false, features = ["macros", "rustls", "ctrlc_handler"], optional = true }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
