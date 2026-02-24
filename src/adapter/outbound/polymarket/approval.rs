@@ -183,9 +183,10 @@ impl PolymarketApproval {
 
         let usdc = IERC20::new(self.usdc_address()?, &provider);
         let owner = self.signer.address();
-        let balance = usdc.balanceOf(owner).call().await.map_err(|e| {
-            ExecutionError::SubmissionFailed(format!("Failed to get balance: {e}"))
-        })?;
+        let balance =
+            usdc.balanceOf(owner).call().await.map_err(|e| {
+                ExecutionError::SubmissionFailed(format!("Failed to get balance: {e}"))
+            })?;
 
         Ok(Self::from_usdc_units(balance))
     }
