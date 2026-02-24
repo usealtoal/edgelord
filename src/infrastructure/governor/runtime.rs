@@ -207,7 +207,7 @@ impl Default for LatencyMetrics {
 /// }
 /// ```
 ///
-/// See [`RuntimeGovernor`] for the production implementation.
+/// See [`super::latency::LatencyGovernor`] for the production implementation.
 pub trait AdaptiveGovernor: Send + Sync {
     /// Record a latency observation.
     ///

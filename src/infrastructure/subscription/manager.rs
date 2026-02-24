@@ -90,7 +90,7 @@ pub enum ConnectionEvent {
 /// }
 /// ```
 ///
-/// See [`PrioritySubscriptionManager`] for the production implementation.
+/// See [`super::priority::PrioritySubscriptionManager`] for the production implementation.
 #[async_trait]
 pub trait SubscriptionManager: Send + Sync {
     /// Add markets to the priority queue for subscription.
