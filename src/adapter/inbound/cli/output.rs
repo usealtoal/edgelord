@@ -832,11 +832,14 @@ mod tests {
     // Tests for const fn new
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn test_output_config_new_is_const() {
         // Verify OutputConfig::new can be used in const context
         const CONFIG: OutputConfig = OutputConfig::new(true, false, 5);
-        assert!(CONFIG.json);
-        assert!(!CONFIG.quiet);
+        // Use assert_eq! to verify the const values (clippy prefers assert! but
+        // we want explicit value comparison here for clarity)
+        assert_eq!(CONFIG.json, true);
+        assert_eq!(CONFIG.quiet, false);
         assert_eq!(CONFIG.verbose, 5);
     }
 }

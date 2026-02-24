@@ -651,8 +651,8 @@ mod tests {
         let book = book_msg.to_orderbook();
 
         // Should handle many levels
-        assert!(book.bids().len() > 0);
-        assert!(book.asks().len() > 0);
+        assert!(!book.bids().is_empty());
+        assert!(!book.asks().is_empty());
     }
 
     // -------------------------------------------------------------------------

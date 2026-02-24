@@ -510,7 +510,7 @@ mod tests {
             let delay = stream.next_delay();
             let delay_ms = delay.as_millis() as u64;
             // Should be between 100 and 120 (base + up to 20% jitter)
-            assert!(delay_ms >= 100 && delay_ms <= 120, "delay was {delay_ms}ms");
+            assert!((100..=120).contains(&delay_ms), "delay was {delay_ms}ms");
         }
     }
 
