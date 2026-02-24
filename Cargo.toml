@@ -42,11 +42,11 @@ telegram-integration = ["telegram"]
 tokio = { version = "1", features = ["full"] }
 
 # WebSocket
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3"
 
 # HTTP (for REST API calls)
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Polymarket CLOB client (optional)
 polymarket-client-sdk = { version = "0.4", features = ["clob"], optional = true }
