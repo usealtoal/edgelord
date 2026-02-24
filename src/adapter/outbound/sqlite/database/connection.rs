@@ -155,8 +155,7 @@ mod tests {
 
         // Verify busy_timeout is set by querying it
         // The pragma returns a single row with the timeout value
-        let result = diesel::sql_query("SELECT 1 as test")
-            .execute(&mut conn);
+        let result = diesel::sql_query("SELECT 1 as test").execute(&mut conn);
         assert!(result.is_ok());
     }
 
