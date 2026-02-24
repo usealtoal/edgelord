@@ -821,20 +821,3 @@ mod integration_tests {
     }
 }
 
-// Make GammaMarket have a Default impl for tests
-impl Default for GammaMarket {
-    fn default() -> Self {
-        Self {
-            condition_id: String::new(),
-            question: None,
-            active: false,
-            closed: false,
-            outcomes: None,
-            outcome_prices: None,
-            clob_token_ids: None,
-            volume_24hr: None,
-            volume_num: None,
-            liquidity_num: None,
-        }
-    }
-}

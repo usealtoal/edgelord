@@ -57,7 +57,7 @@ impl PolymarketMarket {
 /// and filtering.
 ///
 /// Response format: flat JSON array (no wrapper object).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GammaMarket {
     /// Condition ID (same as CLOB's `condition_id`).
