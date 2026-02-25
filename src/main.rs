@@ -25,6 +25,11 @@ fn setup_colors(choice: ColorChoice) {
 
 #[tokio::main]
 async fn main() {
+    // Install rustls crypto provider before any TLS operations
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let _ = dotenvy::dotenv();
     let _ = cli::operator::install(Box::new(Operator));
 

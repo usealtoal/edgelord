@@ -51,6 +51,9 @@ tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3"
 
+# TLS (explicit rustls with ring backend to avoid crypto provider conflicts)
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+
 # HTTP (for REST API calls)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
