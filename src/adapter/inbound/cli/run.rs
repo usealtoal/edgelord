@@ -1,7 +1,7 @@
 //! Handler for the `run` command.
 
 use crate::adapter::inbound::cli::command::RunArgs;
-use crate::adapter::inbound::cli::{banner, operator, output};
+use crate::adapter::inbound::cli::{operator, output};
 use crate::error::Result;
 use crate::port::inbound::operator::runtime::{RunRequest, RunStartupSnapshot};
 
@@ -11,11 +11,6 @@ pub async fn execute(args: &RunArgs) -> Result<()> {
     let machine_output = output::is_json();
     let request = build_run_request(args, config_toml, machine_output);
     let service = operator::operator();
-
-    let styled_output = !request.json_logs;
-    if !args.no_banner && styled_output && !output::is_quiet() {
-        banner::print_banner();
-    }
 
     if !output::is_quiet() || machine_output {
         let startup = service.prepare_run(&request)?;

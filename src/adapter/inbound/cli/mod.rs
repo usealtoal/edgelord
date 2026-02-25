@@ -1,6 +1,5 @@
 //! CLI module graph.
 
-pub mod banner;
 pub mod check;
 pub mod command;
 pub mod config;

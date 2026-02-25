@@ -299,10 +299,6 @@ pub struct RunArgs {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Skip the ASCII art banner on startup.
-    #[arg(long)]
-    pub no_banner: bool,
-
     /// Use JSON log format instead of pretty-printed logs.
     #[arg(long)]
     pub json_logs: bool,
@@ -560,7 +556,6 @@ mod tests {
         let cli = Cli::try_parse_from(["edgelord", "run"]).unwrap();
         if let Commands::Run(args) = cli.command {
             assert!(!args.dry_run);
-            assert!(!args.no_banner);
             assert!(!args.json_logs);
             assert!(!args.telegram_enabled);
             assert!(!args.mainnet);
@@ -582,16 +577,6 @@ mod tests {
         let cli = Cli::try_parse_from(["edgelord", "run", "--dry-run"]).unwrap();
         if let Commands::Run(args) = cli.command {
             assert!(args.dry_run);
-        } else {
-            panic!("Expected Run command");
-        }
-    }
-
-    #[test]
-    fn test_run_args_no_banner() {
-        let cli = Cli::try_parse_from(["edgelord", "run", "--no-banner"]).unwrap();
-        if let Commands::Run(args) = cli.command {
-            assert!(args.no_banner);
         } else {
             panic!("Expected Run command");
         }
