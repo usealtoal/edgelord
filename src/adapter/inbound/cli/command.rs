@@ -17,7 +17,12 @@ use super::provision::command::ProvisionCommand;
 #[command(version)]
 pub struct Cli {
     /// Color output mode [auto, always, never]
-    #[arg(long, global = true, default_value = "auto", hide_possible_values = true)]
+    #[arg(
+        long,
+        global = true,
+        default_value = "auto",
+        hide_possible_values = true
+    )]
     pub color: ColorChoice,
 
     /// JSON output for scripting
