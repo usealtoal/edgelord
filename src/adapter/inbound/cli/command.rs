@@ -11,17 +11,13 @@ use std::path::PathBuf;
 use super::paths;
 use super::provision::command::ProvisionCommand;
 
-/// Root CLI structure for the edgelord application.
-///
-/// Provides global options (color, JSON output, verbosity) and dispatches
-/// to subcommands for specific functionality.
+/// Prediction market arbitrage detection and execution CLI
 #[derive(Parser, Debug)]
 #[command(name = "edgelord")]
 #[command(version)]
-#[command(about = "A prediction market arbitrage detection and execution CLI")]
 pub struct Cli {
-    /// Color output mode
-    #[arg(long, global = true, default_value = "auto")]
+    /// Color output mode [auto, always, never]
+    #[arg(long, global = true, default_value = "auto", hide_possible_values = true)]
     pub color: ColorChoice,
 
     /// JSON output for scripting
@@ -32,7 +28,7 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub quiet: bool,
 
-    /// Increase output verbosity (-v, -vv, -vvv)
+    /// Increase output verbosity
     #[arg(short, long, global = true, action = clap::ArgAction::Count)]
     pub verbose: u8,
 
@@ -41,16 +37,14 @@ pub struct Cli {
 }
 
 /// Color output mode for terminal rendering.
-///
-/// Controls whether ANSI color codes are emitted in terminal output.
 #[derive(Clone, Debug, Default, clap::ValueEnum)]
 pub enum ColorChoice {
-    /// Detect terminal capability automatically.
+    /// Detect automatically
     #[default]
     Auto,
-    /// Always emit color codes.
+    /// Always use colors
     Always,
-    /// Never emit color codes.
+    /// Never use colors
     Never,
 }
 
