@@ -18,6 +18,11 @@ exclude = ["tests/", "docs/", ".github/"]
 name = "edgelord"
 path = "src/main.rs"
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/edgelord-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "edgelord-{ target }/edgelord{ binary-ext }"
+
 [features]
 default = ["polymarket", "telegram"]
 polymarket = [

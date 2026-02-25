@@ -41,7 +41,13 @@ With [Homebrew](https://brew.sh):
 brew install usealtoal/tap/edgelord
 ```
 
-With [cargo](https://doc.rust-lang.org/cargo/):
+With [cargo-binstall](https://github.com/cargo-bins/cargo-binstall) (pre-built binary):
+
+```bash
+cargo binstall edgelord
+```
+
+Or build from source with [cargo](https://doc.rust-lang.org/cargo/) (requires cmake and C++ compiler):
 
 ```bash
 cargo install edgelord
