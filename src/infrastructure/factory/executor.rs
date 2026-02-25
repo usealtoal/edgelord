@@ -15,6 +15,11 @@ use crate::port::outbound::exchange::ArbitrageExecutor;
 ///
 /// Returns `None` if no wallet private key is configured (detection-only mode)
 /// or if executor initialization fails.
+///
+/// Note: Polymarket's CLOB API only supports mainnet (chain ID 137). When
+/// running on testnet (chain ID 80002), executor initialization will fail
+/// with an authentication error. This is expected - use dry_run mode for
+/// testnet to detect opportunities without executing trades.
 pub async fn build_executor(config: &Config) -> Option<Arc<dyn ArbitrageExecutor + Send + Sync>> {
     match ExchangeFactory::create_arbitrage_executor(config).await {
         Ok(Some(exec)) => {
@@ -26,7 +31,14 @@ pub async fn build_executor(config: &Config) -> Option<Arc<dyn ArbitrageExecutor
             None
         }
         Err(e) => {
-            warn!(error = %e, "Failed to initialize executor - detection only");
+            let network = config.network();
+            if network.is_testnet() {
+                info!(
+                    "Testnet mode - Polymarket CLOB only supports mainnet, running detection only"
+                );
+            } else {
+                warn!(error = %e, "Failed to initialize executor - detection only");
+            }
             None
         }
     }

@@ -251,20 +251,29 @@ pub fn execute(path: PathBuf, force: bool) -> Result<()> {
     println!();
     output::section("Next Steps");
 
-    let network_name = if is_mainnet {
-        "Polygon"
+    if is_mainnet {
+        output::note(&format!(
+            "1. Fund your wallet with USDC on {}",
+            output::highlight("Polygon")
+        ));
+        output::note(&format!(
+            "2. Verify: {}",
+            output::highlight("edgelord check health")
+        ));
+        output::note(&format!("3. Start:  {}", output::highlight("edgelord run")));
     } else {
-        "Amoy testnet"
-    };
-    output::note(&format!(
-        "1. Fund your wallet with USDC on {}",
-        output::highlight(network_name)
-    ));
-    output::note(&format!(
-        "2. Verify: {}",
-        output::highlight("edgelord check health")
-    ));
-    output::note(&format!("3. Start:  {}", output::highlight("edgelord run")));
+        output::note("Testnet mode: Polymarket CLOB only supports mainnet for trading.");
+        output::note("edgelord will detect opportunities but cannot execute trades on testnet.");
+        output::note(&format!(
+            "1. Verify: {}",
+            output::highlight("edgelord check health")
+        ));
+        output::note(&format!("2. Start:  {}", output::highlight("edgelord run")));
+        output::note(&format!(
+            "3. For real trading, re-run {} with mainnet",
+            output::highlight("edgelord init")
+        ));
+    }
 
     Ok(())
 }
